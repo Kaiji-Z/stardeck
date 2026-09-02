@@ -1,0 +1,56 @@
+{
+  "name": "stardeck",
+  "version": "0.1.0",
+  "description": "星舰甲板——agent 舰队的作战看板与守护进程：任意 CLI agent（opencode/codex/pi…）经 MCP 领令出勤，账本/验收/收官由系统核对。",
+  "type": "module",
+  "license": "MIT",
+  "author": "Kaiji-Z",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaiji-Z/stardeck.git"
+  },
+  "bin": {
+    "stardeck": "bin/stardeck.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "src/mcp-bridge.mjs",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "verify": "node scripts/verify.mjs",
+    "verify:eval": "node scripts/run-eval.mjs",
+    "live": "node --import tsx scripts/live-check.ts",
+    "start": "node --import tsx src/cli.ts",
+    "playground": "node scripts/playground.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@types/three": "^0.180.0",
+    "esbuild": "^0.25.10",
+    "happy-dom": "^20.13.1",
+    "promptfoo": "^0.122.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "three": "^0.180.0",
+    "tsdown": "^0.12.4",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "ignoredOptionalDependencies": [
+      "@huggingface/transformers",
+      "onnxruntime-node"
+    ]
+  }
+}

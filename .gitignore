@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.goal/
+*.log
+.DS_Store
+.playwright-mcp/
+.impeccable/
+HANDOFF.md
