@@ -435,10 +435,19 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           // 替换符=字节在到达前已坏（执行者侧 shell 编码事故嫌疑，如 Windows GBK
           // 控制台拼 curl JSON——我方 readBody 恒 UTF-8，MCP 桥 stdio 亦然）。账本
           // 忠实入账不改写；回执警示教导改走 MCP/UTF-8 通道重交。
+          // 2026-09-04 playground 实抓扩展：war_publish 的标题/任务书/验收同样
+          // 中招（心跳任务标题成花）——哨位覆盖全部自由文本入口。
           const rec = out as { ok?: boolean; warning?: string }
-          if (body.name === 'war_submit' && rec.ok === true && typeof body.arguments?.report === 'string' && (body.arguments.report as string).includes('�')) {
-            rec.warning = '战报含乱码（U+FFFD 替换符——疑似你侧 shell 用了非 UTF-8 编码拼请求，如 Windows GBK 控制台的 curl）。请改用 MCP 工具或 UTF-8 HTTP 通道重新 war_submit 本战报。'
-            console.warn('[stardeck] war_submit 战报含乱码——回执已警示重交')
+          const mojibakeFields: string[] = []
+          if (body.name === 'war_submit' && typeof body.arguments?.report === 'string' && (body.arguments.report as string).includes('\uFFFD')) mojibakeFields.push('战报')
+          if (body.name === 'war_publish') {
+            if (typeof body.arguments?.title === 'string' && (body.arguments.title as string).includes('\uFFFD')) mojibakeFields.push('任务标题')
+            if (typeof body.arguments?.brief === 'string' && (body.arguments.brief as string).includes('\uFFFD')) mojibakeFields.push('任务书')
+            if (typeof body.arguments?.acceptance === 'string' && (body.arguments.acceptance as string).includes('\uFFFD')) mojibakeFields.push('验收标准')
+          }
+          if (rec.ok === true && mojibakeFields.length > 0) {
+            rec.warning = `${mojibakeFields.join('/')}含乱码（U+FFFD 替换符——疑似你侧 shell 用了非 UTF-8 编码拼请求，如 Windows GBK 控制台的 curl）。请改用 MCP 工具或 UTF-8 HTTP 通道重新提交。`
+            console.warn(`[stardeck] ${body.name} ${mojibakeFields.join('/')}含乱码——回执已警示重交`)
           }
           return sendJson(res, 200, out) // 工具业务失败也 200——调用方看 ok/error（错误文案即教学）
         }

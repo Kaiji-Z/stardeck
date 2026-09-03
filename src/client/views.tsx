@@ -3470,7 +3470,6 @@ export function warView(services: ClientServicesFace): () => ReactNode {
           ),
         ),
       hqPickerOpen ? createElement(HqWorkspacePicker, { key: 'hqpicker', registered: registeredPlanets, onClose: () => { setHqPickerOpen(false) }, onRegistered: refresh }) : null,
-      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null) }, refresh }) : null,
       detailCommand !== undefined ? createElement(FocusPage, {
         key: `cmd-${detailCommand.commandId}`,
         cmd: detailCommand,
@@ -3514,6 +3513,10 @@ export function warView(services: ClientServicesFace): () => ReactNode {
         onReportSeen: () => { setReportSeenRev(x => x + 1) },
         onJumpMiss: () => { setActionError(activeCopy().actions.jumpMissHint) },
       }) : null,
+      // critique 实抓（下续战令被聚焦页遮住）：composer 必须渲染在 FocusPage
+      // 之后——两弹窗同用 .war-modal-backdrop（z-index 9000），同 z 时 DOM 靠后
+      // 者在上；「下续战令」正是聚焦页里开 composer 的路径。
+      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null) }, refresh }) : null,
       settingsOpen ? createElement(SettingsDrawer, {
         key: 'settings',
         onClose: () => { setSettingsOpen(false) },
