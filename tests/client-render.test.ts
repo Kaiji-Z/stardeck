@@ -294,7 +294,16 @@ test('舰队门：模型输入随席位卡内展开 + 底部钮在滚动容器�
   const actions = document.querySelector('.war-gate-actions')
   assert.ok(scroll !== null, '席列滚动容器在场')
   assert.ok(actions !== null && !scroll.contains(actions), '底部操作钮在滚动容器外（不随席列滚动）')
-  assert.ok(scroll.querySelectorAll('[role="button"]').length === 11, '十一席全在场')
+  // critique 复检 P1：缺席席折叠——默认只渲染 ready/limited 席 + 折叠行钮
+  // （fixture：7 席可显示；4 未检出收进折叠行，不再占第一屏）。
+  const foldBtn = [...scroll.querySelectorAll('button')].find(b => (b.textContent ?? '').includes('+4'))
+  assert.ok(foldBtn !== undefined, '缺席席折叠行在场（+4 即将支持）')
+  assert.ok(foldBtn!.getAttribute('aria-expanded') === 'false', '折叠行默认收起')
+  assert.equal(scroll.querySelectorAll('[role="button"]').length, 7, '默认只渲染可绑定/受限席（缺席席折叠）')
+  foldBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(scroll.querySelectorAll('[role="button"]').length, 11, '展开后 11 席全在场')
+  assert.ok(foldBtn!.getAttribute('aria-expanded') === 'true', '展开态 aria-expanded')
   // 选中 pi 席 → 模型输入在【pi 卡内】展开
   const piCard = [...scroll.querySelectorAll('[role="button"]')].find(c => (c.textContent ?? '').includes('pi')) as HTMLElement
   piCard.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))

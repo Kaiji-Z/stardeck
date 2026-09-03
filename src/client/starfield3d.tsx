@@ -667,6 +667,11 @@ export function Warzone(props: WarzoneProps): ReactNode {
     // 同语义），canvas 内的实时动态不再只有指针可感。
     createElement('div', { className: 'war-sr-only', role: 'status', 'aria-live': 'polite' },
       activeCopy().starfield.footStat(squads.filter(q => q.live).length, planets.length, fronts.length)),
+    // critique 复检 P2：0 星球空场的常驻水印（指路 toast 会退场+冷却，水印不睡）
+    // ——HQ 本就常驻脉冲且可点开注册门，这里补「点它」的语义。
+    planets.length === 0
+      ? createElement('div', { className: 'war-wz-empty', role: 'status' }, activeCopy().starfield.emptyWatermark)
+      : null,
     createElement('div', { ref: tipRef, className: 'war-wz-tip' }),
     // V16.4-R2 critique P2：键盘镜像——行星→战线此前纯指针可达（canvas 拾取）。
     // 视觉隐藏的星球按钮列（Tab 顺序=轨道序，focus-visible 时显形）补齐键盘路径。

@@ -793,6 +793,9 @@ export class WarzoneScene {
    *  （update 不推它的轨道），只作为 squad 目标提供 mesh/radius/deployedSquads
    *  语义；编队绕 HQ 星舰近轨，左列在打、3D 里就有化身。 */
   private hqAnchor: WzPlanet | null = null
+  /** critique 复检 P2：0 星球空场态——HQ 信标慢脉冲（注册门 affordance，
+   *  与 2D 雷达的常驻脉冲环同语义）。 */
+  private emptyStar = true
   private readonly squadBySession = new Map<string, WzSquad>()
   /** 悬停/聚焦高亮星域（V11.5f 定案）：光晕增亮 + HQ↔星球虚线轨迹。 */
   private readonly hlWs = new Set<string>()
@@ -1960,6 +1963,9 @@ export class WarzoneScene {
     this.hqEngineMat.opacity = (0.7 + 0.25 * pulse * 0.5) * duty
     if (this.isDarkTheme) (this.hqBeacon.material as THREE.MeshBasicMaterial).color.setRGB(1.1, 2.2, 2.6).multiplyScalar((0.8 + 0.3 * Math.sin(t * 3)) * duty)
     else (this.hqBeacon.material as THREE.MeshBasicMaterial).color.setHex(0x1173b4).multiplyScalar((0.9 + 0.25 * Math.sin(t * 3)) * duty)
+    // critique 复检 P2：空场时信标慢呼吸（2D 雷达已有常驻脉冲环的 3D 对位）
+    if (this.emptyStar) this.hqBeacon.scale.setScalar(1 + 0.25 * Math.sin(t * 2.2))
+    else if (this.hqBeacon.scale.x !== 1) this.hqBeacon.scale.setScalar(1)
     for (const p of this.planets) {
       const o = p.orbit
       // V11.5a（舰长定）：公转停——地形是固定参照系（空间记忆/拾取稳定/军图惯例），
@@ -2114,6 +2120,7 @@ export class WarzoneScene {
     this.bridged = true
     this.lastBridge = bridge
     this.hqActive = bridge.active
+    this.emptyStar = bridge.planets.length === 0
     const fronts = bridge.fronts ?? []
     const frontKey = fronts.map(f => `${f.rootId}:${f.gens}:${f.live ? 1 : 0}:${f.battlefield}`).join('|')
     const key = bridge.planets.map(p => p.wsPath).join('|')
@@ -2480,7 +2487,11 @@ export class WarzoneTactical {
       g.fillStyle = P.name
       g.font = '11px Consolas,"Microsoft YaHei"'
       g.textAlign = 'left'; g.textBaseline = 'alphabetic'
-      g.fillText(this.legend, S.x + M + 4, S.y + S.h - M - 6)
+      // critique 复检 P2：图例按「颜色 ｜ 结构 ｜ 动效」三段拆两行——单行 8 概念
+      // 是隐喻自学入口里排最末的视觉件，拆行后每行语义同质。
+      const parts = this.legend.split(' ｜ ')
+      g.fillText(parts[0]!, S.x + M + 4, S.y + S.h - M - 22)
+      if (parts.length > 1) g.fillText(parts.slice(1).join(' ｜ '), S.x + M + 4, S.y + S.h - M - 6)
       g.globalAlpha = 1
     }
   }

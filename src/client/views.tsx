@@ -320,15 +320,6 @@ function LifeStrip(cmd: BoardCommand, chain: BoardTask[]): ReactNode {
   )
 }
 
-/** V5 档位徽章：L0 直发 / L1 呈批 / L2 澄清（未分诊不显示）。 */
-function gradeChip(cmd: BoardCommand): ReactNode {
-  if (cmd.grade === null) return null
-  const label = activeCopy().grade[cmd.grade]
-  const cd = activeCopy().commandDetail
-  const title = `${cd.gradeTitlePrefix}${cmd.gradeReason !== null ? `：${cmd.gradeReason}` : ''}${cmd.regrades > 0 ? cd.regradesNote(cmd.regrades) : ''}`
-  return createElement('span', { className: `war-chip gr-${cmd.grade}`, title }, label)
-}
-
 /** V9.3（复评 P2-2）：task.lastError 是任务级最新败因——挂在每次失败尝试卡上
  * 会把第 2 次的败因安到第 1 次头上且双计。只在该卡确为最新失败尝试时展示，
  * 更早的尝试给中性文案（复盘进详情看全程）。 */
@@ -517,6 +508,15 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
     : null
   const ghostSpeaks = tour && formingVariantOf(cmd, chain) !== null
   const activate = (): void => { onDetail(cmd) }
+  // critique 复检 P1（chip 军备竞赛）：档位不再是独立 chip——并入状态 chip 作
+  // 档位色后缀（title 带分诊理由），R1 行常态只剩 状态+定时（条件显）+时间。
+  const gradeOf = cmd.grade
+  const gradeMeta = gradeOf !== null
+    ? { suffix: activeCopy().grade[gradeOf], title: (() => {
+        const cd = activeCopy().commandDetail
+        return `${cd.gradeTitlePrefix}${cmd.gradeReason !== null ? `：${cmd.gradeReason}` : ''}${cmd.regrades > 0 ? cd.regradesNote(cmd.regrades) : ''}`
+      })() }
+    : null
   return createElement('div', {
     key: cmd.commandId,
     className: `war-card war-command-card clickable${cmd.status === 'received' ? ' pulse' : ''}${relClass(trace)}`,
@@ -532,8 +532,11 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
   // R1 徽章行（组面卡在此挂历代状态 pip；时间靠右）。
   createElement('div', { className: 'war-card-top' },
     createElement('span', { className: `war-dot ${meta.dot}` }),
-    createElement('span', { className: `war-chip ${meta.cls}` }, meta.label),
-    gradeChip(cmd),
+    createElement('span', { className: `war-chip ${meta.cls}`, title: gradeMeta?.title },
+      meta.label,
+      gradeMeta !== null
+        ? createElement('span', { className: `war-chip-grade gr-${gradeOf}` }, ` · ${gradeMeta.suffix}`)
+        : null),
     genBadge(cmd),
     pips,
     cmd.schedule !== null && cmd.schedule.dispatchedAt === null
@@ -2126,14 +2129,8 @@ function WarIsland(props: {
           window.setTimeout(() => { el.classList.remove('war-flash') }, 1600)
         }
         const go = (): void => {
-          // V16.4-R7 critique A6：统一手势——四段全部 flash 列内目标卡（等·大副的
-          // 卡=任务列成形卡），钉岛留给 ✉ 徽标，同一动作不再两种结果。
-          if (seg.kind === 'awaiting') {
-            // A3-P3：首击时面板尚未挂载——flash 推迟一拍，等 pinned 重渲染后再描边。
-            setPinned(true)
-            window.setTimeout(() => { flash(document.querySelector('.war-inbox .war-inbox-row') ?? document.querySelector('.war-inbox')) }, 60)
-            return
-          }
+          // V16.4-R7 critique A6：统一手势——各段 flash 列内目标卡；收件箱不设
+          // 计数段（critique 复检 P1：等你/等·大副语义重叠）——钉岛留给 ✉ 徽标。
           if (seg.kind === 'pending') { flash(document.querySelector('.war-zone.war-tasks .war-forming')); return }
           if (seg.kind === 'waiting') { flash(document.querySelector('.war-zone.war-tasks .war-chip.st-published')?.closest('.war-card') ?? null); return }
           if (seg.kind === 'active') { flash(document.querySelector('.war-zone.war-field .war-card')); return }

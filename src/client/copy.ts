@@ -33,6 +33,8 @@ export interface WarCopy {
   starfield: { aria: string; hqOn: string; hqOff: string; orbIdle: string; mapLegend: string; mapHintToast: string; mapHintDismiss: string; untraced: string; controls: string; ungrouped: string
     /** critique P1-2：星域空场指路 toast（编队在外而星球零注册时一次性示）。 */
     hqGuideToast: string
+    /** critique 复检 P2：0 星球时的常驻水印（toast 会退场，水印不睡）。 */
+    emptyWatermark: string
     /** V16.4-R5 critique P1：星域层文案并词典（此前 starfield3d/wzLog/2D 标题 ~20 条
      *  硬编码绕过 activeCopy——V16「改一处词典三皮肤同步」的结构性保证在地图半边失效）。 */
     hqName: string
@@ -480,7 +482,7 @@ export interface WarCopy {
   island: {
     counts: (c: { awaiting: number; pending: number; waiting: number; active: number; failed: number }) => string
     /** V16.4-R3：分段结构化（岛计数可点路由）——label 过词表（函数返回值派生）。 */
-    countSegs: (c: { awaiting: number; pending: number; waiting: number; active: number; failed: number }) => ReadonlyArray<{ kind: 'awaiting' | 'pending' | 'waiting' | 'active' | 'failed'; label: string }>
+    countSegs: (c: { awaiting: number; pending: number; waiting: number; active: number; failed: number }) => ReadonlyArray<{ kind: 'pending' | 'waiting' | 'active' | 'failed'; label: string }>
     /** V18 critique：岛计数=全页签口径（切片只作用于三列）。 */
     countsScope: string
     inboxBadge: (n: number) => string
@@ -770,10 +772,11 @@ export const warCopy: WarCopy = {
     hqOn: '司令部在线——战时状态，全局开关亮着',
     hqOff: '停战状态——司令部熄灯',
     orbIdle: '执行中',
-    mapLegend: '蓝动·琥珀等·绿善终·红败 ｜ 行星=战场（内环=最老）· 环=战线（分段=战线数）· ✓凯旋 · 呼吸光点=执行中',
+    mapLegend: '蓝动·琥珀等·绿善终·红败 ｜ 行星=战场（内环=最老）· 环=战线（分段=战线数） ｜ ✓凯旋 · 呼吸光点=执行中',
     mapHintToast: '🪐 战场不止一个——试试战区视图（点此开启，⚙ 设置里随时可关）',
     mapHintDismiss: '忽略',
     hqGuideToast: '🪐 编队已出动，但战区还没有战场——注册工作区给它们一个落位（点此注册）',
+    emptyWatermark: '战区还是空的——点击 HQ 注册工作区为战场',
     controls: '左键拖拽平移 · 中键旋转 · 滚轮缩放 · 双击或 R 复位 · 悬停光点点亮战线',
     untraced: '未溯源执行',
     ungrouped: '未分组',
@@ -1013,15 +1016,15 @@ export const warCopy: WarCopy = {
   island: {
     // V10.1 审查：零段折叠（三个 0 是胶囊噪音）。V12.2 定案「让图例失业」：
     // 等待对象后缀化（等·参谋/等·指挥官）——词本身自消歧，图例 待×3 行删除。
-    // V18 critique A2：等你段居首（舰长待办先于机器忙闲）。
+    // critique 复检 P1：「等你」段退役（✉ 徽标与 pillAria 承载同一事实，常驻
+    // 视野不再自相缠绕）；「等·参谋」改「接令中」（动词不再是第三个「等」）。
     counts: c =>
-      [c.awaiting > 0 ? `等你 ${c.awaiting}` : '', c.pending > 0 ? `等·参谋 ${c.pending}` : '', c.waiting > 0 ? `等·指挥官 ${c.waiting}` : '', c.active > 0 ? `执行中 ${c.active}` : '', c.failed > 0 ? `折戟 ${c.failed}` : '']
+      [c.pending > 0 ? `接令中 ${c.pending}` : '', c.waiting > 0 ? `等·指挥官 ${c.waiting}` : '', c.active > 0 ? `执行中 ${c.active}` : '', c.failed > 0 ? `折戟 ${c.failed}` : '']
         .filter(x => x !== '').join(' · '),
     // V16.4-R3 critique P1-2：岛计数可点——分段结构化（kind 路由到列），词仍过词表。
     countSegs: c =>
       [
-        c.awaiting > 0 ? { kind: 'awaiting' as const, label: `等你 ${c.awaiting}` } : null,
-        c.pending > 0 ? { kind: 'pending' as const, label: `等·参谋 ${c.pending}` } : null,
+        c.pending > 0 ? { kind: 'pending' as const, label: `接令中 ${c.pending}` } : null,
         c.waiting > 0 ? { kind: 'waiting' as const, label: `等·指挥官 ${c.waiting}` } : null,
         c.active > 0 ? { kind: 'active' as const, label: `执行中 ${c.active}` } : null,
         c.failed > 0 ? { kind: 'failed' as const, label: `折戟 ${c.failed}` } : null,
@@ -1312,10 +1315,11 @@ export const plainCopy: WarCopy = {
     hqOn: '干活状态中——总部亮着',
     hqOff: '当前没有激活的事项线',
     orbIdle: '进行中',
-    mapLegend: '蓝=干活·琥珀=等你·绿=完成·红=失败 ｜ 星球=项目（内环=最早）· 环=同一条线（点=第几轮）· ✓完成数 · 亮点=进行中',
+    mapLegend: '蓝=干活·琥珀=等你·绿=完成·红=失败 ｜ 星球=项目（内环=最早）· 环=同一条线（点=第几轮） ｜ ✓完成数 · 亮点=进行中',
     mapHintToast: '🪐 项目不止一个——试试全景图视图（点这里打开，⚙ 设置里可以关掉）',
     mapHintDismiss: '忽略',
     hqGuideToast: '🪐 有任务在外面跑，但全景图上还没有星球——添加工作区给它们一个位置（点此添加）',
+    emptyWatermark: '全景图还是空的——点击 HQ 添加工作区',
     controls: '左键拖动平移 · 中键转视角 · 滚轮缩放 · 双击或 R 回正 · 悬停亮点查看关联',
     untraced: '还没关联命令',
     ungrouped: '杂项',
@@ -1554,12 +1558,11 @@ export const plainCopy: WarCopy = {
   },
   island: {
     counts: c =>
-      [c.awaiting > 0 ? `等你 ${c.awaiting}` : '', c.pending > 0 ? `等·规划 Agent ${c.pending}` : '', c.waiting > 0 ? `等·执行 Agent ${c.waiting}` : '', c.active > 0 ? `执行中 ${c.active}` : '', c.failed > 0 ? `失败 ${c.failed}` : '']
+      [c.pending > 0 ? `规划中 ${c.pending}` : '', c.waiting > 0 ? `等·执行 Agent ${c.waiting}` : '', c.active > 0 ? `执行中 ${c.active}` : '', c.failed > 0 ? `失败 ${c.failed}` : '']
         .filter(x => x !== '').join(' · '),
     countSegs: c =>
       [
-        c.awaiting > 0 ? { kind: 'awaiting' as const, label: `等你 ${c.awaiting}` } : null,
-        c.pending > 0 ? { kind: 'pending' as const, label: `等·规划 Agent ${c.pending}` } : null,
+        c.pending > 0 ? { kind: 'pending' as const, label: `规划中 ${c.pending}` } : null,
         c.waiting > 0 ? { kind: 'waiting' as const, label: `等·执行 Agent ${c.waiting}` } : null,
         c.active > 0 ? { kind: 'active' as const, label: `执行中 ${c.active}` } : null,
         c.failed > 0 ? { kind: 'failed' as const, label: `失败 ${c.failed}` } : null,

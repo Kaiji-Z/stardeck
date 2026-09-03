@@ -24,6 +24,9 @@ export function seatStatusOf(seat: { ok: boolean; experimental?: boolean; adapte
   return seat.experimental === true ? 'limited' : 'ready'
 }
 
+/** 分级排序权重（critique 复检 P1：可绑定前置，缺席席不稀释第一屏）。 */
+const STATUS_ORDER: Record<SeatStatus, number> = { ready: 0, limited: 1, absent: 2 }
+
 /** i18n：门面文案双语（绑定门出现在词典皮肤之外，自带两套）。 */
 interface GateCopy {
   statusLabel: Record<SeatStatus, string>
@@ -39,6 +42,8 @@ interface GateCopy {
   back: string
   enter: string
   absentTitle: string
+  /** critique 复检 P1：缺席席折叠行（+N 即将支持——未检出不再占半屏）。 */
+  absentFold: (n: number) => string
 }
 
 const GATE: Record<'zh' | 'en', GateCopy> = {
@@ -64,6 +69,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     back: '返回甲板',
     enter: '开始调度',
     absentTitle: '该舰队本机未检出——先安装或检查入口路径',
+    absentFold: n => `+${n} 即将支持`,
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -87,6 +93,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     back: 'Back to deck',
     enter: 'Start dispatching',
     absentTitle: 'Fleet not found on this machine — install it or check the entry path',
+    absentFold: n => `+${n} coming soon`,
   },
 }
 
@@ -101,10 +108,16 @@ export function fleetGate(props: {
   useSyncExternalStore(subscribeLang, langId)
   const t = GATE[langId()]
   const noteOf = (seat: Seat): string => (langId() === 'en' && seat.noteEn !== undefined ? seat.noteEn : seat.note)
+  // critique 复检 P1：分级排序（可绑定→受限→未检出，组内保序）+ 缺缺席折叠
+  // ——第一屏只议事可绑定的席位，未检出不再稀释半屏。
+  const sorted = [...props.fleet.seats].sort((a, b) => STATUS_ORDER[seatStatusOf(a)] - STATUS_ORDER[seatStatusOf(b)])
+  const absentSeats = sorted.filter(s => seatStatusOf(s) === 'absent')
+  const visibleSeats = sorted.filter(s => seatStatusOf(s) !== 'absent')
   const selected = props.fleet.seats.find(s => s.id === props.fleet.active.executor) ?? props.fleet.seats[0]
   const [pick, setPick] = useState(selected !== undefined ? selected.id : 'opencode')
   const picked = props.fleet.seats.find(s => s.id === pick) ?? selected
   const [model, setModel] = useState(props.fleet.active.model)
+  const [showAbsent, setShowAbsent] = useState(false)
   const card = (seat: Seat): ReturnType<typeof createElement> => {
     const status = seatStatusOf(seat)
     const isPick = seat.id === pick
@@ -158,7 +171,9 @@ export function fleetGate(props: {
   }
   return createElement('div', {
     className: 'war-root', // 令牌作用域：门在 warView 的 .war-root 之外，必须自带
-    style: { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--war-backdrop, rgba(15,23,42,.34))', fontFamily: 'var(--war-font)' },
+    // critique 复检 P1：门底铺星图纸面（既有 --war-chart-bg 令牌，零新资产）——
+    // 第一屏从此有星舰语言，不再是悬浮在灰幕上的通用 SaaS 弹窗。
+    style: { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--war-chart-bg, rgba(15,23,42,.34))', fontFamily: 'var(--war-font)' },
   },
     createElement('div', {
       style: {
@@ -167,14 +182,29 @@ export function fleetGate(props: {
         display: 'flex', flexDirection: 'column',
       },
     },
-      createElement('div', { style: { fontSize: 13, letterSpacing: 2, color: 'var(--war-text-3)' } }, t.brand),
+      createElement('div', { style: { fontSize: 13, letterSpacing: 1, color: 'var(--war-text-3)' } }, t.brand),
       createElement('h1', { style: { margin: '6px 0 4px', color: 'var(--war-text-1)', fontSize: 22 } }, t.title),
       createElement('p', { style: { margin: '0 0 6px', color: 'var(--war-text-2)', fontSize: 13 } }, t.lead),
-      createElement('p', { style: { margin: '0 0 14px', color: 'var(--war-text-3)', fontSize: 13 } }, t.sub),
+      // critique 复检 P1（B 实证 3.7:1）：副标题从 text-3 升 text-2——第一屏
+      // 说明文字不再贴着对比度下限。
+      createElement('p', { style: { margin: '0 0 14px', color: 'var(--war-text-2)', fontSize: 13 } }, t.sub),
       // 席位清单独立滚动容器（2026-09-03 定案：十一席不撑爆门面；底部操作钮
       // 在容器外常驻，不随席列滚动）。
       createElement('div', { className: 'war-gate-scroll', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'grid', gap: 8, alignContent: 'start', paddingBottom: 4 } },
-        props.fleet.seats.map(card)),
+        visibleSeats.map(card),
+        absentSeats.length > 0
+          ? createElement('button', {
+              key: 'absent-fold', type: 'button',
+              onClick: () => { setShowAbsent(!showAbsent) },
+              'aria-expanded': showAbsent,
+              style: {
+                textAlign: 'left', cursor: 'pointer', padding: '8px 12px', borderRadius: 'var(--war-r-md, 10px)',
+                background: 'transparent', border: '1px dashed var(--war-border-soft)',
+                color: 'var(--war-text-3)', fontSize: 12,
+              },
+            }, `${showAbsent ? '▾ ' : '▸ '}${t.absentFold(absentSeats.length)}`)
+          : null,
+        showAbsent ? absentSeats.map(card) : null),
       props.error !== undefined && props.error !== ''
         ? createElement('div', { role: 'alert', style: { marginTop: 10, fontSize: 13, color: 'var(--war-fail)', background: 'var(--war-fail-tint)', border: '1px solid var(--war-fail-border)', borderRadius: 8, padding: '8px 10px', flex: '0 0 auto' } }, props.error)
         : null,

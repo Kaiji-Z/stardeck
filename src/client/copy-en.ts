@@ -256,10 +256,11 @@ export const enWarCopy: WarCopy = {
     hqOn: 'HQ online — wartime state, the master switch is on',
     hqOff: 'Peacetime — HQ lights are off',
     orbIdle: 'Executing',
-    mapLegend: 'Blue moving · amber waiting · green well-ended · red defeat | Planet = battlefield (inner ring = oldest) · Ring = campaign (segments = campaign count) · ✓ triumph · breathing dot = executing',
+    mapLegend: 'Blue moving · amber waiting · green well-ended · red defeat | Planet = battlefield (inner ring = oldest) · Ring = campaign (segments = campaign count) | ✓ triumph · breathing dot = executing',
     mapHintToast: '🪐 More than one battlefield — try the War Zone view (click to enable; toggle anytime in ⚙ settings)',
     mapHintDismiss: 'Dismiss',
     hqGuideToast: '🪐 Squads are out, but the war zone has no battlefields yet — register a workspace to give them a place (click to register)',
+    emptyWatermark: 'The war zone is empty — click HQ to register a workspace as a battlefield',
     controls: 'Left-drag pan · middle-drag rotate · wheel zoom · double-click or R reset · hover a dot to light its campaign',
     untraced: 'Untraced execution',
     ungrouped: 'Ungrouped',
@@ -498,12 +499,11 @@ export const enWarCopy: WarCopy = {
   },
   island: {
     counts: c =>
-      [c.awaiting > 0 ? `You ${c.awaiting}` : '', c.pending > 0 ? `Staff ${c.pending}` : '', c.waiting > 0 ? `Field ${c.waiting}` : '', c.active > 0 ? `Executing ${c.active}` : '', c.failed > 0 ? `Defeats ${c.failed}` : '']
+      [c.pending > 0 ? `On it ${c.pending}` : '', c.waiting > 0 ? `Field ${c.waiting}` : '', c.active > 0 ? `Executing ${c.active}` : '', c.failed > 0 ? `Defeats ${c.failed}` : '']
         .filter(x => x !== '').join(' · '),
     countSegs: c =>
       [
-        c.awaiting > 0 ? { kind: 'awaiting' as const, label: `You ${c.awaiting}` } : null,
-        c.pending > 0 ? { kind: 'pending' as const, label: `Staff ${c.pending}` } : null,
+        c.pending > 0 ? { kind: 'pending' as const, label: `On it ${c.pending}` } : null,
         c.waiting > 0 ? { kind: 'waiting' as const, label: `Field ${c.waiting}` } : null,
         c.active > 0 ? { kind: 'active' as const, label: `Executing ${c.active}` } : null,
         c.failed > 0 ? { kind: 'failed' as const, label: `Defeats ${c.failed}` } : null,
@@ -791,10 +791,11 @@ export const enPlainCopy: WarCopy = {
     hqOn: 'Working — HQ lights on',
     hqOff: 'No active item lines right now',
     orbIdle: 'Running',
-    mapLegend: 'Blue=working · amber=awaiting you · green=done · red=failed | Planet = project (inner ring = earliest) · Ring = same line (dot = round) · ✓ done count · bright dot = running',
+    mapLegend: 'Blue=working · amber=awaiting you · green=done · red=failed | Planet = project (inner ring = earliest) · Ring = same line (dot = round) | ✓ done count · bright dot = running',
     mapHintToast: '🪐 More than one project — try the map view (click to open; toggle in ⚙ settings)',
     mapHintDismiss: 'Dismiss',
     hqGuideToast: '🪐 Tasks are running, but the map has no planets yet — add a workspace to give them a place (click to add)',
+    emptyWatermark: 'The map is empty — click HQ to add a workspace',
     controls: 'Left-drag pan · middle-drag orbit · wheel zoom · double-click or R reset · hover a bright dot to see related',
     untraced: 'Not linked to a command yet',
     ungrouped: 'Misc',
@@ -1033,12 +1034,11 @@ export const enPlainCopy: WarCopy = {
   },
   island: {
     counts: c =>
-      [c.awaiting > 0 ? `You ${c.awaiting}` : '', c.pending > 0 ? `Planner ${c.pending}` : '', c.waiting > 0 ? `Executor ${c.waiting}` : '', c.active > 0 ? `Running ${c.active}` : '', c.failed > 0 ? `Failed ${c.failed}` : '']
+      [c.pending > 0 ? `Planning ${c.pending}` : '', c.waiting > 0 ? `Executor ${c.waiting}` : '', c.active > 0 ? `Running ${c.active}` : '', c.failed > 0 ? `Failed ${c.failed}` : '']
         .filter(x => x !== '').join(' · '),
     countSegs: c =>
       [
-        c.awaiting > 0 ? { kind: 'awaiting' as const, label: `You ${c.awaiting}` } : null,
-        c.pending > 0 ? { kind: 'pending' as const, label: `Planner ${c.pending}` } : null,
+        c.pending > 0 ? { kind: 'pending' as const, label: `Planning ${c.pending}` } : null,
         c.waiting > 0 ? { kind: 'waiting' as const, label: `Executor ${c.waiting}` } : null,
         c.active > 0 ? { kind: 'active' as const, label: `Running ${c.active}` } : null,
         c.failed > 0 ? { kind: 'failed' as const, label: `Failed ${c.failed}` } : null,
