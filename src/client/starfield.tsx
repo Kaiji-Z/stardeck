@@ -104,6 +104,22 @@ export function moonPos(planet: PlanetSpec, sessionId: string, slotOffsetRad = 0
   }
 }
 
+/** HQ 恒星位（critique P1-2 根修配套）：galaxyLayout 的 HQ 禁区中心——布局数学
+ * 与禁区判定共用这一个坐标源。 */
+export const HQ_POS = { xPct: 50, yPct: 42 }
+
+/** 未注册工作区的编队挂 HQ 近地轨道（诚实降级：左列在打、星域必须有化身——
+ * 不再因星球缺席被整滴丢弃）。轨道半径略大于行星近地轨（HQ 体积感更大）。 */
+const HQ_MOON_R_PCT = 7
+
+export function hqMoonPos(sessionId: string, slotOffsetRad = 0): { xPct: number; yPct: number } {
+  const a = moonAngleRad(sessionId) + slotOffsetRad
+  return {
+    xPct: +(HQ_POS.xPct + HQ_MOON_R_PCT * Math.cos(a)).toFixed(2),
+    yPct: +(HQ_POS.yPct + HQ_MOON_R_PCT * 0.72 * Math.sin(a)).toFixed(2),
+  }
+}
+
 /** workspace 创建序投影（纯）：按各 workspace 最早任务 startedAt 升序——board
  * 投影没有直接的 workspace 注册表，最早出场顺序是稳定且确定性的替身。 */
 export function workspaceCreationOrder(tasks: ReadonlyArray<Pick<BoardTask, 'workspacePath' | 'startedAt'>>): string[] {

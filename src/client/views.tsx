@@ -18,7 +18,7 @@ import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeL
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
 import { visitDelta, type VisitDelta } from './visit.ts'
 import { applyBattlefieldMarker, applyGradeMarker, displayTitleOf, stalledOnUserPlan, type ComposerGrade } from './preflight.ts'
-import { galaxyLayout, garrisonOf, moonPos, StarfieldMap, workspaceCreationOrder } from './starfield.tsx'
+import { galaxyLayout, garrisonOf, hqMoonPos, HQ_POS, moonPos, StarfieldMap, workspaceCreationOrder } from './starfield.tsx'
 import { Warzone } from './starfield3d.tsx'
 import { attemptPhaseOf, warLogOf, type WzBridgePlanet, type WzBridgeSquad, type WzLogFeedItem, type WzFrontNode } from './warzone-scene.ts'
 import { commandTasks, frontsOf, frontOfTaskMap, greedyRootHues, wsKeyOf, UNGROUPED_WS_KEY, type WarFront, type WzBridgeFrontLite } from './front.ts'
@@ -537,10 +537,15 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
     genBadge(cmd),
     pips,
     cmd.schedule !== null && cmd.schedule.dispatchedAt === null
-      ? createElement('span', {
-          className: 'war-chip sched',
-          title: activeCopy().scheduleChip.cardTitle(fmtSchedule(cmd.schedule.nextRunAt)),
-        }, activeCopy().scheduleChip.chip(fmtSchedule(cmd.schedule.nextRunAt)))
+      ? (() => {
+          // critique P3：nextRunAt 缺失/解析失败不再露出无语义的「⏰ —」破折号。
+          const t = fmtSchedule(cmd.schedule?.nextRunAt ?? null)
+          const sched = activeCopy().scheduleChip
+          return createElement('span', {
+            className: 'war-chip sched',
+            title: t === '—' ? sched.cardTitlePending : sched.cardTitle(t),
+          }, t === '—' ? sched.chipPending : sched.chip(t))
+        })()
       : null,
     createElement('span', { className: 'war-time' }, relTime(cmd.createdAt)),
   ),
@@ -561,7 +566,10 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
     ...(preflight && !ghostSpeaks ? { title: activeCopy().preflight.title } : {}),
   },
     preflight && !ghostSpeaks
-      ? createElement('span', { className: 'war-preflight-text' }, activeCopy().preflight.hint)
+      ? createElement('span', { className: 'war-preflight-text' },
+          // critique P2：talking 态的真阻塞是「等你答问」——预检提示改说两步
+          // 语义，不再与状态行「等你答问」打架。
+          cmd.status === 'talking' ? activeCopy().preflight.hintTalking : activeCopy().preflight.hint)
       : ghostSpeaks ? null : cancelledNote,
   ),
   // R5 快捷操作行：进入对话 / 改直发（V7-④ 出口）/ ◎ 聚焦；tour 变体全空给占位；
@@ -1330,20 +1338,19 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   const ghostPanel = (key?: string): ReactNode => {
     if (ghostVariant === 'plan') {
       const pending = cmd.plan?.status === 'pending'
+      const planText = (cmd.plan as { text?: string }).text ?? ''
       return createElement('div', { key, className: 'war-subdetail' },
         createElement('div', { className: 'war-subdetail-title' }, `${fp.planTitle}（${copy.planTitle[(cmd.plan as { status: 'pending' | 'approved' | 'rejected' }).status]}）`),
-        pending ? createElement('div', { className: 'war-sub-value' }, fp.planPending) : null,
-        createElement('div', { className: 'war-sub-value war-plan-body' }, (cmd.plan as { text: string }).text),
-        pending
+        // critique P1-1：单一批准入口——批准/驳回只留置顶决策带（批注框与后果
+        // 前置文案都在那，这里不再复读两颗钮）；「大副还在写」只在计划正文
+        // 确实还空着时说，不再与已呈原文同屏打架。
+        pending && planText === '' ? createElement('div', { className: 'war-sub-value' }, fp.planPending) : null,
+        createElement('div', { className: 'war-sub-value war-plan-body' }, planText),
+        pending && (standalone || staffTarget !== null)
           ? subActions([
-            createElement('button', { key: 'ap', className: 'war-btn primary', title: copy.planIrreversible, onClick: () => { onDecidePlan('approve', planNote.trim() === '' ? undefined : planNote.trim()) } }, copy.approvePlan),
-            createElement('button', { key: 'rj', className: 'war-btn', title: fp.planRejectTitle, onClick: () => { onDecidePlan('reject', planNote.trim() === '' ? undefined : planNote.trim()) } }, copy.rejectPlan),
-            standalone || staffTarget !== null
-              ? createElement('button', { key: 'in', className: 'war-btn', onClick: () => { openStaffPane(staffTarget) } }, fp.planEnterSession)
-              : null,
+            createElement('button', { key: 'in', className: 'war-btn', onClick: () => { openStaffPane(staffTarget) } }, fp.planEnterSession),
           ])
           : null,
-        pending ? createElement('div', { className: 'war-cp-note' }, copy.planIrreversible) : null,
       )
     }
     if (ghostVariant === 'talking') {
@@ -1452,6 +1459,12 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
           ? createElement('div', { className: 'war-cd-band-in' },
             createElement('span', { className: 'war-cd-band-tag' }, `⚠ ${band.title}`),
             createElement('span', { className: 'war-cd-band-hint' }, band.planHint),
+            // critique P1-1：批计划的依据就地可读——计划原文随决策带常驻（默认
+            // 截 6 行，点开看全文），不再「依据要多点一次才可见」。
+            createElement('details', { className: 'war-cd-band-plan' },
+              createElement('summary', null, band.planPeek),
+              createElement('div', { className: 'war-plan-body' }, (cmd.plan as { text: string }).text),
+            ),
             // 驳回带意见（2026-09-02 定案）：意见框随置顶决策带常驻（不依赖展开
             // 计划段）——驳回时送达大副重拟，批准时作为批注入账。
             createElement('textarea', {
@@ -1489,10 +1502,14 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                   ),
                 )
                 : scheduled
-                  ? createElement('div', { className: 'war-cd-band-in' },
-                    createElement('span', { className: 'war-cd-band-tag' }, '⏰'),
-                    createElement('span', { className: 'war-cd-band-hint' }, band.scheduledHint(fmtSchedule(cmd.schedule.nextRunAt))),
-                  )
+                  ? (() => {
+                    // critique P3：决策带的定时行同样不露「· —」破折号。
+                    const t = fmtSchedule(cmd.schedule?.nextRunAt ?? null)
+                    return createElement('div', { className: 'war-cd-band-in' },
+                      createElement('span', { className: 'war-cd-band-tag' }, '⏰'),
+                      createElement('span', { className: 'war-cd-band-hint' }, t === '—' ? band.scheduledHintPending : band.scheduledHint(t)),
+                    )
+                  })()
                   : (() => {
                     // V18 critique A2-P1：终局命令的安神带不得说「自动推进中」——
                     // 读投影零歧义：cancelled=已取消终局，settled=已收官；quiet 只留
@@ -2098,8 +2115,9 @@ function WarIsland(props: {
     // 等外勤小队→任务列待领卡、执行→执行列首卡、挫败→回报列败卡，1.6s 闪显描边）；
     // 分段词走 countSegs 词典（函数返回值过词表，trek 同步派生）。
     // 段分隔必须切带空格的 ' · '——词内的 等·大副 之 · 无空格，不能当分隔符吃掉。
-    // aria-live=polite：SSE 计数跃迁对读屏可闻（收件箱增量播报之外的轻量覆盖）。
-    createElement('span', { className: 'war-island-counts', 'aria-label': countsText, 'aria-live': 'polite', title: copy.countsScope },
+    // critique P2：aria-live 摘除（岛计数与收件箱 announce 双通道对同一事件重复
+    // 播报）——增量播报权归收件箱专用 live 区，计数对读屏保持可读但不抢麦。
+    createElement('span', { className: 'war-island-counts', 'aria-label': countsText, title: copy.countsScope },
       ...copy.countSegs(counts).flatMap((seg, pi): ReactNode[] => {
         const flash = (el: Element | null): void => {
           if (el === null) return
@@ -2885,19 +2903,23 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     const commandTextOf = new Map(commands.map(c => [c.commandId, displayTitleOf(c.text).slice(0, 14)] as const))
     const moonSlot = new Map<string, number>()
     const starTroops = live.flatMap(({ t, a }) => {
-      const idx = wzWsOrder.indexOf(wsKeyOf(t.workspacePath) ?? '')
-      if (idx < 0) return []
-      const spec = planetSpecs[idx]!
+      // critique P1-2 根修：未注册工作区的编队不再整滴丢弃（左列在打、星域无人
+      // 的直接矛盾）——挂 HQ 近地轨道作诚实降级，HQ 注册门语义不动（星球仍只
+      // 来自注册；轨道光点可点回源命令聚焦页）。
+      const key = wsKeyOf(t.workspacePath) ?? ''
+      const idx = wzWsOrder.indexOf(key)
+      const spec = idx >= 0 ? planetSpecs[idx]! : null
       // V10.1 对抗审查 P1：同星多活体确定性避让——按序偏移 π/3（hash 相位撞车无防线）。
-      const k = moonSlot.get(spec.wsPath) ?? 0
-      moonSlot.set(spec.wsPath, k + 1)
-      const pos = moonPos(spec, a.sessionId, k * Math.PI / 3)
+      const k = moonSlot.get(spec !== null ? spec.wsPath : '__hq__') ?? 0
+      moonSlot.set(spec !== null ? spec.wsPath : '__hq__', k + 1)
+      const slot = k * Math.PI / 3
+      const pos = spec !== null ? moonPos(spec, a.sessionId, slot) : hqMoonPos(a.sessionId, slot)
       const src = lineageOf(t.taskId)?.commandId ?? null
       // critique：兜底不再露会话号片段（「可追查不装」在细节碎玻璃）——词典化「未溯源」。
       const sourceLabel = src !== null ? commandTextOf.get(src) ?? null : null
       return [{
         sessionId: a.sessionId,
-        planet: spec,
+        planet: spec ?? { wsPath: '__hq__', ring: 0, xPct: HQ_POS.xPct, yPct: HQ_POS.yPct },
         xPct: pos.xPct,
         yPct: pos.yPct,
         verbLabel: a.activity?.label ?? activeCopy().starfield.orbIdle,
@@ -2923,6 +2945,24 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       const t = window.setTimeout(() => { setPipeHint(false); try { localStorage.setItem('warroom-pipe-hint-seen', String(Date.now())) } catch { /* noop */ } }, 12000)
       return () => { window.clearTimeout(t) }
     }, [pipeHint])
+    // critique P1-2：星域空场指路——编队在外而星球零注册时，一次性 toast 引导
+    // HQ 注册（15s 自动退场 + 7 天冷却，机制照抄 mapHint）。编队本体已挂 HQ
+    // 近地轨道（诚实降级），这里补的是「星域里怎么没有它们的星球」的解释与出口。
+    const [hqGuide, setHqGuide] = useState(false)
+    useEffect(() => {
+      if (wzWsOrder.length > 0 || live.length === 0) return
+      try {
+        const last = Number(localStorage.getItem('warroom-hq-guide-seen') ?? '0')
+        if (last > 0 && Date.now() - last < 7 * 24 * 3600 * 1000) return
+        setHqGuide(true)
+        localStorage.setItem('warroom-hq-guide-seen', String(Date.now()))
+      } catch { /* 隐私模式 */ }
+    }, [wzWsOrder.length, live.length])
+    useEffect(() => {
+      if (!hqGuide) return
+      const t = window.setTimeout(() => { setHqGuide(false) }, 15000)
+      return () => { window.clearTimeout(t) }
+    }, [hqGuide])
     // V10.1 对抗审查 P0-2：hover/聚焦某战线时，其已结算 attempts 在星域显「昔日阵地」
     // ghost（舰长 V10 定案「达成印记 hover 显形」本体——平时不留常驻位，追问才显形）。
     // V10.1 舰长定：聚焦态下悬停族系高亮让位——聚焦是主导航态，悬停不该抢戏；
@@ -2936,12 +2976,11 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       ? tasks.flatMap(t => {
           if (!familyCmdIds.has(lineageOf(t.taskId)?.commandId ?? '')) return []
           const idx = wzWsOrder.indexOf(wsKeyOf(t.workspacePath) ?? '')
-          if (idx < 0) return []
-          const spec = planetSpecs[idx]!
           return t.attemptLog
             .filter(a => a.outcome !== null)
             .map(a => {
-              const pos = moonPos(spec, a.sessionId)
+              // 未注册工作区的昔日阵地同样挂 HQ 轨道（与活体同一降级语义）。
+              const pos = idx >= 0 ? moonPos(planetSpecs[idx]!, a.sessionId) : hqMoonPos(a.sessionId)
               return { sessionId: a.sessionId, xPct: pos.xPct, yPct: pos.yPct, outcome: a.outcome! }
             })
         })
@@ -3359,6 +3398,18 @@ export function warView(services: ClientServicesFace): () => ReactNode {
                 createElement('button', {
                   type: 'button', className: 'war-map-hint-x', title: activeCopy().starfield.mapHintDismiss,
                   onClick: () => { setPipeHint(false); try { localStorage.setItem('warroom-pipe-hint-seen', String(Date.now())) } catch { /* noop */ } },
+                }, activeCopy().starfield.mapHintDismiss),
+              )
+            : null,
+          hqGuide
+            ? createElement('div', { key: 'hq-guide', className: 'war-map-hint', role: 'status' },
+                createElement('button', {
+                  type: 'button', className: 'war-map-hint-main',
+                  onClick: () => { setHqGuide(false); setHqPickerOpen(true) },
+                }, activeCopy().starfield.hqGuideToast),
+                createElement('button', {
+                  type: 'button', className: 'war-map-hint-x', title: activeCopy().starfield.mapHintDismiss,
+                  onClick: () => { setHqGuide(false) },
                 }, activeCopy().starfield.mapHintDismiss),
               )
             : null,

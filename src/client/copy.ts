@@ -17,7 +17,9 @@
 import type { BoardCommand, BoardTask, BoardAttempt } from './data.ts'
 
 export interface WarCopy {
-  head: { title: string; subActive: string; subIdle: string; /** 侧栏入口悬停 title 后缀（入典：随皮肤派生）。 */ entrySuffix: string }
+  head: { title: string; subActive: string; subIdle: string; /** 侧栏入口悬停 title 后缀（入典：随皮肤派生）。 */ entrySuffix: string
+    /** critique P2-5：独立形态右下舰队胶囊（此前硬编码中文绕过双语层）。 */
+    fleetPill: (executor: string) => string }
   loading: { connecting: string; unreachable: (err: string) => string }
   /** 人类可读时长词（views relTime「N 分钟前」/收件箱等待「N 分钟」）——三皮肤同值，
    *  入典为「所有用户可见文案只从本模块取」契约的完整。 */
@@ -29,6 +31,8 @@ export interface WarCopy {
   /** 底部命令调度条（V9.1：滚轮横移的「英雄位」坞，视觉与三列拉开）。 */
   /** V10 星域战场。 */
   starfield: { aria: string; hqOn: string; hqOff: string; orbIdle: string; mapLegend: string; mapHintToast: string; mapHintDismiss: string; untraced: string; controls: string; ungrouped: string
+    /** critique P1-2：星域空场指路 toast（编队在外而星球零注册时一次性示）。 */
+    hqGuideToast: string
     /** V16.4-R5 critique P1：星域层文案并词典（此前 starfield3d/wzLog/2D 标题 ~20 条
      *  硬编码绕过 activeCopy——V16「改一处词典三皮肤同步」的结构性保证在地图半边失效）。 */
     hqName: string
@@ -145,6 +149,8 @@ export interface WarCopy {
     terminalCancelled: string
     terminalSettled: string
     planHint: string
+    /** critique P1-1：决策带内嵌计划原文（details 摘要行）。 */
+    planPeek: string
     clarifyHint: string
     clarifyBtn: string
     reviewHint: string
@@ -152,6 +158,8 @@ export interface WarCopy {
     retryHint: string
     retryBtn: string
     scheduledHint: (time: string) => string
+    /** critique P3：nextRunAt 缺失时的定时行（不露「· —」破折号）。 */
+    scheduledHintPending: string
     noGrade: string
     noBattle: string
     battleLine: (n: number) => string
@@ -160,7 +168,9 @@ export interface WarCopy {
     evTests: (passed: number, failed: number) => string
   }
   /** V9.2 定时命令卡角标（调度条里的 ⏰ 待发卡）。 */
-  scheduleChip: { chip: (time: string) => string; cardTitle: (time: string) => string }
+  scheduleChip: { chip: (time: string) => string; cardTitle: (time: string) => string
+    /** critique P3：出发时刻缺失/解析失败时的兜底（不露「⏰ —」）。 */
+    chipPending: string; cardTitlePending: string }
   columns: {
     commands: { title: string; empty: string }
     tasks: { title: string; empty: string }
@@ -218,6 +228,8 @@ export interface WarCopy {
   /** V7-④ 夜间预检（将停在计划待批的命令警告 + 改直发出口）。 */
   preflight: {
     hint: string
+    /** critique P2-4：talking 态变体——真阻塞是等你答问，不再与状态行打架。 */
+    hintTalking: string
     toDirect: string
     title: string
   }
@@ -518,6 +530,7 @@ export const warCopy: WarCopy = {
     subActive: '命令 → 任务 → 作战 → 结果 · 左区指挥 · 右区战场',
     subIdle: '退役中（/war 启用）',
     entrySuffix: '战略任务栏（跨工作区）',
+    fleetPill: executor => `舰队 · ${executor} ⇄`,
   },
   loading: {
     connecting: '连接作战室…',
@@ -544,6 +557,7 @@ export const warCopy: WarCopy = {
     terminalCancelled: '已取消——此命令已终局，不再推进',
     terminalSettled: '已收官——全线终局，无需你动作',
     planHint: '参谋呈了计划，批准即放权（夜间无人值守照常执行）',
+    planPeek: '计划原文（批准前请细读）',
     clarifyHint: '参谋在等你的回答',
     clarifyBtn: '进入参谋对话',
     reviewHint: '战报已核验，等你翻阅收官',
@@ -551,6 +565,7 @@ export const warCopy: WarCopy = {
     retryHint: '有折戟，等你定夺',
     retryBtn: '去看败因',
     scheduledHint: time => `定时下达 · ${time} 到点自动出发（此前不转达参谋）`,
+    scheduledHintPending: '定时下达 · 出发时刻待定（到点前不转达参谋）',
     noGrade: '尚未分诊',
     noBattle: '等执行者领取',
     battleLine: n => `${n} 次作战`,
@@ -592,6 +607,8 @@ export const warCopy: WarCopy = {
   scheduleChip: {
     chip: time => `⏰ ${time}`,
     cardTitle: time => `定时命令：${time} 到点自动下达（在此之前不会转达参谋）`,
+    chipPending: '⏰ 已排',
+    cardTitlePending: '定时命令：出发时刻待定（到点前不会转达参谋）',
   },
   columns: {
     commands: { title: '命令', empty: '点 + 下达第一道命令' },
@@ -643,6 +660,7 @@ export const warCopy: WarCopy = {
   },
   preflight: {
     hint: '将停在计划待批——夜间无人值守会停整晚',
+    hintTalking: '答完参谋的问还要批计划——两步都过才会继续跑，夜里没人理会停整晚',
     toDirect: '改直发',
     title: '升档 L1/L2 的命令要等你批准计划才会继续，夜里没人批就一直停着。可改为 L0 直发（参谋直接发布执行），或保持等你批。',
   },
@@ -755,6 +773,7 @@ export const warCopy: WarCopy = {
     mapLegend: '蓝动·琥珀等·绿善终·红败 ｜ 行星=战场（内环=最老）· 环=战线（分段=战线数）· ✓凯旋 · 呼吸光点=执行中',
     mapHintToast: '🪐 战场不止一个——试试战区视图（点此开启，⚙ 设置里随时可关）',
     mapHintDismiss: '忽略',
+    hqGuideToast: '🪐 编队已出动，但战区还没有战场——注册工作区给它们一个落位（点此注册）',
     controls: '左键拖拽平移 · 中键旋转 · 滚轮缩放 · 双击或 R 复位 · 悬停光点点亮战线',
     untraced: '未溯源执行',
     ungrouped: '未分组',
@@ -780,10 +799,10 @@ export const warCopy: WarCopy = {
     hqPickerEmpty: '宿主侧暂无工作区（或清单未就绪）',
     hqPickerManualSection: '手动注册',
     hqPickerManualPathLabel: '文件夹路径',
-    hqPickerManualTitleLabel: '星球名（可选，缺省=文件夹名）',
+    hqPickerManualTitleLabel: '战场名（可选，缺省=文件夹名）',
     hqPickerBrowse: '浏览…',
-    hqPickerManualHint: '点「浏览」在资源管理器选文件夹——对话框里可在任意位置「新建文件夹」当新星球；或直接输入已有路径。注册后即入星域，下达命令时可在星球行选它为执行星球。',
-    hqPickerManualDone: '✓ 已注册入星域',
+    hqPickerManualHint: '点「浏览」在资源管理器选文件夹——对话框里可在任意位置「新建文件夹」当新战场；或直接输入已有路径。注册后即入战区，下达命令时可在战场行选它为执行战场。',
+    hqPickerManualDone: '✓ 已注册入战区',
     hqPickerLoadError: '宿主工作区清单暂不可用',
     hqPickerRegFail: '注册没生效——稍候重试',
     frontBfLabel: '战场：',
@@ -1054,6 +1073,7 @@ export const plainCopy: WarCopy = {
     subActive: '命令 → 任务 → 执行 → 结果 · 左区下达 · 右区看结果',
     subIdle: '未启用（/war 启用）',
     entrySuffix: '跨工作区看板',
+    fleetPill: executor => `舰队 · ${executor} ⇄`,
   },
   loading: {
     connecting: '连接看板…',
@@ -1080,6 +1100,7 @@ export const plainCopy: WarCopy = {
     terminalCancelled: '已取消——这条命令结束了，不再推进',
     terminalSettled: '已完成——全部结束，不用你管',
     planHint: '规划 Agent 给了方案，点头就照做（夜里也不停）',
+    planPeek: '方案原文（点头前先看看）',
     clarifyHint: '规划 Agent 在等你回话',
     clarifyBtn: '去对话',
     reviewHint: '结果已核好，等你过目',
@@ -1087,6 +1108,7 @@ export const plainCopy: WarCopy = {
     retryHint: '有失败的，等你定',
     retryBtn: '去看失败',
     scheduledHint: time => `定时 · ${time} 自动开始（到点前不转给规划 Agent）`,
+    scheduledHintPending: '定时 · 出发时刻待定（到点前不转给规划 Agent）',
     noGrade: '还没分诊',
     noBattle: '等人接手',
     battleLine: n => `执行 ${n} 次`,
@@ -1128,6 +1150,8 @@ export const plainCopy: WarCopy = {
   scheduleChip: {
     chip: time => `⏰ ${time}`,
     cardTitle: time => `定时命令：${time} 自动下达（到点前不转给规划 Agent）`,
+    chipPending: '⏰ 已排',
+    cardTitlePending: '定时命令：出发时刻待定（到点前不转给规划 Agent）',
   },
   columns: {
     commands: { title: '命令', empty: '点 + 下达第一条命令' },
@@ -1178,6 +1202,7 @@ export const plainCopy: WarCopy = {
   },
   preflight: {
     hint: '需要你批准方案后才会继续——夜里没人处理会一直停着',
+    hintTalking: '规划 Agent 先等你的回话，方案也要你点头——两步都过才会继续，夜里没人理会停一晚',
     toDirect: '改为直接执行',
     title: '标记为 L1/L2 的任务要等你批准方案才会继续，夜里没人处理就一直停着。可改为直接执行（规划 Agent 直接发布），或保持等你批。',
   },
@@ -1290,6 +1315,7 @@ export const plainCopy: WarCopy = {
     mapLegend: '蓝=干活·琥珀=等你·绿=完成·红=失败 ｜ 星球=项目（内环=最早）· 环=同一条线（点=第几轮）· ✓完成数 · 亮点=进行中',
     mapHintToast: '🪐 项目不止一个——试试全景图视图（点这里打开，⚙ 设置里可以关掉）',
     mapHintDismiss: '忽略',
+    hqGuideToast: '🪐 有任务在外面跑，但全景图上还没有星球——添加工作区给它们一个位置（点此添加）',
     controls: '左键拖动平移 · 中键转视角 · 滚轮缩放 · 双击或 R 回正 · 悬停亮点查看关联',
     untraced: '还没关联命令',
     ungrouped: '杂项',

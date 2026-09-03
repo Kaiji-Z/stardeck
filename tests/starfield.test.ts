@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { chainHueSlot, deriveContinuation, foldChains, foldDirectives, type Directive } from '../src/directives.ts'
 // 星域布局纯函数——坐标确定性是 V10 的视觉红线（SSE 零抖动）。
-import { galaxyLayout, garrisonOf, hash01, moonPos, planetAngleDeg, planetLabel, workspaceCreationOrder } from '../src/client/starfield.tsx'
+import { galaxyLayout, garrisonOf, hqMoonPos, HQ_POS, hash01, moonPos, planetAngleDeg, planetLabel, workspaceCreationOrder } from '../src/client/starfield.tsx'
 
 function chainsFor(dirs: readonly Directive[]) {
   return foldChains(dirs)
@@ -79,4 +79,16 @@ test('星域名与旧链路回归：尾段截取；directives fold 链色槽仍�
   const chains = chainsFor(dirs)
   assert.ok(chainHueSlot(chains.rootByCommand.get('r')!) < 8)
   assert.match((deriveContinuation({ status: 'draft' }, undefined) as { error: string }).error, /大副对话/)
+})
+
+test('HQ 近地轨道（critique P1-2）：未注册编队锚 HQ——确定性、界内、贴 HQ 恒星位', () => {
+  const m = hqMoonPos('sess-orphan')
+  assert.deepEqual(m, hqMoonPos('sess-orphan'), '零抖动契约：同会话恒同位')
+  for (const [sid] of [['a'], ['b'], ['c'], ['sess-orphan']] as const) {
+    const p = hqMoonPos(`sess-${sid}`)
+    assert.ok(p.xPct >= 0 && p.xPct <= 100 && p.yPct >= 0 && p.yPct <= 100, '百分比界内')
+    const dx = p.xPct - HQ_POS.xPct, dy = p.yPct - HQ_POS.yPct
+    assert.ok(Math.hypot(dx, dy / 0.72) <= 8, '贴 HQ 近轨（半径 7% 级别）')
+  }
+  assert.notDeepEqual(hqMoonPos('sess-a'), hqMoonPos('sess-b'), '不同会话散布')
 })

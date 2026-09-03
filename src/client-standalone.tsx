@@ -7,11 +7,12 @@
  * 在门上显示提示（不静默放行）。宿主服务面全可选；到访 lastSeen 离页落。
  * @module stardeck/client-standalone
  */
-import { createElement, useCallback, useEffect, useState } from 'react'
+import { createElement, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ensureWarStyles } from './client/styles.ts'
 import { warView, type ClientServicesFace } from './client/views.tsx'
 import { fleetGate, type FleetState } from './client/fleet-gate.tsx'
+import { activeCopy, langId, subscribeLang } from './client/copy.ts'
 
 ensureWarStyles()
 
@@ -31,6 +32,9 @@ function App(): ReturnType<typeof createElement> {
   const [phase, setPhase] = useState<'entry' | 'board' | 'switch'>('entry')
   const [error, setError] = useState('')
   const [bindNote, setBindNote] = useState('')
+  // critique P2-5：语言轴订阅——胶囊文案入双语层（head.fleetPill），切 EN 即换，
+  // 不再硬编码中文绕过 copy-lang 完备性铁门。
+  useSyncExternalStore(subscribeLang, langId)
   useEffect(() => {
     fetch('/warroom/api/fleet').then(r => r.json()).then((f: { ok?: boolean; active?: FleetState['active']; seats?: FleetState['seats'] }) => {
       if (f.ok === true && f.active !== undefined && f.seats !== undefined) setFleet({ active: f.active, seats: f.seats })
@@ -65,7 +69,7 @@ function App(): ReturnType<typeof createElement> {
         background: 'var(--war-card-bg)', border: '1px solid var(--war-border)', boxShadow: 'var(--war-shadow-1)',
         color: 'var(--war-text-2)', fontFamily: 'var(--war-font-code)', fontSize: 13,
       },
-    }, `舰队 · ${fleet.active.executor} ⇄`)
+    }, activeCopy().head.fleetPill(fleet.active.executor))
     : null
   // 满高挂载：宿主 shell 给 .war-root 一满高容器（height:100% 才有锚），
   // 独立形态在此自供——否则板塌到内容高，星域/三列被压扁。

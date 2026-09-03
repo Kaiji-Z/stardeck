@@ -789,6 +789,10 @@ export class WarzoneScene {
   private bridged = false
   private hqActive = true
   private planetKey = ''
+  /** critique P1-2：未注册工作区编队的 HQ 锚位（懒建）——不进 this.planets
+   *  （update 不推它的轨道），只作为 squad 目标提供 mesh/radius/deployedSquads
+   *  语义；编队绕 HQ 星舰近轨，左列在打、3D 里就有化身。 */
+  private hqAnchor: WzPlanet | null = null
   private readonly squadBySession = new Map<string, WzSquad>()
   /** 悬停/聚焦高亮星域（V11.5f 定案）：光晕增亮 + HQ↔星球虚线轨迹。 */
   private readonly hlWs = new Set<string>()
@@ -2086,6 +2090,26 @@ export class WarzoneScene {
   /** 板同步（V11.5 连线正门）：星球集（wsPath 变更时整组重建，否则原地刷状态）
    * + 编队 diff（新会话=星舰起飞 / 消失=返航 / 相位迁移随板面）+ WAR LOG 整组
    * 替换 + HQ 出航开关。此后 demo 自驱永久旁路。 */
+  private ensureHqAnchor(): WzPlanet {
+    if (this.hqAnchor !== null) return this.hqAnchor
+    const mesh = new THREE.Group()
+    mesh.position.set(0, -6, 0)
+    this.scene.add(mesh)
+    // halo 仅为满足 WzPlanet 形状的哑件（不入场景、零透明度——update 不遍历锚位）。
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0 }))
+    const proxy = new THREE.Mesh(new THREE.SphereGeometry(1, 6, 4), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }))
+    this.disposables.push(halo.material, proxy.geometry, proxy.material)
+    this.hqAnchor = {
+      kind: 'planet', id: -1, name: activeCopy().starfield.hqName, wsPath: '__hq__', cls: 'medium', level: 1,
+      radius: 14, mesh, cloud: null, ring: null, pillar: null, halo, proxy,
+      baseGlow: new THREE.Color(0), haloScale: 0,
+      orbit: { r: 0, ecc: 0, speed: 0, angle: 0, phase: 0, tiltA: 0, yBase: -6 },
+      status: 'battle', state: 'active', garrison: 0, failing: 0,
+      battleT: 0, ringT: 0, inbound: 0, deployedSquads: [], seed: 0, rot: 0,
+    }
+    return this.hqAnchor
+  }
+
   syncBoard(bridge: { active: boolean; planets: ReadonlyArray<WzBridgePlanet>; squads: ReadonlyArray<WzBridgeSquad>; log: ReadonlyArray<WzLogEntry>; fronts?: ReadonlyArray<WzBridgeFrontLite> }): void {
     this.bridged = true
     this.lastBridge = bridge
@@ -2149,8 +2173,8 @@ export class WarzoneScene {
     }
     for (const bs of bridge.squads) {
       const existing = this.squadBySession.get(bs.sessionId)
-      const planet = byWs.get(bs.wsPath)
-      if (planet === undefined) continue
+      // critique P1-2：未注册工作区的编队挂 HQ 锚位（不再 continue 丢弃）。
+      const planet = byWs.get(bs.wsPath) ?? this.ensureHqAnchor()
       if (existing === undefined) {
         const s = this.createSquad(planet, 'outbound', 0, { verb: bs.verb, paused: bs.paused, sourceLabel: bs.sourceLabel, boardPhase: bs.phase, sourceCommandId: bs.sourceCommandId, live: bs.live })
         s.sessionId = bs.sessionId

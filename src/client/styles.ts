@@ -94,9 +94,11 @@ export const WAR_CSS = `
   --war-wz-toggle-bg: rgba(255,255,255,.78); --war-wz-toggle-border: rgba(28,78,128,.45); --war-wz-toggle-text: #33506e;
   --war-wz-toggle-on-bg: linear-gradient(180deg,rgba(25,113,194,.24),rgba(25,113,194,.08));
   --war-wz-toggle-on-text: #0b3a63; --war-wz-toggle-hover-text: #0b3a63;
-  --war-wz-legend-text: #4a648a; --war-wz-hint: #4a648a;
+  /* critique B 取证：3D 天空 #8fc3ec 上的 HUD 文字需 ≥4.5:1——#4a648a 只有 3.2:1，
+     加深到 #24405c（4.9:1）；foot-stat 同挂此墨色。 */
+  --war-wz-legend-text: #24405c; --war-wz-hint: #24405c;
   --war-wz-tip-bg: rgba(252,253,255,.95); --war-wz-tip-border: rgba(28,78,128,.35);
-  --war-wz-tip-shadow: 0 4px 20px rgba(30,60,100,.22); --war-wz-tip-text: #23405e;
+  --war-wz-tip-shadow: 0 4px 14px rgba(30,60,100,.2); --war-wz-tip-text: #23405e;
   --war-wz-tip-name: #10365c; --war-wz-tip-tag: #1c4e80; --war-wz-tip-tag-border: rgba(28,78,128,.45);
   --war-wz-tip-desc: #4c6a8a; --war-wz-tip-row-line: rgba(70,110,160,.25);
   --war-wz-tip-label: #5a7396; --war-wz-tip-value: #132f4a;
@@ -181,14 +183,15 @@ body[data-ds-dark-theme] .war-root{
   --war-wz-card-bg: rgba(8,14,28,.84); --war-wz-card-border: rgba(255,179,92,.4);
   --war-wz-card-text: #cfe6ff; --war-wz-card-dim: #7e9cc0;
   --war-wz-card-hover-border: rgba(255,179,92,.9); --war-wz-card-hover-text: #eef8ff;
-  --war-wz-card-shadow: 0 0 14px rgba(0,140,255,.14); --war-wz-card-hover-shadow: 0 0 18px rgba(0,140,255,.3);
+  /* critique B 取证：彩色辉光（dark-glow / 1px 边+26px 大模糊）→ 定向阴影。 */
+  --war-wz-card-shadow: 0 2px 10px rgba(2,10,24,.5); --war-wz-card-hover-shadow: 0 4px 14px rgba(2,10,24,.6);
   --war-wz-dot: #6fe3ff; --war-wz-dot-glow: #6fe3ff;
   --war-wz-toggle-bg: rgba(8,14,28,.6); --war-wz-toggle-border: rgba(111,227,255,.4); --war-wz-toggle-text: #8fb6dd;
   --war-wz-toggle-on-bg: linear-gradient(180deg,rgba(60,140,255,.3),rgba(60,140,255,.1));
   --war-wz-toggle-on-text: #eaf6ff; --war-wz-toggle-hover-text: #dff2ff;
   --war-wz-legend-text: #7e9cc0; --war-wz-hint: #7e9cc0;
   --war-wz-tip-bg: rgba(8,14,28,.78); --war-wz-tip-border: rgba(111,227,255,.35);
-  --war-wz-tip-shadow: 0 0 26px rgba(0,140,255,.16),inset 0 0 20px rgba(20,60,120,.22); --war-wz-tip-text: #cfe6ff;
+  --war-wz-tip-shadow: 0 6px 16px rgba(2,10,24,.55); --war-wz-tip-text: #cfe6ff;
   --war-wz-tip-name: #eaf6ff; --war-wz-tip-tag: #8fd8ff; --war-wz-tip-tag-border: rgba(111,227,255,.4);
   --war-wz-tip-desc: #9db8d8; --war-wz-tip-row-line: rgba(120,170,220,.14);
   --war-wz-tip-label: #7e9cc0; --war-wz-tip-value: #e8f4ff;
@@ -639,7 +642,8 @@ body[data-ds-dark-theme] .war-root .war-alarm-time,body[data-ds-dark-theme] .war
 .war-set-conn-dot.down{background:var(--war-fail-border)}
 .war-set-conn-text{flex:1 1 auto;min-width:0}
 /* --- V9.3：非零收件箱 = 岛的主导信号（胶囊染警示，清空回常态）--------------- */
-.war-island-pill.has-inbox{border-color:color-mix(in srgb, var(--war-wait-border) 60%, var(--war-border));box-shadow:0 2px 10px color-mix(in srgb, var(--war-wait-border) 18%, transparent)}
+/* critique B 取证：琥珀辉光（dark-glow）撤除——等你信号由边框色承担，不再发晕。 */
+.war-island-pill.has-inbox{border-color:color-mix(in srgb, var(--war-wait-border) 60%, var(--war-border))}
 .war-island-pill.has-inbox .war-head-dot{background:var(--war-wait-border);opacity:1}
 
 /* --- V9.3：批准计划视觉隔离（一键保留，后果先讲清——决策区独立成块）--------- */
@@ -755,7 +759,7 @@ body[data-ds-dark-theme] .war-root .war-stars{position:absolute;inset:0;
 .war-wz-xcard{position:absolute;left:0;top:0;pointer-events:auto;display:flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border-radius:var(--war-r-pill);background:var(--war-wz-card-bg);border:1px solid var(--war-wz-card-border);color:var(--war-wz-card-text);font:12px/1.4 var(--war-font);white-space:nowrap;cursor:grab;backdrop-filter:blur(6px);box-shadow:var(--war-wz-card-shadow);transition:border-color .15s,box-shadow .15s;touch-action:none}
 .war-wz-xcard:active{cursor:grabbing}
 .war-wz-xcard:hover,.war-wz-xcard:focus-visible{border-color:var(--war-wz-card-hover-border);box-shadow:var(--war-wz-card-hover-shadow);color:var(--war-wz-card-hover-text);outline:none}
-.war-wz-xdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--war-wz-dot);box-shadow:0 0 5px var(--war-wz-dot-glow);animation:war-wz-breathe 1.6s ease-in-out infinite}
+.war-wz-xdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--war-wz-dot);animation:war-wz-breathe 1.6s ease-in-out infinite}
 .war-wz-xverb{font-weight:600}
 .war-wz-xsrc{color:var(--war-wz-card-dim)}
 @keyframes war-wz-breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.82)}}
@@ -764,7 +768,7 @@ body[data-ds-dark-theme] .war-root .war-stars{position:absolute;inset:0;
 .war-wz-toggle button.on{background:var(--war-wz-toggle-on-bg);color:var(--war-wz-toggle-on-text);font-weight:700}
 .war-wz-toggle button:hover{color:var(--war-wz-toggle-hover-text)}
 .war-wz-foot{position:absolute;left:50%;bottom:calc(var(--war-dock-h, 230px) + 10px);transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;user-select:none}
-.war-wz-foot-stat{font-size:12px;color:var(--war-text-2);letter-spacing:.04em}
+.war-wz-foot-stat{font-size:12px;color:var(--war-wz-hint);letter-spacing:.04em}
 /* V16.4-R2 critique P2：键盘镜像星球钮——平时视觉隐藏，focus-visible 显形为浮钮。 */
 .war-wz-kbplanet{position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
 .war-wz-kbplanet:focus-visible{position:fixed;left:340px;top:64px;z-index:30;width:auto;height:auto;overflow:visible;padding:4px 10px;border-radius:var(--war-r-pill);border:1px solid var(--war-run-border);background:var(--war-pop-bg);color:var(--war-text-1);font-size:12px;font-family:var(--war-font);outline:2px solid var(--war-focus);outline-offset:1px}
@@ -779,7 +783,7 @@ body[data-ds-dark-theme] .war-root .war-stars{position:absolute;inset:0;
  * 钉住卡内嵌战线行可点击（事件委托 data-wz-front，卡体点击不落回星域）。 */
 .war-wz-tip{position:absolute;left:0;top:0;z-index:20;min-width:236px;max-width:360px;display:none;background:var(--war-wz-tip-bg);border:1px solid var(--war-wz-tip-border);border-radius:var(--war-r-md);padding:12px 14px;backdrop-filter:blur(8px);box-shadow:var(--war-wz-tip-shadow);color:var(--war-wz-tip-text);font:12px/1.65 var(--war-font);pointer-events:auto}
 .war-wz-tip .tt-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.war-wz-tip .dot{width:9px;height:9px;border-radius:50%;background:var(--war-wz-tip-dot);box-shadow:0 0 5px var(--war-wz-tip-dot-glow);flex:none}
+.war-wz-tip .dot{width:9px;height:9px;border-radius:50%;background:var(--war-wz-tip-dot);flex:none}
 .war-wz-tip .dot.warm{background:var(--war-wz-tip-dot-warm)}
 .war-wz-tip .tt-name{font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--war-wz-tip-name);white-space:nowrap}
 .war-wz-tip .tt-tag{margin-left:auto;font-size:12px;color:var(--war-wz-tip-tag);border:1px solid var(--war-wz-tip-tag-border);padding:1px 7px;border-radius:99px;white-space:nowrap}
@@ -917,6 +921,13 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 .war-cd-band.quiet .war-cd-band-tag.war-cd-band-err{color:var(--war-fail)}
 .war-cd-band-hint{flex:1 1 200px;min-width:0;font-size:12px;line-height:1.5;color:var(--war-text-2)}
 .war-cd-band-actions{display:flex;gap:8px;flex:0 0 auto}
+/* critique P1-1：决策带内嵌计划原文——默认截 6 行，details 展开全文（键盘原生可达）。 */
+.war-cd-band-plan{flex:1 1 100%}
+.war-cd-band-plan summary{list-style:none;cursor:pointer;font-size:12px;color:var(--war-wait);display:inline-flex;align-items:center;gap:4px}
+.war-cd-band-plan summary::-webkit-details-marker{display:none}
+.war-cd-band-plan summary::before{content:'▸';transition:transform .15s ease}
+.war-cd-band-plan[open] summary::before{transform:rotate(90deg)}
+.war-cd-band-plan .war-plan-body{margin-top:6px;max-height:340px;background:var(--war-card-bg);border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);padding:8px 10px}
 .war-cd-stage{display:flex;flex-direction:column;gap:8px;padding-top:6px}
 .war-cd-stage-head{display:flex;align-items:center;gap:8px;min-width:0}
 .war-cd-stage-name{flex:0 0 auto;font-size:13px;font-weight:600;color:var(--war-text-1)}
@@ -961,8 +972,9 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 .war-session-badge{font-size:11px;color:var(--war-text-3);font-family:var(--war-font-code);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;max-width:46%}
 .war-session-body{overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .war-session-msg{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--war-border-soft);border-radius:6px;background:var(--war-card-bg)}
-.war-session-msg.war-session-user{border-left:3px solid var(--war-run-strong)}
-.war-session-msg.war-session-assistant{border-left:3px solid var(--war-done)}
+/* critique B 取证（side-tab）：角色区分改底色微染，不再三条 3px 左边条。 */
+.war-session-msg.war-session-user{background:color-mix(in srgb, var(--war-run-strong) 7%, var(--war-card-bg))}
+.war-session-msg.war-session-assistant{background:var(--war-card-bg)}
 .war-session-meta{font-size:11px;color:var(--war-text-3);letter-spacing:.04em}
 .war-session-part{font-size:12px;line-height:1.7;color:var(--war-text-1);white-space:pre-wrap;word-break:break-word}
 .war-session-reasoning{color:var(--war-text-3);font-style:italic}
