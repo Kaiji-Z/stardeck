@@ -81,10 +81,12 @@ export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkIt
  * 接令工单内嵌 relayPromptFor 正典（分诊纪律+起草法全文随旗面），续办
  * 工单只给增量指引——不改正典措辞。
  */
-export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' = 'mcp'): string {
+export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' | 'http' = 'mcp'): string {
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】你是 stardeck 舰的外聘大副——本进程已通过 MCP 桥（server 名 stardeck）直连舰桥，war_* 工具全量可用。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
-    : '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程已由 stardeck 扩展注册大副侧工具（war_triage / war_plan / war_publish / war_board / war_abandon_command，经 HTTP 回连舰桥，与 MCP 同名同义）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
+    : face === 'http'
+      ? '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程经 HTTP 直连舰桥（zcode 无头模式不加载项目 MCP：若本进程工具面里没有 war_* 工具，一律走这条通道，不要探测别的端口）。POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）、war_board 看全局、war_abandon_command 弃案。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
+      : '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程已由 stardeck 扩展注册大副侧工具（war_triage / war_plan / war_publish / war_board / war_abandon_command，经 HTTP 回连舰桥，与 MCP 同名同义）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
   const sections: string[] = [
     staffPersonaText(0),
     '',

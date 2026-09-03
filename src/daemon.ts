@@ -373,7 +373,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendDirectiveEvent(stateDir, { type: 'directive_received', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
       }
       staffSession = await spawnStaffAgent({
-        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : 'mcp'),
+        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' ? 'http' : 'mcp'),
         workspacePath: join(stateDir, 'staff'),
         http: base,
         agentId,

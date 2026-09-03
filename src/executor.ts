@@ -64,8 +64,9 @@ export interface ExecutorAdapter {
 }
 
 /** 征召令正文=正典 commanderOrderFor + stardeck 工具接入面（出口教学增量）。
- * face 决定接入面措辞：opencode/codex=经 MCP 桥；pi=经注入扩展（无 MCP）。 */
-export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extension' = 'mcp'): string {
+ * face 决定接入面措辞：opencode/codex=经 MCP 桥；pi=经注入扩展（无 MCP）；
+ * zcode=http 直连（无头不加载项目 MCP——2026-09-04 playground 实证）。 */
+export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extension' | 'http' = 'mcp'): string {
   const order = commanderOrderFor({
     maxUnits: 0,
     taskId: args.taskId,
@@ -76,7 +77,9 @@ export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extensi
   })
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】本工作区已接入 stardeck MCP 服务（server 名 stardeck，war_* 工具全量可用）：'
-    : '【stardeck 工具接入面】本工作区已由 stardeck 扩展注册 war_claim / war_submit / war_fail 工具（经 HTTP 回连舰桥，与 MCP 同名同义）：'
+    : face === 'http'
+      ? '【stardeck 工具接入面】经 HTTP 直连舰桥（zcode 无头模式不加载项目 MCP：若本进程工具面里没有 war_* 工具，一律走这条通道）：POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。'
+      : '【stardeck 工具接入面】本工作区已由 stardeck 扩展注册 war_claim / war_submit / war_fail 工具（经 HTTP 回连舰桥，与 MCP 同名同义）：'
   return [
     order,
     '',
@@ -958,7 +961,9 @@ export const zcodeAdapter: ExecutorAdapter = {
   id: 'zcode',
   async spawn(args) {
     mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
-    writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), executorBrief(args), 'utf8')
+    // http 面（critique 实抓）：zcode 无头不加载项目 .mcp.json——简报不再谎称
+    // MCP 已连接，改教 HTTP 直连通道（node + UTF-8 纪律）。
+    writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), executorBrief(args, 'http'), 'utf8')
     injectZcodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
     return spawnCli(args.executorBin, zcodePromptArgs({ prompt: PROMPT }),
       {
