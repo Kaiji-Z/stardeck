@@ -794,10 +794,10 @@ body[data-ds-dark-theme] .war-root .war-stars{position:absolute;inset:0;
 /* V18.3：定宽 360（高度不限，长路径换行不省略）；pointer-events auto——聚焦态
  * 钉住卡内嵌战线行可点击（事件委托 data-wz-front，卡体点击不落回星域）。 */
 .war-wz-tip{position:absolute;left:0;top:0;z-index:20;min-width:236px;max-width:360px;display:none;background:var(--war-wz-tip-bg);border:1px solid var(--war-wz-tip-border);border-radius:var(--war-r-md);padding:12px 14px;backdrop-filter:blur(8px);box-shadow:var(--war-wz-tip-shadow);color:var(--war-wz-tip-text);font:12px/1.65 var(--war-font);pointer-events:auto}
-.war-wz-tip .tt-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.war-wz-tip .tt-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;min-width:0} /* V19：长名折行不撑破卡（360px 上限内换行） */
 .war-wz-tip .dot{width:9px;height:9px;border-radius:50%;background:var(--war-wz-tip-dot);flex:none}
 .war-wz-tip .dot.warm{background:var(--war-wz-tip-dot-warm)}
-.war-wz-tip .tt-name{font-size:calc(14px*var(--war-fs));font-weight:700;letter-spacing:.06em;color:var(--war-wz-tip-name);white-space:nowrap}
+.war-wz-tip .tt-name{font-size:calc(14px*var(--war-fs));font-weight:700;letter-spacing:.06em;color:var(--war-wz-tip-name);white-space:normal;overflow-wrap:anywhere;min-width:0} /* V19：nowrap 退役——长目录名折行，完整路径仍在 tt-desc */
 .war-wz-tip .tt-tag{margin-left:auto;font-size:calc(12px*var(--war-fs));color:var(--war-wz-tip-tag);border:1px solid var(--war-wz-tip-tag-border);padding:1px 7px;border-radius:99px;white-space:nowrap}
 .war-wz-tip .tt-desc{color:var(--war-wz-tip-desc);font-size:calc(12px*var(--war-fs));margin-bottom:8px;white-space:normal;overflow-wrap:anywhere}  /* V18.3：完整路径换行不省略（定案） */
 .war-wz-tip .tt-row{display:flex;justify-content:space-between;gap:18px;padding:2.5px 0;border-top:1px dashed var(--war-wz-tip-row-line)}

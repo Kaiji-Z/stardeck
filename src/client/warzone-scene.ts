@@ -2482,18 +2482,18 @@ export class WarzoneTactical {
       g.beginPath(); g.arc(s1.x, s1.y, rr, 0, PI2)
       g.fillStyle = col + '2e'; g.fill()
       g.strokeStyle = isHl ? P.hl : col; g.lineWidth = isHl ? 2.6 : 1.6; g.stroke()
-      // reticle 四向刻度须（0°/90°/180°/270° 短须——「被锁定追踪的目标」语法）
-      for (const a of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
-        g.beginPath()
-        g.moveTo(s1.x + Math.cos(a) * (rr + 2), s1.y + Math.sin(a) * (rr + 2))
-        g.lineTo(s1.x + Math.cos(a) * (rr + 8), s1.y + Math.sin(a) * (rr + 8))
-        g.strokeStyle = col; g.lineWidth = 1.4; g.stroke()
+      // reticle 四向刻度须：只在高亮（悬停/族链命中）时出现——静息态保持干净
+      // 一环一点（舰长反馈：常驻刻度+驻军弧+战线环三层环语义分不清，做减法）。
+      if (isHl) {
+        for (const a of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
+          g.beginPath()
+          g.moveTo(s1.x + Math.cos(a) * (rr + 2), s1.y + Math.sin(a) * (rr + 2))
+          g.lineTo(s1.x + Math.cos(a) * (rr + 8), s1.y + Math.sin(a) * (rr + 8))
+          g.strokeStyle = col; g.lineWidth = 1.4; g.stroke()
+        }
       }
       g.beginPath(); g.arc(s1.x, s1.y, 3.2, 0, PI2); g.fillStyle = col; g.fill()
-      if (p.garrison > 0) {
-        g.beginPath(); g.arc(s1.x, s1.y, rr + 7, -Math.PI / 2, -Math.PI / 2 + Math.min(PI2, p.garrison / 12 * PI2))
-        g.strokeStyle = P.garrison; g.lineWidth = 2.5; g.stroke()
-      }
+      // 驻军弧退役（V19.5）：数字已在铭牌读数「N▸状态」里——盘面少一层环语义。
       // V18.6 战线环 2D 同语言（V15.2 语义）：一星球一环、分段=战线数，环色=
       // 星球身份色（黄金角轮转，与 3D rebuildFrontLines 同式）。
       const fn = frontN.get(p.wsPath) ?? 0
@@ -2514,8 +2514,8 @@ export class WarzoneTactical {
       g.globalAlpha = 1
     })
     // V19.5 引线铭牌 pass（贾维斯索引）：名字/状态从目标环牵出——出环短须→折臂
-    // →水平铭牌（名=状态色等宽字，下挂微型读数「N▸执行中 · ✕1」）；铭牌本身
-    // 入 hits（悬停/点击同星球）——「索引」名副其实。弧排退役（V18.2 案翻）。
+    // →水平铭牌（名=状态色等宽字，下挂微型读数「N▸执行中 · ✕1」）。铭牌纯展示
+    // （舰长定案：hover 只认星球本体，文字索引不触发悬停卡）。弧排退役（V18.2 案翻）。
     const sf = activeCopy().starfield
     g.font = '11px Consolas,"Microsoft YaHei"'
     const places = planCallouts(cx, cy, tacPlanets.map(a => ({ id: a.p.wsPath, x: a.x, y: a.y, r: a.rr + 9, w: g.measureText(planetLabelOf(a.p).split(' ·')[0]!).width })), { x0: S.x + 4, x1: S.x + S.w - 4 })
@@ -2532,7 +2532,6 @@ export class WarzoneTactical {
       g.fillStyle = a.isHl ? P.nameHl : a.col
       g.fillText(nm, place.tx, place.ly - 6)
       ;(g as unknown as { letterSpacing?: string }).letterSpacing = '0px'
-      const nmW = g.measureText(nm).width
       const statusWord = a.p.state === 'active' ? sf.wzStBattle
         : a.p.state === 'settled' ? sf.wzStHeld
         : a.p.state === 'failed' ? `✕${a.p.failing > 0 ? a.p.failing : 1}`
@@ -2540,8 +2539,6 @@ export class WarzoneTactical {
       const read = `${a.p.garrison > 0 ? `${a.p.garrison}▸` : ''}${statusWord}`
       g.font = '9px Consolas,"Microsoft YaHei"'; g.fillStyle = P.name
       g.fillText(read, place.tx, place.ly + 7)
-      const tw = Math.max(nmW, g.measureText(read).width) + 8
-      hits.push({ x: place.align === 'left' ? place.tx + tw / 2 : place.tx - tw / 2, y: place.ly, r: Math.max(tw / 2, 14), ref: a.p })
       g.globalAlpha = 1
     }
     // 编队符号 + 虚线航迹
