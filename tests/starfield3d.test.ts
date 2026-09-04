@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { archetypeOf, attemptPhaseOf, clampCam, dampCam, ease, pad2, planetNoise, qbez, truncateForArc, warLogOf, warzoneLayoutFor, warzonePlanets, WZ_CAM_DIST_MAX, WZ_CAM_DIST_MIN, WZ_CAM_HOME, WZ_CAM_PITCH_MAX, WZ_CAM_PITCH_MIN, wzCamBounds, wzStatusText } from '../src/client/warzone-scene.ts'
+import { archetypeOf, attemptPhaseOf, clampCam, dampCam, ease, pad2, planetNoise, planCallouts, qbez, truncateForArc, warLogOf, warzoneLayoutFor, warzonePlanets, WZ_CAM_DIST_MAX, WZ_CAM_DIST_MIN, WZ_CAM_HOME, WZ_CAM_PITCH_MAX, WZ_CAM_PITCH_MIN, wzCamBounds, wzStatusText } from '../src/client/warzone-scene.ts'
 
 /** V11.4 warzone demo 移植的纯函数面：星球布局确定性（红线①——同种子恒同貌，
  * SSE 零抖动、探针可断言的根基）+ 贝塞尔航迹几何。 */
@@ -170,4 +170,30 @@ test('V19 铭文省略截断 truncateForArc：超预算补 … 不超线、放�
   const mv = (ch: string) => w[ch] ?? 4
   // 广(12)+…(8)=20 ≤ 30；加阔 12+12=24 > 30-8=22 → 断在第一字后
   assert.equal(truncateForArc(mv, '广阔深遥', 30), '广…')
+})
+
+test('V19.5 贾维斯雷达·引线铭牌 planCallouts：侧别/堆叠防撞/越界翻侧', () => {
+  const cx = 300, cy = 250, w = 600
+  // 右半盘 → 铭牌朝右（align left，tx > 折臂点）；左半盘镜像
+  const two = planCallouts(cx, cy, [
+    { id: 'r', x: cx + 100, y: cy, r: 12, w: 60 },
+    { id: 'l', x: cx - 100, y: cy, r: 12, w: 60 },
+  ], { x0: 6, x1: w - 6 })
+  const pr = two.get('r')!, pl = two.get('l')!
+  assert.equal(pr.side, 1); assert.equal(pr.align, 'left'); assert.ok(pr.tx > pr.ex)
+  assert.equal(pl.side, -1); assert.equal(pl.align, 'right'); assert.ok(pl.tx < pl.ex)
+  // 引线起点在目标环上（p0 距星球心 = r）
+  assert.ok(Math.abs(Math.hypot(pr.p0x - (cx + 100), pr.p0y - cy) - 12) < 0.01, 'p0 落在环缘')
+  // 同侧近距堆叠：y 差 5px 的两牌，第二块被推到 minGap 之外
+  const stack = planCallouts(cx, cy, [
+    { id: 'a', x: cx + 120, y: cy, r: 10, w: 40 },
+    { id: 'b', x: cx + 150, y: cy + 5, r: 10, w: 40 },
+  ], { x0: 6, x1: w - 6 })
+  const pa = stack.get('a')!, pb = stack.get('b')!
+  assert.ok(Math.abs(pb.ly - pa.ly) >= 17, `同侧堆叠 minGap（dy=${Math.abs(pb.ly - pa.ly).toFixed(1)}）`)
+  // 越界翻侧：右缘星球+宽铭牌出界 → align 翻成 right、tx 落回目标左侧
+  const flip = planCallouts(cx, cy, [{ id: 'e', x: w - 30, y: cy, r: 10, w: 120 }], { x0: 6, x1: w - 6 })
+  const pe = flip.get('e')!
+  assert.equal(pe.align, 'right', '出界铭牌翻侧')
+  assert.ok(pe.tx < pe.ex, '翻侧后铭牌在目标左侧')
 })
