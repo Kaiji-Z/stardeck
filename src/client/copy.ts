@@ -351,7 +351,7 @@ export interface WarCopy {
     taskAcceptance: string
     briefMissing: string
     acceptanceMissing: string
-    /** V9.10 战报展开收菜三件：战利品+历次作战+待发落动作（V9.12 正名复用 taskCard.handleReview/handleRetry）。 */
+    /** V9.10 战报展开收菜三件：战利品+历次作战+待发落动作（V9.12 正名复用 taskCard.handleRetry；V19.6 handleReview 随聚焦页跳钮一并退役）。 */
     lootLabel: string
     attemptsSection: string
     /** V9.10 配置展开的改档出口标签。 */
@@ -763,8 +763,6 @@ export const warCopy: WarCopy = {
     taskIdTitle: '任务单 ID（溯源用）',
     failReason: e => `败因：${e}`,
     failTitle: '重试已用尽，等舰长让大副重新立案',
-    handleReview: '打回重做 · 参谋会话',
-    handleReviewTitle: '驳回这份战报——打回意见到参谋会话说（验收通过走「通过收官」）',
     handleRetry: '去下重试令 · 参谋会话',
     handleRetryTitle: '重试授权在参谋会话说——板是读投影，发令走参谋',
   },
@@ -1319,8 +1317,6 @@ export const plainCopy: WarCopy = {
     taskIdTitle: '任务编号（溯源用）',
     failReason: e => `失败原因：${e}`,
     failTitle: '重试已用尽，等规划 Agent 重新立案',
-    handleReview: '打回去重做 · 规划 Agent 会话',
-    handleReviewTitle: '驳回这份汇报——打回意见送到规划 Agent 会话（通过走「完成收官」）',
     handleRetry: '去下重试令 · 规划 Agent 会话',
     handleRetryTitle: '重试授权在规划 Agent 会话说——板是只读的，发令走规划 Agent',
   },

@@ -1776,25 +1776,17 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       createElement('span', { className: 'war-time' }, relTime(a.startedAt)),
                       ))))
                     : null,
-                  // 独立形态不等 staffTarget（老命令可无大副会话捕获）：一键收官只看
-                  // reported 链；大副会话钮独立形态照出（openStaffPane 自带降级路由）。
-                  (lastReport !== undefined && chain.some(t => t.status === 'reported')) || failedChain
+                  // 独立形态一键收官只看 reported 链。V19.6 舰长定：动作行的会话跳钮
+                  // 撤——「打回重做·参谋会话」与底部「⌁ 任务会话」同靶（openStaffPane
+                  // 同参），打回真路径是板上下令、会话弹窗给不出；会话入口唯底部一行。
+                  standalone && !failedChain && lastReport !== undefined && chain.some(t => t.status === 'reported')
                     ? subActions([
-                        standalone && !failedChain && chain.some(t => t.status === 'reported')
-                          ? createElement('button', {
-                              className: 'war-btn primary', type: 'button',
-                              disabled: acceptBusy,
-                              title: fp.acceptTitle,
-                              onClick: acceptReported,
-                            }, acceptBusy ? fp.acceptBusy : fp.acceptBtn)
-                          : null,
-                        standalone || staffTarget !== null
-                          ? createElement('button', {
-                              className: 'war-btn',
-                              title: failedChain ? activeCopy().taskCard.handleRetryTitle : activeCopy().taskCard.handleReviewTitle,
-                              onClick: () => { openStaffPane(staffTarget) },
-                            }, failedChain ? activeCopy().taskCard.handleRetry : activeCopy().taskCard.handleReview)
-                          : null,
+                        createElement('button', {
+                          className: 'war-btn primary', type: 'button',
+                          disabled: acceptBusy,
+                          title: fp.acceptTitle,
+                          onClick: acceptReported,
+                        }, acceptBusy ? fp.acceptBusy : fp.acceptBtn),
                       ])
                     : null,
                   standalone && acceptNote !== ''
@@ -1961,9 +1953,9 @@ function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, o
       ? createElement('div', { className: 'war-card-top' },
         createElement('button', {
           className: 'war-btn primary',
-          title: task.status === 'failed' ? activeCopy().taskCard.handleRetryTitle : activeCopy().taskCard.handleReviewTitle,
+          title: activeCopy().taskCard.handleRetryTitle,
           onClick: e => { e.stopPropagation(); onHandle() },
-        }, task.status === 'failed' ? activeCopy().taskCard.handleRetry : activeCopy().taskCard.handleReview),
+        }, activeCopy().taskCard.handleRetry),
       )
       : null,
   )
@@ -3291,8 +3283,8 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // 聚合态，成形卡归组首），单代/孤儿保持原排序心智；组与扁平项按最近活动交错。
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
       // V19.5：reported 卡不再给「去验收·参谋会话」跳钮——验收已在板上闭环
-      //（战报 md+证据+产物预览+通过收官，点卡进聚焦页即达）；会话跳钮只剩
-      // 打回重做场景（failed），且聚焦页回报段常驻。
+      //（战报 md+证据+产物预览+通过收官，点卡进聚焦页即达）；V19.6 聚焦页
+      // 动作行会话跳钮也撤（与 ⌁ 任务会话同靶）——卡上只剩 failed 的重试令钮。
       t.status === 'failed' && staffFor(t.taskId) !== null
         ? () => { openStaff(t.taskId) }
         : null,
