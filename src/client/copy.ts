@@ -622,7 +622,7 @@ export const warCopy: WarCopy = {
     langHint: '只换界面措辞——账本与提示词资产保持中文正典（agent 的军语不随语言切换）。',
     fontSection: '字体大小',
     fontReset: '重置',
-    fontHint: '整体缩放板面（85%–135%）：文字、控件、弹窗随动，canvas 像素比同乘不糊。',
+    fontHint: '只缩放文字（85%–135%）：栏与卡片布局不变，文字在原盒内换行适应。',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,
@@ -1179,7 +1179,7 @@ export const plainCopy: WarCopy = {
     langHint: '只换界面措辞——账本与提示词资产保持中文正典（agent 的军语不随语言切换）。',
     fontSection: '字体大小',
     fontReset: '重置',
-    fontHint: '整体缩放板面（85%–135%）：文字、控件、弹窗随动，canvas 像素比同乘不糊。',
+    fontHint: '只缩放文字（85%–135%）：栏与卡片布局不变，文字在原盒内换行适应。',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,

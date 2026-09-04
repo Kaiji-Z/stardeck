@@ -467,7 +467,8 @@ test('V19 字体缩放：设置抽屉滑杆在场，调值 → .war-root zoom �
   await new Promise(resolve => setTimeout(resolve, 80))
   const rootEl = document.querySelector('.war-root') as HTMLElement | null
   assert.ok(rootEl !== null)
-  assert.ok((rootEl!.getAttribute('style') ?? '').includes('1.2'), `根元素内联 zoom 生效（style=${rootEl!.getAttribute('style')}）`)
+  const rootStyle = rootEl!.getAttribute('style') ?? ''
+  assert.ok(rootStyle.includes('--war-fs') && rootStyle.replace(/\s/g, '').includes('1.2'), `根元素字号系数生效（style=${rootStyle}）`)
   assert.equal(localStorage.getItem('warroom-cfg-zoom'), '1.2', '持久化落 localStorage')
   // 重置钮回 1
   const reset = [...document.querySelectorAll('.war-font-row button')].find(b => /重置|Reset/.test(b.textContent ?? ''))

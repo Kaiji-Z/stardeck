@@ -2685,9 +2685,10 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     const [composerOpen, setComposerOpen] = useState(false)
     const [hqPickerOpen, setHqPickerOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
-    // V19 字体缩放（设置抽屉滑杆）：85%–135% 板面整体缩放——CSS zoom 作用在
-    // .war-root（文字/控件/弹窗随动，布局全弹性域不破）；canvas 清晰度由
-    // Warzone 的 uiZoom prop 补像素比。localStorage 持久（纯展示层偏好）。
+    // V19 字体缩放（设置抽屉滑杆）：85%–135% 纯字号系数——CSS 变量 --war-fs
+    // 作用 .war-root，styles 全量 font-size/px 行高乘系数；栏宽/卡高/间距等布局
+    // 尺寸一律不动，文字在原盒内换行适应（首版 CSS zoom 连布局一起缩，舰长否）。
+    // localStorage 持久（纯展示层偏好）。
     const [fontScale, setFontScale] = useState(() => {
       try {
         const v = parseFloat(localStorage.getItem('warroom-cfg-zoom') ?? '1')
@@ -3368,7 +3369,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     }
     // V12.2 皮肤钩子：data-war-skin 随文案皮肤落属性——当前军事/平话只换措辞，
     // 未来视觉皮肤在 CSS [data-war-skin] 选择器内重映射 --war-* 令牌层即可。
-    return createElement('div', { className: 'war-root', 'data-war-skin': skinId(), style: { zoom: fontScale } as CSSProperties },
+    return createElement('div', { className: 'war-root', 'data-war-skin': skinId(), style: { '--war-fs': String(fontScale) } as CSSProperties },
       // V8 hero 灵动岛：替代标题栏——操作件与大盘状态全收进顶部胶囊（展开浮层
       // 盖列区，不推挤；聚焦模式 = 岛的常驻形态）。
       createElement(WarIsland, {
@@ -3435,7 +3436,6 @@ export function warView(services: ClientServicesFace): () => ReactNode {
                 key: 'starfield3d',
                 ariaLabel: activeCopy().starfield.aria,
                 active: data.active,
-                uiZoom: fontScale,
                 planets: wzPlanets,
                 squads: wzSquads,
                 log: wzLog,

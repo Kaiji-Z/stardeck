@@ -829,9 +829,6 @@ export class WarzoneScene {
   private camMinDist = WZ_CAM_DIST_MIN
   private camMaxDist = WZ_CAM_DIST_MAX
   private viewH = 800
-  private lastW = 0
-  private lastH = 0
-  private uiZoom = 1
   private readonly camCenter = new THREE.Vector3(0, 0, 0)
   private readonly PAN_LIMIT = 340
   /** V12（定案·浅色范式=天空）：主题态——null=未初始化（首贴必生效）；
@@ -2252,18 +2249,7 @@ export class WarzoneScene {
     this.composer.setSize(w, h)
     this.bloom.setSize(w, h)
     this.viewH = h
-    this.lastW = w
-    this.lastH = h
     this.recalcCamBounds()
-  }
-
-  /** V19 字体缩放：UI zoom（.war-root 的 CSS zoom）把 canvas 视觉放大——
-   *  像素比同乘补偿，否则位图被拉伸发糊（雷达文字首当其冲）。z 变更即重分配。 */
-  setUiZoom(z: number): void {
-    if (Math.abs(z - this.uiZoom) < 0.001) return
-    this.uiZoom = z
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * z)
-    this.resize(this.lastW, this.lastH)
   }
 
   dispose(): void {
@@ -2297,8 +2283,6 @@ export class WarzoneTactical {
   private cx = 0
   private cy = 0
   private worldScale = 1
-  /** V19 字体缩放：UI zoom（.war-root 的 CSS zoom）——位图像素比同乘保清晰。 */
-  private uiZoom = 1
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -2323,18 +2307,11 @@ export class WarzoneTactical {
   }
 
   resize(w: number, h: number): void {
-    const dpr = Math.min(devicePixelRatio, 2) * this.uiZoom
+    const dpr = Math.min(devicePixelRatio, 2)
     this.w = w; this.h = h
     this.canvas.width = w * dpr
     this.canvas.height = h * dpr
     this.g.setTransform(dpr, 0, 0, dpr, 0, 0)
-  }
-
-  /** V19 字体缩放：UI zoom 变更即按既有尺寸重分配（位图随 dpr×zoom 保清晰）。 */
-  setUiZoom(z: number): void {
-    if (Math.abs(z - this.uiZoom) < 0.001) return
-    this.uiZoom = z
-    this.resize(this.w, this.h)
   }
 
 
