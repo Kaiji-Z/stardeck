@@ -1,6 +1,7 @@
 {
   "name": "stardeck",
   "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
   "description": "星舰甲板——agent 舰队的作战看板与守护进程：任意 CLI agent（opencode/codex/pi…）经 MCP 领令出勤，账本/验收/收官由系统核对。",
   "type": "module",
   "license": "MIT",

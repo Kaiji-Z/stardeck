@@ -1,0 +1,37 @@
+# Publish to npm via Trusted Publishing (OIDC) — no stored tokens anywhere.
+# The npm-side trusted-publisher binding MUST match this file exactly:
+#   repository: Kaiji-Z/stardeck
+#   workflow filename: publish.yml        (this file's name, not the workflow's `name`)
+#   environment: LEAVE EMPTY on the npm side — this workflow declares none.
+# 首发注意（新包 bootstrap，自 dsh-plugin-stardeck 移植同款路径）：npm 没有
+# pending publisher 机制——包必须先存在才能在 npmjs 包设置里配 Trusted Publisher。
+# 全新包名（stardeck）的首版须手动 `npm publish`（本地 npm login + pnpm build，
+# 无 tag、CI 不跑）；包落地后在包设置配好上述三元组，下一版起 tag→OIDC 接管。
+# Trigger: pushing a v* tag (e.g. `git push origin v0.2.0`), or the Actions
+# "Run workflow" button. Plain branch pushes NEVER publish.
+# The job re-runs the full local verify gate (tests → build → bundle
+# assertions) and only then publishes, with provenance attestation.
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # required for the OIDC token npm's trusted publishing exchanges
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable # activates the packageManager-pinned pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run verify
+      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+      - run: npm publish --provenance --tag latest
