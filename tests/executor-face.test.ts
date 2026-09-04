@@ -155,6 +155,17 @@ test('适配器注册表三席在位（opencode 实弹 / codex+pi 契约实装�
   assert.ok(executorBrief(face).includes('MCP 服务'))
 })
 
+test('V19 腿1 战报纪律：三 face 简报都教「report=给舰长的最终答复」（结论先行/产物相对路径/不复述过程）', () => {
+  const face = { taskId: 't1', title: 'x', acceptance: 'y', workspacePath: '/w', http: 'http://h', agentId: 'oc-z', model: '', modelProvider: '', executorBin: '', stateDir: '/s' }
+  for (const f of ['mcp', 'pi-extension', 'http'] as const) {
+    const brief = executorBrief(face, f)
+    assert.ok(brief.includes('给舰长的最终答复'), `${f} face 教受众`)
+    assert.ok(brief.includes('结论先行'), `${f} face 教首句结论`)
+    assert.ok(brief.includes('相对路径'), `${f} face 教产物指路`)
+    assert.ok(brief.includes('不复述执行过程'), `${f} face 教过程退后`)
+  }
+})
+
 test('win32 spawn 通道：.cmd 垫片给教学错误；JS 入口经 node 直跑（首弹实测的坑）', async () => {
   const dir = tmpDir()
   try {

@@ -117,6 +117,14 @@ try {
   if (evidence === undefined) throw new Error('回报无 evidence——外勤没按出口协议交证')
   const green = killCreditAllGreen(evidence, task.workspacePath)
   check('KillCredit 机械全绿', green.green, green.why)
+  // V19 腿1 实弹灵魂验收：战报纪律是否真落到外勤交卷——report 非空且提及
+  // 至少一个 evidence 产物文件名（防提示词白写：教学在简报里，见真章在战报里）。
+  {
+    const repText = (report?.text ?? '').trim()
+    const evFiles = (evidence.files ?? []) as string[]
+    const mentions = evFiles.some(f => repText.includes(f.split(/[\\/]/).pop() ?? f))
+    check('战报=给舰长的最终答复（非空且指路产物文件名）', repText.length >= 10 && mentions, `report=${repText.length} 字 files=${evFiles.join(',')} 指路=${mentions}`)
+  }
   check('强制人工验收生效（reported 呈批不自动收官）', task.status === 'reported', `status=${task.status}`)
 
   const closed = await callTool('war_close_task', { task_id: taskId, verdict: '通过收官——实弹回响属实' }, 'live-staff')
@@ -479,5 +487,18 @@ if (verdict === 'FAIL') {
   console.log('保留现场供排查：' + stateDir)
   process.exit(1)
 }
-rmSync(stateDir, { recursive: true, force: true })
+// Windows 目录锁（坑录类）：判分后立刻删常撞残留句柄（daemon/opencode 退场竞速）
+// ——重试三拍仍锁则留现场退出 0（判分已定，清场是尽力而为，不为保洁误伤门禁）。
+for (let i = 0; i < 3; i++) {
+  try {
+    rmSync(stateDir, { recursive: true, force: true })
+    break
+  } catch (err) {
+    if (i === 2) {
+      console.log(`现场目录暂被句柄占用，稍后可手清：${stateDir}（${err instanceof Error ? err.code : String(err)}）`)
+      break
+    }
+    await new Promise(r => setTimeout(r, 1_000))
+  }
+}
 process.exit(0)

@@ -38,6 +38,8 @@ let boardFixture: Record<string, unknown> = {
   ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r-test',
   commands: [], tasks: [], threads: [], roster: [], rosterErrors: [],
 }
+// V19 腿3 测试面：attach/history 桩（默认失败面=既有测试行为；置 fixture 换成功面）。
+let historyFixture: Record<string, unknown> = { ok: false, error: '测试桩：无此会话' }
 const jsonResponse = (data: unknown, ok = true): Response =>
   ({ ok, status: 200, json: async () => data }) as unknown as Response
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -46,7 +48,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promis
   if (init?.body !== undefined) { try { body = JSON.parse(String(init.body)) } catch { body = String(init.body) } }
   calls.push({ url, body })
   if (url.includes('/warroom/api/board')) return jsonResponse(boardFixture)
-  if (url.includes('/warroom/api/attach/history')) return jsonResponse({ ok: false, error: '测试桩：无此会话' })
+  if (url.includes('/warroom/api/attach/history')) return jsonResponse(historyFixture)
+  if (url.includes('/warroom/api/workspace/file')) return jsonResponse({ ok: true, name: 'report-x.md', binary: false, content: '# 产物标题\n\n- 结论一：A\n- 结论二：B\n' })
+  if (url.includes('/warroom/api/workspace/reveal')) return jsonResponse({ ok: true })
   if (url.includes('/warroom/api/attach/entries')) return jsonResponse({ ok: true, entries: {} })
   if (url.includes('/warroom/api/tools/call')) return jsonResponse({ ok: true, output: {} })
   if (url.includes('/warroom/api/commands/talking')) return jsonResponse({ ok: true })
@@ -328,4 +332,82 @@ test('舰队门：模型输入随席位卡内展开 + 底部钮在滚动容器�
   await new Promise(resolve => setTimeout(resolve, 60))
   assert.deepEqual(enters, [{ executor: 'pi', model: 'zai/glm-5.2' }], 'onEnter 收到所选席+卡内输入的模型串')
   r.unmount()
+})
+
+test('V19 腿2 reported：战报 md 渲染 + files chip 可点 → 板内预览弹窗（workspace/file + md 渲染）', async () => {
+  const task = mkTask({
+    taskId: '20260904-pv1', title: '盘点 x', status: 'reported',
+    workspacePath: '/tmp/w/tasks/pv1',
+    attemptLog: [{ id: 'oc-1', sessionId: 'pg-pv-1', startedAt: new Date().toISOString(), outcome: 'reported' }],
+    reports: [{ ts: new Date().toISOString(), text: '## 结论\n\n盘点完成：3 个顶层目录。\n\n- 产物已落盘 `report-x.md`\n', evidence: null, deliverables: null }],
+    deliverables: [{ kind: 'files', summary: '1 个文件改动', detail: 'report-x.md', ts: new Date().toISOString() }],
+  })
+  const cmd = mkCmd({ commandId: 'cmd-pv1', text: '盘点 x', status: 'approved', taskId: '20260904-pv1' })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [task], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  // 展开战报卡（任务回报段末卡点击）
+  const card = [...document.querySelectorAll('.war-cd-stage[data-stage="report"] .war-card-top')].pop() as HTMLElement | undefined
+  card?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+  // md-lite 渲染：标题成块、正文在
+  assert.ok(document.querySelector('.war-md .war-md-h') !== null, '战报标题块渲染（md-lite）')
+  assert.ok(r.text().includes('盘点完成'), '战报结论段在')
+  // files chip=可点 button（data 面）
+  const chip = document.querySelector('button.war-loot-file') as HTMLButtonElement | null
+  assert.ok(chip !== null, 'files 交付物 chip 是可点按钮')
+  assert.equal(chip?.textContent, 'report-x.md')
+  calls.length = 0
+  chip?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 120))
+  const fileCall = calls.find(c => c.url.includes('/warroom/api/workspace/file'))
+  assert.ok(fileCall !== undefined, '点击打到 workspace/file 只读端点')
+  assert.ok(String(fileCall?.url).includes(encodeURIComponent('/tmp/w/tasks/pv1')), '携带任务工作区参数')
+  const modal = document.querySelector('[data-war-preview]')
+  assert.ok(modal !== null, '板内预览弹窗在场')
+  assert.ok(r.text().includes('产物预览') || r.text().includes('Artifact preview'), '预览标题在场')
+  assert.ok(modal?.textContent?.includes('产物标题') === true, '产物正文已渲染（md 标题）')
+  r.unmount()
+})
+
+test('V19 腿3 会话历史：末条 assistant 正文钉「最终汇报」，过程流折叠在下', async () => {
+  historyFixture = {
+    ok: true, executor: 'opencode', sessionId: 'sess-hf',
+    messages: [
+      { role: 'user', ts: 1, parts: [{ kind: 'text', text: 'Mission: 盘点' }] },
+      { role: 'tool', ts: 2, parts: [{ kind: 'tool', text: 'ls', tool: 'bash' }] },
+      { role: 'assistant', ts: 3, parts: [{ kind: 'text', text: '过程中间汇报一句' }] },
+      { role: 'assistant', ts: 4, parts: [{ kind: 'text', text: '盘点完成：3 个顶层目录，产物 report-x.md。' }] },
+    ],
+  }
+  try {
+    const task = mkTask({
+      taskId: '20260904-hf1', title: 'x', status: 'closed',
+      attemptLog: [{ id: 'oc-1', sessionId: 'sess_hf', startedAt: new Date().toISOString(), outcome: 'succeeded' }],
+    })
+    const cmd = mkCmd({ commandId: 'cmd-hf1', text: '做 x', status: 'approved', staffSessionId: 'staff-hf1', taskId: '20260904-hf1' })
+    const el = createElement(views.FocusPage, {
+      cmd, chain: [task as never], statuses: new Map(), hqSessionId: null, services,
+      focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+      onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+    })
+    const r = await render(el)
+    const btn = r.click(/任务会话|Task session/)
+    assert.ok(btn !== null, '任务会话钮在场')
+    await new Promise(resolve => setTimeout(resolve, 120))
+    const wrap = document.querySelector('.war-session-finalwrap')
+    assert.ok(wrap !== null, '最终汇报置顶块在场')
+    assert.ok(wrap?.textContent?.includes('盘点完成：3 个顶层目录') === true, '钉的是末条 assistant 汇报')
+    const proc = document.querySelector('.war-session-process') as HTMLDetailsElement | null
+    assert.ok(proc !== null, '过程流折叠容器在场')
+    assert.ok(proc?.open !== true, '过程流默认折叠')
+    assert.ok(proc?.textContent?.includes('过程记录') === true || proc?.textContent?.includes('Process log') === true, '折叠摘要标签在场')
+    assert.ok(proc?.textContent?.includes('Mission: 盘点') === true, '过程消息全量保留在折叠内')
+    r.unmount()
+  } finally {
+    historyFixture = { ok: false, error: '测试桩：无此会话' }
+  }
 })

@@ -26,6 +26,7 @@ import { warLogKindColor } from './war-tokens.ts'
 import { PipeOverlay, type PipeFamily, type PipeStop } from './pipe-overlay.tsx'
 import { buildAlarmCron, nextRunOf, parseCron, type AlarmSpec } from '../schedule.ts'
 import { waitKindOf } from './waithint.ts'
+import { looksLikeFilePath, parseMd, pinFinalMessage, splitInline } from './report-face.ts'
 import { QUALITY_TIERS } from '../types.ts'
 
 /** V17 三页签全局切片（进行中/已收官/已归档）：模块级 store——WarView 与
@@ -1023,7 +1024,7 @@ interface SessionHistoryFace {
 }
 
 /** 只读会话历史弹窗（方案2·二段）：任务会话/执行会话主钮的板内默认动作——
- * 零 token 读各舰队本机存档（sqlite/jsonl），不 resume 不烧模型。 */
+ *  零 token 读各舰队本机存档（sqlite/jsonl），不 resume 不烧模型。 */
 function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHistoryFace | null; busy: boolean; error: string; onClose: () => void }): ReactNode {
   const { kind, hist, busy, error, onClose } = props
   const fp = activeCopy().focusPage
@@ -1035,6 +1036,17 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
   const roleLabel = (role: string): string => role === 'user' ? fp.historyRoleUser : role === 'tool' ? fp.historyRoleTool : kind === 'staff' ? fp.historyRoleStaff : fp.historyRoleExec
+  const messageNode = (m: SessionHistoryFace['messages'][number], i: number): ReactNode =>
+    createElement('div', { key: i, className: `war-session-msg war-session-${m.role}` },
+      createElement('div', { className: 'war-session-meta' }, `${roleLabel(m.role)}${m.ts !== null ? ` · ${fmtTs(m.ts)}` : ''}`),
+      ...m.parts.map((p, j) => p.kind === 'tool'
+        ? createElement('div', { key: j, className: 'war-session-tool' }, `⚙ ${p.tool ?? ''}${p.text !== '' ? ` ${p.text}` : ''}`)
+        : createElement('div', { key: j, className: p.kind === 'reasoning' ? 'war-session-part war-session-reasoning' : 'war-session-part' }, p.text),
+      ),
+    )
+  // V19 腿3 过程退后：末条 assistant 正文钉正面作「最终汇报」，过程流折叠在
+  // 下（桌面版「总结即答案」的板内对位物）；无 assistant 正文=退回全量过程流。
+  const pinned = hist !== null ? pinFinalMessage(hist.messages) : { final: null, rest: [] as SessionHistoryFace['messages'] }
   return createElement('div', { className: 'war-modal-backdrop', onClick: onClose },
     createElement('div', { className: 'war-modal war-session-modal', role: 'dialog', 'aria-label': title, onClick: e => e.stopPropagation(), ref: layer.ref, ...layer.props },
       createElement('div', { className: 'war-session-head' },
@@ -1048,14 +1060,96 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
         busy ? createElement('p', { className: 'war-hq-picker-hint' }, fp.historyLoading)
         : error !== '' ? createElement('p', { className: 'war-hq-picker-err' }, error)
         : hist !== null && hist.messages.length === 0 ? createElement('p', { className: 'war-hq-picker-hint' }, fp.historyEmpty)
-        : hist !== null ? hist.messages.map((m, i) => createElement('div', { key: i, className: `war-session-msg war-session-${m.role}` },
-            createElement('div', { className: 'war-session-meta' }, `${roleLabel(m.role)}${m.ts !== null ? ` · ${fmtTs(m.ts)}` : ''}`),
-            ...m.parts.map((p, j) => p.kind === 'tool'
-              ? createElement('div', { key: j, className: 'war-session-tool' }, `⚙ ${p.tool ?? ''}${p.text !== '' ? ` ${p.text}` : ''}`)
-              : createElement('div', { key: j, className: p.kind === 'reasoning' ? 'war-session-part war-session-reasoning' : 'war-session-part' }, p.text),
-            ),
-          ))
+        : hist !== null && pinned.final !== null
+          ? createElement('div', { className: 'war-session-finalwrap', 'data-war-final': '1' },
+              createElement('div', { className: 'war-session-meta' }, fp.historyFinal),
+              ...pinned.final.parts.filter(p => p.kind === 'text' && p.text.trim() !== '').map((p, j) =>
+                createElement('div', { key: `f-${j}`, className: 'war-session-part' }, p.text)),
+              createElement('details', { className: 'war-session-process' },
+                createElement('summary', null, fp.historyProcess(pinned.rest.length)),
+                ...pinned.rest.map(messageNode),
+              ),
+            )
+          : hist !== null ? hist.messages.map(messageNode)
         : null,
+      ),
+    ),
+  )
+}
+
+/** V19 战报可读性：markdown-lite 渲染壳（块级 parseMd + 行内 splitInline）——
+ *  战报正文与 md 产物预览共用一个渲染语言；路径形 token 链化成可点按钮
+ *  （onOpenFile 缺席=纯展示退化，如预览嵌套里不再开预览）。 */
+function reportBody(text: string, onOpenFile?: (name: string) => void): ReactNode {
+  const pathNode = (v: string, key: string): ReactNode =>
+    onOpenFile !== undefined
+      ? createElement('button', { key, className: 'war-md-path', type: 'button', title: activeCopy().focusPage.lootFileTitle, onClick: () => { onOpenFile(v) } }, v)
+      : createElement('code', { key }, v)
+  const inline = (s: string, keyBase: string): ReactNode[] => splitInline(s).map((t, i) => {
+    const key = `${keyBase}-${i}`
+    if (t.t === 'code') return looksLikeFilePath(t.v) ? pathNode(t.v, key) : createElement('code', { key }, t.v)
+    if (t.t === 'bold') return createElement('strong', { key }, t.v)
+    if (t.t === 'path') return pathNode(t.v, key)
+    return t.v
+  })
+  return createElement('div', { className: 'war-md' },
+    ...parseMd(text).map((b, i) => {
+      const key = `b-${i}`
+      switch (b.kind) {
+        case 'h': return createElement('div', { key, className: `war-md-h war-md-h${b.level}` }, ...inline(b.text, key))
+        case 'p': return createElement('p', { key, className: 'war-md-p' }, ...inline(b.text, key))
+        case 'ul': return createElement('ul', { key, className: 'war-md-ul' }, ...b.items.map((it, j) => createElement('li', { key: `${key}-${j}` }, ...inline(it, `${key}-${j}`))))
+        case 'ol': return createElement('ol', { key, className: 'war-md-ol' }, ...b.items.map((it, j) => createElement('li', { key: `${key}-${j}` }, ...inline(it, `${key}-${j}`))))
+        case 'code': return createElement('pre', { key, className: 'war-md-code' }, b.text)
+        case 'quote': return createElement('blockquote', { key, className: 'war-md-quote' }, ...inline(b.text, key))
+      }
+    }),
+  )
+}
+
+/** V19 腿2 产物板内预览弹窗：只读调 workspace/file 端点（war_root 限界在服务侧），
+ *  md 产物走 reportBody 渲染、其余文本 pre 直出、二进制给指路文案；
+ *  「打开所在文件夹」走 reveal 端点（本机资源管理器，账本零改动）。 */
+function ArtifactPreviewModal(props: { ws: string; name: string; onClose: () => void }): ReactNode {
+  const { ws, name, onClose } = props
+  const fp = activeCopy().focusPage
+  const title = fp.previewTitle(name)
+  const layer = useModalLayer(onClose, title)
+  const [state, setState] = useState<{ phase: 'busy' } | { phase: 'err'; msg: string } | { phase: 'binary' } | { phase: 'empty' } | { phase: 'ok'; content: string }>({ phase: 'busy' })
+  const [revealNote, setRevealNote] = useState('')
+  useEffect(() => {
+    setState({ phase: 'busy' })
+    fetch(`/warroom/api/workspace/file?ws=${encodeURIComponent(ws)}&name=${encodeURIComponent(name)}`)
+      .then(async r => (await r.json()) as { ok?: boolean; error?: string; binary?: boolean; content?: string })
+      .then(out => {
+        if (out.ok !== true) setState({ phase: 'err', msg: out.error ?? 'unknown' })
+        else if (out.binary === true) setState({ phase: 'binary' })
+        else if ((out.content ?? '') === '') setState({ phase: 'empty' })
+        else setState({ phase: 'ok', content: out.content! })
+      })
+      .catch(() => setState({ phase: 'err', msg: 'fetch failed' }))
+  }, [ws, name])
+  const reveal = (): void => {
+    fetch('/warroom/api/workspace/reveal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ws, name }) })
+      .then(async r => (await r.json()) as { ok?: boolean })
+      .then(out => { setRevealNote(out.ok === true ? fp.previewOpenDone : fp.previewOpenFail) })
+      .catch(() => { setRevealNote(fp.previewOpenFail) })
+  }
+  return createElement('div', { className: 'war-modal-backdrop', onClick: onClose },
+    createElement('div', { className: 'war-modal war-preview-modal', role: 'dialog', 'aria-label': title, onClick: e => e.stopPropagation(), ref: layer.ref, ...layer.props },
+      createElement('div', { className: 'war-session-head' },
+        createElement('div', { className: 'war-modal-title' }, title),
+        createElement('button', { type: 'button', className: 'war-btn', onClick: reveal }, fp.previewOpen),
+        createElement('button', { type: 'button', className: 'war-hq-picker-x', 'aria-label': activeCopy().settings.close, autoFocus: true, onClick: onClose }, '✕'),
+      ),
+      revealNote !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, revealNote) : null,
+      createElement('div', { className: 'war-session-body war-preview-body', 'data-war-preview': name },
+        state.phase === 'busy' ? createElement('p', { className: 'war-hq-picker-hint' }, '…')
+        : state.phase === 'err' ? createElement('p', { className: 'war-hq-picker-err' }, `${fp.previewFail}${state.msg}`)
+        : state.phase === 'binary' ? createElement('p', { className: 'war-hq-picker-hint' }, fp.previewBinary)
+        : state.phase === 'empty' ? createElement('p', { className: 'war-hq-picker-hint' }, fp.previewEmpty)
+        : /\.(md|markdown)$/i.test(name) ? reportBody(state.content)
+        : createElement('pre', { className: 'war-md-code' }, state.content),
       ),
     ),
   )
@@ -1193,6 +1287,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   const [histKind, setHistKind] = useState<'staff' | 'exec' | null>(null)
   const [histBusy, setHistBusy] = useState(false)
   const [histError, setHistError] = useState('')
+  // V19 腿2 产物预览目标（战报路径/chips 可点开）：{ws:任务工作区, name:相对路径}。
+  const [preview, setPreview] = useState<{ ws: string; name: string } | null>(null)
   const [hist, setHist] = useState<SessionHistoryFace | null>(null)
   const openSessionHistory = (kind: 'staff' | 'exec', keyOverride?: string): void => {
     const key = keyOverride ?? (kind === 'staff' ? staffAttachKey : attachTaskId)
@@ -1634,13 +1730,30 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
               open !== null && open.kind === 'report'
                 ? createElement('div', { className: 'war-subdetail' },
                   verdictTask !== undefined && verdictTask.closedVerdict !== null ? subRow(fp.reportVerdict, verdictTask.closedVerdict) : null,
-                  lastReport !== undefined ? subRow(fp.reportLatest, `${detailCopy.reportPrefix(relTime(lastReport.r.ts))}${lastReport.r.text}`) : null,
+                  // V19 腿2：战报走 markdown-lite 渲染（标题/列点/代码块），产物路径
+                  // 链化可点→板内预览（腿1 教外勤「结论先行+产物给相对路径」，这里兑现读侧）。
+                  lastReport !== undefined ? subRow(fp.reportLatest, createElement('span', null,
+                    createElement('span', { className: 'war-report-time' }, detailCopy.reportPrefix(relTime(lastReport.r.ts))),
+                    reportBody(lastReport.r.text, reportHost !== undefined ? (n) => { setPreview({ ws: reportHost.workspacePath, name: n }) } : undefined),
+                  )) : null,
                   evSummary !== null && lastReport?.r.evidence !== null && lastReport?.r.evidence !== undefined ? Fold(evSummary, [EvidenceBlock(lastReport.r.evidence!)]) : null,
                   // V9.10 收获三件：任务产出/交付物 + 历次执行会话（逐次可跳）+ 待定夺动作
                   // （V9.12 正名：reported 链→去验收 / 败链→去下重试令，都落大副会话）。
+                  // V19 腿2：files 交付物的每个文件路径=可点 chip→板内预览（summary 留标签）。
                   reportHost !== undefined && reportHost.deliverables.length > 0
                     ? subRow(fp.lootLabel, createElement('span', { className: 'war-loot' },
-                      reportHost.deliverables.map((d, i) => createElement('span', { key: `${d.ts}-${i}`, className: `war-loot-item ${d.kind}`, title: d.detail ?? '' }, d.summary))))
+                      reportHost.deliverables.flatMap((d, i) => {
+                        const chips: ReactNode[] = [createElement('span', { key: `${d.ts}-${i}`, className: `war-loot-item ${d.kind}`, title: d.detail ?? '' }, d.summary)]
+                        if (d.kind === 'files' && (d.detail ?? '') !== '' && reportHost.workspacePath !== '') {
+                          for (const p of d.detail!.split(/,\s*/).filter(x => x.trim() !== '')) {
+                            chips.push(createElement('button', {
+                              key: `${d.ts}-${i}-${p}`, type: 'button', className: `war-loot-item ${d.kind} war-loot-file`,
+                              title: fp.lootFileTitle, onClick: () => { setPreview({ ws: reportHost.workspacePath, name: p }) },
+                            }, p))
+                          }
+                        }
+                        return chips
+                      })))
                     : null,
                   execSessions.length > 0
                     ? subRow(fp.attemptsSection, createElement('span', { className: 'war-sub-attempts' },
@@ -1740,6 +1853,10 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             kind: histKind, hist, busy: histBusy, error: histError,
             onClose: () => { setHistKind(null); setHist(null); setHistError('') },
           })
+        : null,
+      // V19 腿2：产物板内预览弹窗（只读端点 + 本机 reveal，账本零改动）。
+      preview !== null
+        ? createElement(ArtifactPreviewModal, { ws: preview.ws, name: preview.name, onClose: () => { setPreview(null) } })
         : null,
     ),
   )

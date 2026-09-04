@@ -397,6 +397,17 @@ export interface WarCopy {
     acceptDone: string
     acceptFail: string
     acceptTitle: string
+    /** V19 战报可读性：产物板内预览（腿2）+ 会话历史最终汇报置顶（腿3）。 */
+    previewTitle: (name: string) => string
+    previewOpen: string
+    previewOpenDone: string
+    previewOpenFail: string
+    previewBinary: string
+    previewEmpty: string
+    previewFail: string
+    lootFileTitle: string
+    historyFinal: string
+    historyProcess: (n: number) => string
   }
   /** V9.2 重设计起草器：一句话能做什么（lead）+ 档位三卡 + 定时两卡（cron）。
    *  档位词条由「标签」升级为「名 + 一句语义」——选项要明确，语义要清晰。 */
@@ -932,6 +943,16 @@ export const warCopy: WarCopy = {
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
     acceptFail: '收官失败：',
     acceptTitle: '通过验收并收官本任务（war_close_task——结论入账本）',
+    previewTitle: (name: string) => `产物预览 · ${name}`,
+    previewOpen: '打开所在文件夹',
+    previewOpenDone: '已在资源管理器中打开。',
+    previewOpenFail: '打开目录失败（舰桥日志有详情）。',
+    previewBinary: '该文件不是文本，无法板内预览——用「打开所在文件夹」查看。',
+    previewEmpty: '（空文件）',
+    previewFail: '产物调取失败：',
+    lootFileTitle: '点击板内预览该产物',
+    historyFinal: '最终汇报',
+    historyProcess: (n: number) => `过程记录（${n} 条）`,
   },
   composer: {
     title: '下达命令',
@@ -1475,6 +1496,16 @@ export const plainCopy: WarCopy = {
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
     acceptFail: '收官失败：',
     acceptTitle: '通过验收并收官本任务（war_close_task——结论入账本）',
+    previewTitle: (name: string) => `产物预览 · ${name}`,
+    previewOpen: '打开所在文件夹',
+    previewOpenDone: '已在资源管理器中打开。',
+    previewOpenFail: '打开目录失败（舰桥日志有详情）。',
+    previewBinary: '该文件不是文本，无法板内预览——用「打开所在文件夹」查看。',
+    previewEmpty: '（空文件）',
+    previewFail: '产物调取失败：',
+    lootFileTitle: '点击板内预览该产物',
+    historyFinal: '最终汇报',
+    historyProcess: (n: number) => `过程记录（${n} 条）`,
   },
   composer: {
     title: '下命令',

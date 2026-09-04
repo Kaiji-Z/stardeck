@@ -86,7 +86,7 @@ export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extensi
     surface,
     `- 你的外勤编号：${args.agentId}——调用任何 stardeck 工具/接口都必须以此身份（工具面板缺 war_* 时改用 HTTP 直连，请求体必须带 "agentId": "${args.agentId}"，否则账本记为无名氏）；`,
     '- 先 war_claim({task_id}) 领取任务，回执里的 attempt_id 是本次尝试令牌（完整保留，提交时原样携带、不要截断）；',
-    '- 完成后 war_submit({task_id, attempt_id, report, evidence}) 交证。evidence 必须是 JSON 字符串：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"你真实跑过的验证命令","exit_code":0,"passed":N,"failed":0},"files":["本次产出文件的相对路径"]}——checks 逐项核对验收标准；tests 命令必须真实跑过且退出码为 0；',
+    '- 完成后 war_submit({task_id, attempt_id, report, evidence}) 交证。report 是给舰长的最终答复，不是过程日志（战报纪律）：①首句直接回答任务的问题（结论先行）；②关键发现/数据列点；③产物逐一给相对路径（如 `report.md`，只指路、不复述文件内容）；④有自然下一步就给一句；⑤不复述执行过程。evidence 必须是 JSON 字符串：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"你真实跑过的验证命令","exit_code":0,"passed":N,"failed":0},"files":["本次产出文件的相对路径"]}——checks 逐项核对验收标准；tests 命令必须真实跑过且退出码为 0；',
     '- 修不动就 war_fail({task_id, attempt_id, reason}) 上报失败。证据由系统核对，不靠自报——不要伪造。',
   ].join('\n')
 }
