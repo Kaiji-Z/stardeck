@@ -446,3 +446,34 @@ test('V19 铺面：链上任务卡计划/任务书走 md-lite——编号步骤�
   assert.ok(document.querySelector('[data-war-preview]') !== null, '预览弹窗在场')
   r.unmount()
 })
+
+test('V19 字体缩放：设置抽屉滑杆在场，调值 → .war-root zoom 内联生效 + localStorage 持久', async () => {
+  boardFixture = { ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r0', commands: [], tasks: [], threads: [], roster: [], rosterErrors: [] }
+  const r = await render(createElement(views.warView(services)))
+  await new Promise(resolve => setTimeout(resolve, 300))
+  localStorage.removeItem('warroom-cfg-zoom')
+  const gear = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') ?? '').includes('设置') || (b.getAttribute('aria-label') ?? '').toLowerCase().includes('settings'))
+  assert.ok(gear !== undefined, '⚙ 设置钮在场')
+  gear!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+  const range = document.querySelector('input[type=range]') as HTMLInputElement | null
+  assert.ok(range !== null, '字体滑杆在场')
+  assert.equal(range!.min, '0.85')
+  assert.equal(range!.max, '1.35')
+  // React 受控 input：走原生 setter + input 事件
+  const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value')?.set
+  setter?.call(range, '1.2')
+  range!.dispatchEvent(new win.Event('input', { bubbles: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+  const rootEl = document.querySelector('.war-root') as HTMLElement | null
+  assert.ok(rootEl !== null)
+  assert.ok((rootEl!.getAttribute('style') ?? '').includes('1.2'), `根元素内联 zoom 生效（style=${rootEl!.getAttribute('style')}）`)
+  assert.equal(localStorage.getItem('warroom-cfg-zoom'), '1.2', '持久化落 localStorage')
+  // 重置钮回 1
+  const reset = [...document.querySelectorAll('.war-font-row button')].find(b => /重置|Reset/.test(b.textContent ?? ''))
+  assert.ok(reset !== undefined, '重置钮在场')
+  reset!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+  assert.equal(localStorage.getItem('warroom-cfg-zoom'), '1', '重置回 1')
+  r.unmount()
+})

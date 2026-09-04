@@ -90,6 +90,9 @@ export const enWarCopy: WarCopy = {
     langZh: '中文',
     langEn: 'English',
     langHint: 'UI wording only — ledgers and prompt assets stay in Chinese (agent-side canon).',
+    fontSection: 'Font size',
+    fontReset: 'Reset',
+    fontHint: 'Scales the whole board (85%-135%): text, controls and dialogs follow; canvas pixel ratio compensates to stay crisp.',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,
@@ -635,6 +638,9 @@ export const enPlainCopy: WarCopy = {
     langZh: '中文',
     langEn: 'English',
     langHint: 'UI wording only — ledgers and prompt assets stay in Chinese (agent-side canon).',
+    fontSection: 'Font size',
+    fontReset: 'Reset',
+    fontHint: 'Scales the whole board (85%-135%): text, controls and dialogs follow; canvas pixel ratio compensates to stay crisp.',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,

@@ -633,6 +633,10 @@ body[data-ds-dark-theme] .war-root .war-alarm-time,body[data-ds-dark-theme] .war
 .war-skin-opt:hover{border-color:var(--war-border-hover)}
 .war-skin-opt.on{border-color:var(--war-run-border);background:var(--war-select-tint);color:var(--war-select-name);box-shadow:inset 0 0 0 1px var(--war-run-border)}
 .war-settings-note{font-size:12px;line-height:1.5;color:var(--war-text-2);margin-top:8px}
+/* V19 字体缩放：滑杆行（range + 实时倍率 + 重置） */
+.war-font-row{display:flex;align-items:center;gap:10px}
+.war-font-row input[type=range]{flex:1;accent-color:var(--war-focus)}
+.war-font-val{font-size:12px;color:var(--war-text-2);font-family:var(--war-font-code);min-width:44px;text-align:center}
 .war-set-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--war-border-soft)}
 .war-set-toggle-text{display:flex;flex-direction:column;gap:2px;min-width:0}
 .war-set-toggle-label{font-size:13px;font-weight:600;color:var(--war-text-1)}
@@ -984,11 +988,11 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 /* critique B 取证（side-tab）：角色区分改底色微染，不再三条 3px 左边条。 */
 .war-session-msg.war-session-user{background:color-mix(in srgb, var(--war-run-strong) 7%, var(--war-card-bg))}
 .war-session-msg.war-session-assistant{background:var(--war-card-bg)}
-.war-session-meta{font-size:11px;color:var(--war-text-3);letter-spacing:.04em}
-.war-session-part{font-size:12px;line-height:1.7;color:var(--war-text-1);white-space:pre-wrap;word-break:break-word}
+.war-session-meta{font-size:12px;color:var(--war-text-3);letter-spacing:.04em}
+.war-session-part{font-size:13px;line-height:1.7;color:var(--war-text-1);white-space:pre-wrap;word-break:break-word}
 .war-session-reasoning{color:var(--war-text-3);font-style:italic}
 /* --- V19 战报可读性：md-lite 渲染 / 产物预览 / 历史最终汇报置顶 ---------------- */
-.war-md{display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.75;color:var(--war-text-1);word-break:break-word}
+.war-md{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.75;color:var(--war-text-1);word-break:break-word}
 .war-md-h{font-weight:700;color:var(--war-text-1)}
 .war-md-h1{font-size:15px}.war-md-h2{font-size:14px}.war-md-h3,.war-md-h4{font-size:13px}
 .war-md-p{margin:0;white-space:pre-wrap}
@@ -1009,7 +1013,7 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 .war-session-process>summary{font-size:11.5px;color:var(--war-text-3);cursor:pointer;user-select:none;padding:2px 0}
 .war-session-process[open]>summary{margin-bottom:6px}
 .war-session-process .war-session-msg{margin-bottom:6px}
-.war-session-tool{font-size:11px;line-height:1.6;color:var(--war-text-2);font-family:var(--war-font-code);white-space:pre-wrap;word-break:break-all}
+.war-session-tool{font-size:12px;line-height:1.6;color:var(--war-text-2);font-family:var(--war-font-code);white-space:pre-wrap;word-break:break-all}
 /* --- V9.10 聚焦页状态机补全：warn ghost / 改档按钮组 / 任务产出+历次执行行 --- */
 .war-tour-ghost.warn{border-color:color-mix(in srgb, var(--war-wait-border) 55%, var(--war-border));background:var(--war-wait-tint)}
 .war-tour-ghost.warn .war-tour-ghost-icon{color:var(--war-wait)}

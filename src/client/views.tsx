@@ -2575,8 +2575,11 @@ function SettingsDrawer(props: {
   /** 独立形态明暗开关（face 门控）：宿主主题由宿主管理，抽屉不给开关；
    *  独立入口供此 prop 才渲染——切 body[data-ds-dark-theme] 并落 localStorage。 */
   standaloneChrome: boolean
+  /** V19 字体缩放：0.85–1.35，CSS zoom 作用 .war-root（画布清晰度由 Warzone uiZoom 补偿）。 */
+  fontScale: number
+  onFontScale: (v: number) => void
 }): ReactNode {
-  const { onClose, hoverFamily, onToggleHoverFamily, autoScroll, onToggleAutoScroll, connected, onRefresh, viewMap, onToggleViewMap, narrowActive, standaloneChrome } = props
+  const { onClose, hoverFamily, onToggleHoverFamily, autoScroll, onToggleAutoScroll, connected, onRefresh, viewMap, onToggleViewMap, narrowActive, standaloneChrome, fontScale, onFontScale } = props
   const copy = activeCopy().settings
   const [skin, setSkinState] = useState(skinId())
   const [lang, setLangState] = useState(langId())
@@ -2648,6 +2651,18 @@ function SettingsDrawer(props: {
           langBtn('zh', copy.langZh),
           langBtn('en', copy.langEn)),
         createElement('div', { className: 'war-settings-note' }, copy.langHint),
+        // V19 字体缩放：滑杆 + 实时倍率读数 + 重置；canvas 由 uiZoom 补像素比不糊。
+        createElement('div', { className: 'war-settings-section' }, copy.fontSection),
+        createElement('div', { className: 'war-font-row' },
+          createElement('input', {
+            key: 'font-range', type: 'range', min: 0.85, max: 1.35, step: 0.05,
+            value: fontScale, 'aria-label': copy.fontSection,
+            onInput: e => { onFontScale(parseFloat((e.target as HTMLInputElement).value)) },
+            onChange: e => { onFontScale(parseFloat((e.target as HTMLInputElement).value)) },
+          }),
+          createElement('span', { key: 'font-val', className: 'war-font-val' }, `×${fontScale.toFixed(2)}`),
+          createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { onFontScale(1) } }, copy.fontReset)),
+        createElement('div', { className: 'war-settings-note' }, copy.fontHint),
         narrowActive ? createElement('div', { className: 'war-settings-note' }, copy.narrowNote) : null,
         createElement('div', { className: 'war-settings-section' }, copy.behaviorSection),
         toggle(copy.hoverFamily, copy.hoverFamilyHint, hoverFamily, onToggleHoverFamily),
@@ -2670,6 +2685,20 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     const [composerOpen, setComposerOpen] = useState(false)
     const [hqPickerOpen, setHqPickerOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    // V19 字体缩放（设置抽屉滑杆）：85%–135% 板面整体缩放——CSS zoom 作用在
+    // .war-root（文字/控件/弹窗随动，布局全弹性域不破）；canvas 清晰度由
+    // Warzone 的 uiZoom prop 补像素比。localStorage 持久（纯展示层偏好）。
+    const [fontScale, setFontScale] = useState(() => {
+      try {
+        const v = parseFloat(localStorage.getItem('warroom-cfg-zoom') ?? '1')
+        return Number.isFinite(v) ? Math.min(1.35, Math.max(0.85, v)) : 1
+      } catch { return 1 }
+    })
+    const applyFontScale = (v: number): void => {
+      const z = Math.min(1.35, Math.max(0.85, Math.round(v * 100) / 100))
+      setFontScale(z)
+      try { localStorage.setItem('warroom-cfg-zoom', String(z)) } catch { /* 隐私模式 */ }
+    }
     // V16.4 critique P2（Alex 画像）：聚焦页状态进 URL hash（#war-cmd-<id>）——
     // 刷新不丢、可贴进笔记发给别人；replaceState 不推历史栈。R2 勘误：hash 归
     // detailCommandId（聚焦页本体），V16.4-R1 曾误接 focusCommandId（族系高亮）。
@@ -3339,7 +3368,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     }
     // V12.2 皮肤钩子：data-war-skin 随文案皮肤落属性——当前军事/平话只换措辞，
     // 未来视觉皮肤在 CSS [data-war-skin] 选择器内重映射 --war-* 令牌层即可。
-    return createElement('div', { className: 'war-root', 'data-war-skin': skinId() },
+    return createElement('div', { className: 'war-root', 'data-war-skin': skinId(), style: { zoom: fontScale } as CSSProperties },
       // V8 hero 灵动岛：替代标题栏——操作件与大盘状态全收进顶部胶囊（展开浮层
       // 盖列区，不推挤；聚焦模式 = 岛的常驻形态）。
       createElement(WarIsland, {
@@ -3406,6 +3435,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
                 key: 'starfield3d',
                 ariaLabel: activeCopy().starfield.aria,
                 active: data.active,
+                uiZoom: fontScale,
                 planets: wzPlanets,
                 squads: wzSquads,
                 log: wzLog,
@@ -3647,6 +3677,8 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       settingsOpen ? createElement(SettingsDrawer, {
         key: 'settings',
         onClose: () => { setSettingsOpen(false) },
+        fontScale,
+        onFontScale: applyFontScale,
         hoverFamily: hoverFamilyOn,
         onToggleHoverFamily: v => { setHoverFamilyOn(v); localStorage.setItem('warroom-cfg-hover-family', v ? '1' : '0') },
         autoScroll: autoScrollOn,

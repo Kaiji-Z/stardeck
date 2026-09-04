@@ -142,6 +142,10 @@ export interface WarCopy {
     langZh: string
     langEn: string
     langHint: string
+    /** V19 字体缩放：85%–135% 板面整体缩放（CSS zoom；canvas 像素比同乘保清晰）。 */
+    fontSection: string
+    fontReset: string
+    fontHint: string
   }
   /** V9.8 命令详情决策带（置顶常驻）：有事给动作，无事给安神行。 */
   commandBand: {
@@ -616,6 +620,9 @@ export const warCopy: WarCopy = {
     langZh: '中文',
     langEn: 'English',
     langHint: '只换界面措辞——账本与提示词资产保持中文正典（agent 的军语不随语言切换）。',
+    fontSection: '字体大小',
+    fontReset: '重置',
+    fontHint: '整体缩放板面（85%–135%）：文字、控件、弹窗随动，canvas 像素比同乘不糊。',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,
@@ -1170,6 +1177,9 @@ export const plainCopy: WarCopy = {
     langZh: '中文',
     langEn: 'English',
     langHint: '只换界面措辞——账本与提示词资产保持中文正典（agent 的军语不随语言切换）。',
+    fontSection: '字体大小',
+    fontReset: '重置',
+    fontHint: '整体缩放板面（85%–135%）：文字、控件、弹窗随动，canvas 像素比同乘不糊。',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,

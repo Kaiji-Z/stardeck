@@ -103,15 +103,18 @@ export interface WarzoneProps {
    *  星球（锚星球投影、无需悬停）并内嵌战线列表（可点击进聚焦页）；
    *  bfpanel 战线弹窗由此退役。null=无聚焦（悬停卡回到纯悬停行为）。 */
   readonly focusWs: string | null
+  /** V19 字体缩放：UI zoom（.war-root 的 CSS zoom）——canvas 像素比同乘补偿保清晰。 */
+  readonly uiZoom?: number
 }
 
 export function Warzone(props: WarzoneProps): ReactNode {
-  const { ariaLabel, active, planets, squads, log, fronts, highlightWs, onOpenCommand, onPlanetHover, onPlanetClick, onVoidClick, onHqClick, orbIdleLabel, onUnavailable, focusWs } = props
+  const { ariaLabel, active, planets, squads, log, fronts, highlightWs, onOpenCommand, onPlanetHover, onPlanetClick, onVoidClick, onHqClick, orbIdleLabel, onUnavailable, focusWs, uiZoom } = props
   const rootRef = useRef<HTMLDivElement | null>(null)
   const c3dRef = useRef<HTMLCanvasElement | null>(null)
   const c2dRef = useRef<HTMLCanvasElement | null>(null)
   const tipRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<WarzoneScene | null>(null)
+  const tacRef = useRef<WarzoneTactical | null>(null)
   const cardsRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const squadsRef = useRef(squads)
@@ -140,6 +143,7 @@ export function Warzone(props: WarzoneProps): ReactNode {
       return
     }
     const tac = new WarzoneTactical(c2d)
+    tacRef.current = tac
     // V12（定案·浅色范式=天空）：主题热切换——body[data-ds-dark-theme] 由宿主
     // theme-presenter 持有，MutationObserver 监听翻转（深空↔天空双皮即时生效）。
     const themeOf = (): boolean => document.body.hasAttribute('data-ds-dark-theme')
@@ -609,6 +613,13 @@ export function Warzone(props: WarzoneProps): ReactNode {
     // onUnavailable 属失败回调闭包，不进依赖。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // V19 字体缩放：UI zoom 变更 → 双 canvas 像素比同乘重分配（视觉放大不发糊）。
+  useEffect(() => {
+    const z = uiZoom ?? 1
+    sceneRef.current?.setUiZoom(z)
+    tacRef.current?.setUiZoom(z)
+  }, [uiZoom])
 
   // 数据面：板真值 → 引擎（星球谱/编队谱/日志/HQ 出航/战线航迹）+ 覆盖层引用。
   useEffect(() => {
