@@ -1516,12 +1516,12 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         : null,
       subRow(fp.taskBrief, t.brief !== '' ? reportBody(t.brief, taskFileLink) : fp.briefMissing),
       subRow(fp.taskAcceptance, t.acceptance !== '' ? t.acceptance : fp.acceptanceMissing),
-    (t.status === 'reported' || t.status === 'failed') && (standalone || staffTarget !== null)
+    (t.status === 'failed') && (standalone || staffTarget !== null)
       ? subActions([createElement('button', {
           className: 'war-btn primary',
-          title: t.status === 'failed' ? activeCopy().taskCard.handleRetryTitle : activeCopy().taskCard.handleReviewTitle,
+          title: activeCopy().taskCard.handleRetryTitle,
           onClick: () => { openStaffPane(staffTarget) },
-        }, t.status === 'failed' ? activeCopy().taskCard.handleRetry : activeCopy().taskCard.handleReview)])
+        }, activeCopy().taskCard.handleRetry)])
       : null,
     )
   }
@@ -3290,7 +3290,10 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // V9.11 任务列=大副侧台账 + V13 Phase B 战线分组：多代战线一组（链色头+代数+
     // 聚合态，成形卡归组首），单代/孤儿保持原排序心智；组与扁平项按最近活动交错。
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
-      (t.status === 'reported' || t.status === 'failed') && staffFor(t.taskId) !== null
+      // V19.5：reported 卡不再给「去验收·参谋会话」跳钮——验收已在板上闭环
+      //（战报 md+证据+产物预览+通过收官，点卡进聚焦页即达）；会话跳钮只剩
+      // 打回重做场景（failed），且聚焦页回报段常驻。
+      t.status === 'failed' && staffFor(t.taskId) !== null
         ? () => { openStaff(t.taskId) }
         : null,
       lineageOf(t.taskId), openCommand, traceFor(lineageOf(t.taskId)?.commandId ?? null),
