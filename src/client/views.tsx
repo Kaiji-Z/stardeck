@@ -714,15 +714,19 @@ function CommandGroupCard(props: { rootId: string; cards: BoardCommand[]; render
  * 选项卡——自主度（放权多少）与发布时机（立即 / cron 定时，到点 tick 自动
  * 下达、一次有效）。档位标记仍拼入命令文本（机制不变）；Ctrl+Enter 提交。
  * 真组件（createElement 挂载）：hooks 各归各实例（#310 教训）。 */
-function CommandComposer(props: { onClose: () => void; refresh: () => void; /** V18.8 全板战线（星球→战线融合选择器选项）。 */ fronts?: FrontChoice[]; /** 预选接续（任务回报卡「下续战令」播种：命令 id + 所属星球键）。 */ initialContinueId?: string | null; initialBattlefield?: string | null; /** 星球清单（现存星球，创建序）。 */ battlefields?: Array<{ key: string; name: string }> }): ReactNode {
-  const { onClose, refresh, fronts = [], initialContinueId = null, initialBattlefield = null } = props
+function CommandComposer(props: { onClose: () => void; refresh: () => void; /** V18.8 全板战线（星球→战线融合选择器选项）。 */ fronts?: FrontChoice[]; /** V19.7 打回/重试播种文本（优先于续写草稿）。 */ initialText?: string | null; /** 预选接续（任务回报卡「下续战令」播种：命令 id + 所属星球键）。 */ initialContinueId?: string | null; initialBattlefield?: string | null; /** 星球清单（现存星球，创建序）。 */ battlefields?: Array<{ key: string; name: string }> }): ReactNode {
+  const { onClose, refresh, fronts = [], initialText = null, initialContinueId = null, initialBattlefield = null } = props
   const layer = useModalLayer(onClose, activeCopy().composer.title)
   // V10.1 critique P1-3：焦点直落 textarea（此前停在弹窗容器 DIV，多按一次 Tab）。
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   useEffect(() => { taRef.current?.focus() }, [])
   // V9.5（复评 P2-1）：草稿落 localStorage——误点背板/顺手 Esc 不再焚稿，
   // 重开起草器自动续写；提交成功才清。
-  const [text, setText] = useState(() => { try { return localStorage.getItem('warroom-draft') ?? '' } catch { return '' } })
+  const [text, setText] = useState(() => {
+    // V19.7 播种文本优先（打回/重试备书）；否则续写上回草稿（V9.5）。
+    if (initialText !== null && initialText !== '') return initialText
+    try { return localStorage.getItem('warroom-draft') ?? '' } catch { return '' }
+  })
   const [grade, setGrade] = useState<ComposerGrade>('auto')
   const [sched, setSched] = useState<'now' | 'cron'>('now')
   // V18.8 闹钟式定时（定案：裸 cron 对人不友好）：模式+时刻为源，cron 由
@@ -1163,8 +1167,8 @@ function ArtifactPreviewModal(props: { ws: string; name: string; onClose: () => 
  * 会话跳钮（任务会话=大副计划会话 / 执行会话=外勤小队实施会话）代替旧 footer
  * 全部按钮，未形成给禁用占位。顶部标题与「等你定夺」决策带沿用 V9.8；阶段
  * 导航只反映真实在场的卡片——没卡的阶段给灰提示行，不预告未发生的事。 */
-export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; statuses: Map<string, BoardTask['status']>; hqSessionId: string | null; services: ClientServicesFace; focusSegment: 'plan' | 'chain' | 'report' | null; onClose: () => void; onRegrade: (grade: 'L0' | 'L1' | 'L2') => void; onDecidePlan: (decision: 'approve' | 'reject', note?: string) => void; onReportSeen: () => void; onJumpMiss: () => void; /** V10 战线族谱：同根全体按代序；多代才显形。 */ chainMembers: BoardCommand[]; /** 族谱跨代跳转（父层换 detailCommandId）。 */ onOpenCommand?: (commandId: string) => void; /** V10 续接入口：报告段「下续战令」——父层开起草器并预选本命令。 */ onContinue?: () => void; /** V14 溯源：本战线续接自源战线的哪条战线（锚链代>1 才有）。 */ origin?: WarFront['origin']; /** V17 归档：账面痕迹由 cmd 携带；动作（父层管扇出/刷新/切页签）。 */ onArchive?: () => void; /** P0-3 撤令：received/talking 命令的舰长放弃出口（war_abandon_command）。 */ onAbandon?: () => void }): ReactNode {
-  const { cmd, chain, statuses, hqSessionId, services, focusSegment, onClose, onRegrade, onDecidePlan, onReportSeen, onJumpMiss, chainMembers, onOpenCommand, onContinue, origin, onArchive, onAbandon } = props
+export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; statuses: Map<string, BoardTask['status']>; hqSessionId: string | null; services: ClientServicesFace; focusSegment: 'plan' | 'chain' | 'report' | null; onClose: () => void; onRegrade: (grade: 'L0' | 'L1' | 'L2') => void; onDecidePlan: (decision: 'approve' | 'reject', note?: string) => void; onReportSeen: () => void; onJumpMiss: () => void; /** V10 战线族谱：同根全体按代序；多代才显形。 */ chainMembers: BoardCommand[]; /** 族谱跨代跳转（父层换 detailCommandId）。 */ onOpenCommand?: (commandId: string) => void; /** V10 续接入口：报告段「下续战令」——父层开起草器并预选本命令。 */ onContinue?: () => void; /** V14 溯源：本战线续接自源战线的哪条战线（锚链代>1 才有）。 */ origin?: WarFront['origin']; /** V17 归档：账面痕迹由 cmd 携带；动作（父层管扇出/刷新/切页签）。 */ onArchive?: () => void; /** P0-3 撤令：received/talking 命令的舰长放弃出口（war_abandon_command）。 */ onAbandon?: () => void; /** V19.7 打回/重试播种：父层开起草器预填（文本+续接）。 */ onCompose?: (kind: 'reject' | 'retry', t: BoardTask) => void }): ReactNode {
+  const { cmd, chain, statuses, hqSessionId, services, focusSegment, onClose, onRegrade, onDecidePlan, onReportSeen, onJumpMiss, chainMembers, onOpenCommand, onContinue, origin, onArchive, onAbandon, onCompose } = props
   const layer = useModalLayer(onClose, activeCopy().focusPage.layerAria(`${displayTitleOf(cmd.text).slice(0, 24)}${cmd.text.length > 24 ? '…' : ''}`))
   // 卡下原地展开的子详情（同卡再点收起；换卡即切换）：命令配置 / 某任务卡下的
   // 计划+任务书（空链 ghost 卡用 '' 占位 taskId）/ 任务回报结论。
@@ -1680,7 +1684,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             ...chain.map(t => [
               TaskCard(t, statuses,
                 () => { setOpen(o => o !== null && o.kind === 'plan' && o.taskId === t.taskId ? null : { kind: 'plan', taskId: t.taskId }) },
-                null, () => {}, NO_TRACE),
+                null, () => {}, NO_TRACE, onCompose),
               open !== null && open.kind === 'plan' && open.taskId === t.taskId ? taskPanel(t, `panel-${t.taskId}`) : null,
             ]),
             ghostVariant !== null
@@ -1769,17 +1773,29 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       createElement('span', { className: 'war-time' }, relTime(a.startedAt)),
                       ))))
                     : null,
-                  // 独立形态一键收官只看 reported 链。V19.6 舰长定：动作行的会话跳钮
-                  // 撤——「打回重做·参谋会话」与底部「⌁ 任务会话」同靶（openStaffPane
-                  // 同参），打回真路径是板上下令、会话弹窗给不出；会话入口唯底部一行。
-                  standalone && !failedChain && lastReport !== undefined && chain.some(t => t.status === 'reported')
+                  // 独立形态收官/打回动作行。V19.6 舰长定：会话跳钮撤（与 ⌁ 任务
+                  // 会话同靶）；V19.7 补真动作对——reported 给「通过收官+打回重做」、
+                  // failed 链给「重试」：都是起草器播种（预填文本+续接），不下令。
+                  standalone && (failedChain || (lastReport !== undefined && chain.some(t => t.status === 'reported')))
                     ? subActions([
-                        createElement('button', {
-                          className: 'war-btn primary', type: 'button',
-                          disabled: acceptBusy,
-                          title: fp.acceptTitle,
-                          onClick: acceptReported,
-                        }, acceptBusy ? fp.acceptBusy : fp.acceptBtn),
+                        !failedChain && lastReport !== undefined
+                          ? createElement('button', {
+                              className: 'war-btn primary', type: 'button',
+                              disabled: acceptBusy,
+                              title: fp.acceptTitle,
+                              onClick: acceptReported,
+                            }, acceptBusy ? fp.acceptBusy : fp.acceptBtn)
+                          : null,
+                        onCompose !== undefined
+                          ? createElement('button', {
+                              className: failedChain ? 'war-btn primary' : 'war-btn', type: 'button',
+                              title: failedChain ? activeCopy().taskCard.retryBtnTitle : activeCopy().taskCard.rejectBtnTitle,
+                              onClick: () => {
+                                const target = chain.find(t => t.status === (failedChain ? 'failed' : 'reported'))
+                                if (target !== undefined) onCompose(failedChain ? 'retry' : 'reject', target)
+                              },
+                            }, failedChain ? activeCopy().taskCard.retryBtn : activeCopy().taskCard.rejectBtn)
+                          : null,
                       ])
                     : null,
                   standalone && acceptNote !== ''
@@ -1895,7 +1911,7 @@ function FormingCard(cmd: BoardCommand, variant: 'plan' | 'talking' | 'drafting'
   )
 }
 
-function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, onOpen: (taskId: string) => void, lineageCmd: BoardCommand | null, onOpenCommand: (commandId: string) => void, trace: CardTrace, /** V14.1 单代战线星球身份（任务列传参；其他调用点不传不渲染）。 */ bf?: string | null): ReactNode {
+function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, onOpen: (taskId: string) => void, lineageCmd: BoardCommand | null, onOpenCommand: (commandId: string) => void, trace: CardTrace, /** V19.7 打回/重试播种（父层拼种子开起草器；缺省不渲染钮）。 */ onCompose?: (kind: 'reject' | 'retry', t: BoardTask) => void, /** V14.1 单代战线星球身份（任务列传参；其他调用点不传不渲染）。 */ bf?: string | null): ReactNode {
   // V9.11 台账终局态：closed/failed 任务书卡常驻任务列但调暗；reported 是待验收
   // 动作态（收件箱有待办），保持全亮不许被埋。
   const settled = task.status === 'closed' || task.status === 'failed'
@@ -1942,6 +1958,16 @@ function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, o
       ? createElement('div', { className: 'war-waithint' }, activeCopy().waitHint.quotaPaused)
       : null,
     task.status === 'failed' && task.lastError !== null ? createElement('div', { className: 'war-fail', title: activeCopy().taskCard.failTitle }, activeCopy().taskCard.failReason(task.lastError)) : null,
+    // V19.7 舰长定：卡上动作钮回归——只备书不下令（弹起草器预填文本+续接本战线）。
+    onCompose !== undefined && (task.status === 'reported' || task.status === 'failed')
+      ? createElement('div', { className: 'war-card-top' },
+        createElement('button', {
+          className: 'war-btn primary',
+          title: task.status === 'reported' ? activeCopy().taskCard.rejectBtnTitle : activeCopy().taskCard.retryBtnTitle,
+          onClick: e => { e.stopPropagation(); onCompose(task.status === 'reported' ? 'reject' : 'retry', task) },
+        }, task.status === 'reported' ? activeCopy().taskCard.rejectBtn : activeCopy().taskCard.retryBtn),
+      )
+      : null,
   )
 }
 
@@ -2690,6 +2716,8 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     }, [detailCommandId])
     // V10 续接播种：任务回报卡「下续战令」→ 预填起草器接续目标。
     const [continueSeed, setContinueSeed] = useState<string | null>(null)
+    // V19.7 打回/重试播种：卡上/聚焦页动作钮 → 起草器预填命令文本（续接仍走 continueSeed）。
+    const [composeTextSeed, setComposeTextSeed] = useState<string | null>(null)
     // V10-R3a 星域/列表视图偏好（窄屏强制列表——中庭放不下恒星系）。
     const [viewPref, setViewPref] = useState<'list' | 'map'>(() => {
       try { return localStorage.getItem('warroom-cfg-view') === 'map' ? 'map' : 'list' } catch { return 'list' }
@@ -2868,6 +2896,14 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     const openCommand = (commandId: string, segment: 'plan' | 'chain' | 'report' | null = null): void => {
       setDetailSegment(segment)
       setDetailCommandId(commandId)
+    }
+    // V19.7 备书器：打回/重试播种——文本进 composeTextSeed、续接钉任务所属命令
+    //（重做生成同战线新一代，星球随战线走）；起草器里舰长过目可改，提交才入账。
+    const composeOrder = (kind: 'reject' | 'retry', t: BoardTask): void => {
+      const tc = activeCopy().taskCard
+      setComposeTextSeed(kind === 'reject' ? tc.rejectTemplate(t.taskId) : tc.retryTemplate(t.taskId))
+      setContinueSeed(lineageOf(t.taskId)?.commandId ?? null)
+      setComposerOpen(true)
     }
     // V9.9 点击接线梳理（舰长定案）：详情面只剩聚焦页——任务卡有溯源开聚焦页，
     // 孤儿任务（真实流程不会出现）直跳其末次会话，不再进旧任务详情。
@@ -3254,9 +3290,10 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // V9.11 任务列=大副侧台账 + V13 Phase B 战线分组：多代战线一组（链色头+代数+
     // 聚合态，成形卡归组首），单代/孤儿保持原排序心智；组与扁平项按最近活动交错。
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
-      // V19.5-6 舰长定：卡上会话跳钮全撤——验收在板上闭环、打回/重试令真路径是
-      // 板上下令，会话弹窗给不出；卡点开聚焦页底部 ⌁ 任务会话即是唯一会话入口。
+      // V19.5-6 舰长定：卡上会话跳钮全撤——验收在板上闭环、会话弹窗给不出打回；
+      // V19.7 卡上动作钮回归为「备书」播种（弹起草器预填，独立形态限定）。
       lineageOf(t.taskId), openCommand, traceFor(lineageOf(t.taskId)?.commandId ?? null),
+      services.standaloneChrome === true ? composeOrder : undefined,
       (() => { const f = taskFront.get(t.taskId); return f !== undefined ? bfNameOf(f.battlefield) : null })())
     const tasksSorted = [...tabTasks].sort((a, b) => {
       const la = lineageOf(a.taskId), lb = lineageOf(b.taskId)
@@ -3644,6 +3681,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
           })
         },
         onContinue: () => { setContinueSeed(detailCommand.commandId); setComposerOpen(true) },
+        onCompose: services.standaloneChrome === true ? composeOrder : undefined,
         // P0-3 撤令（captain-board 通道；成功=关聚焦页回列表刷新，失败=板级错误条）。
         onAbandon: () => {
           void abandonCommand(detailCommand.commandId, '舰长板面撤令（独立形态）——放弃意图或误下').then(r => {
@@ -3669,7 +3707,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       // critique 实抓（下续战令被聚焦页遮住）：composer 必须渲染在 FocusPage
       // 之后——两弹窗同用 .war-modal-backdrop（z-index 9000），同 z 时 DOM 靠后
       // 者在上；「下续战令」正是聚焦页里开 composer 的路径。
-      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null) }, refresh }) : null,
+      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialText: composeTextSeed, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null); setComposeTextSeed(null) }, refresh }) : null,
       settingsOpen ? createElement(SettingsDrawer, {
         key: 'settings',
         onClose: () => { setSettingsOpen(false) },
