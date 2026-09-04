@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { archetypeOf, attemptPhaseOf, clampCam, dampCam, ease, pad2, planetNoise, qbez, warLogOf, warzoneLayoutFor, warzonePlanets, WZ_CAM_DIST_MAX, WZ_CAM_DIST_MIN, WZ_CAM_HOME, WZ_CAM_PITCH_MAX, WZ_CAM_PITCH_MIN, wzCamBounds, wzStatusText } from '../src/client/warzone-scene.ts'
+import { archetypeOf, attemptPhaseOf, clampCam, dampCam, ease, pad2, planetNoise, qbez, truncateForArc, warLogOf, warzoneLayoutFor, warzonePlanets, WZ_CAM_DIST_MAX, WZ_CAM_DIST_MIN, WZ_CAM_HOME, WZ_CAM_PITCH_MAX, WZ_CAM_PITCH_MIN, wzCamBounds, wzStatusText } from '../src/client/warzone-scene.ts'
 
 /** V11.4 warzone demo 移植的纯函数面：星球布局确定性（红线①——同种子恒同貌，
  * SSE 零抖动、探针可断言的根基）+ 贝塞尔航迹几何。 */
@@ -156,4 +156,18 @@ test('审计轮·批次3：wzStatusText 状态 key→词典显示词（英文枚
   assert.equal(wzStatusText('wait', sf), '待进攻')
   assert.equal(wzStatusText('battle', sf), '执行中')
   assert.equal(wzStatusText('held', sf), '已占领')
+})
+
+test('V19 铭文省略截断 truncateForArc：超预算补 … 不超线、放得下原样、极端只留 …', () => {
+  // 等宽测尺：每字 10px（含 …），预算 55 → 容 4 字 + … = 50 ≤ 55
+  const m = (ch: string) => 10
+  assert.equal(truncateForArc(m, 'ABCDEFGHIJ', 55), 'ABCD…')
+  assert.equal(truncateForArc(m, 'ABC', 55), 'ABC', '放得下原样返回（不添 …）')
+  assert.equal(truncateForArc(m, 'ABCDEFGHIJ', 10), '…', '只容得下 … 就只留 …')
+  assert.equal(truncateForArc(m, 'ABCDEFGHIJ', 5), '…', '预算连 … 都不够也只留 …（不超线）')
+  // 变宽测尺（截断点按累计宽找）：宽字 12、窄字 4、… 宽 8；预算 30
+  const w: Record<string, number> = { '广': 12, '阔': 12, '深': 12, '遥': 12, '…': 8 }
+  const mv = (ch: string) => w[ch] ?? 4
+  // 广(12)+…(8)=20 ≤ 30；加阔 12+12=24 > 30-8=22 → 断在第一字后
+  assert.equal(truncateForArc(mv, '广阔深遥', 30), '广…')
 })

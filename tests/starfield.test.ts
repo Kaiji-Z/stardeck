@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { chainHueSlot, deriveContinuation, foldChains, foldDirectives, type Directive } from '../src/directives.ts'
 // 星域布局纯函数——坐标确定性是 V10 的视觉红线（SSE 零抖动）。
-import { galaxyLayout, garrisonOf, hqMoonPos, HQ_POS, hash01, moonPos, planetAngleDeg, planetLabel, workspaceCreationOrder } from '../src/client/starfield.tsx'
+import { galaxyLayout, garrisonOf, hqMoonPos, HQ_POS, hash01, moonPos, planetAngleDeg, planetLabel, planetLabelCaps, workspaceCreationOrder } from '../src/client/starfield.tsx'
 
 function chainsFor(dirs: readonly Directive[]) {
   return foldChains(dirs)
@@ -91,4 +91,38 @@ test('HQ 近地轨道（critique P1-2）：未注册编队锚 HQ——确定性�
     assert.ok(Math.hypot(dx, dy / 0.72) <= 8, '贴 HQ 近轨（半径 7% 级别）')
   }
   assert.notDeepEqual(hqMoonPos('sess-a'), hqMoonPos('sess-b'), '不同会话散布')
+})
+
+test('V19 标签防撞宽 planetLabelCaps：邻球水平间距收紧、纵向错开不管、单人免检', () => {
+  // 近邻（|dy|≤9）：gap=8-3=5 → 夹在地板 6；两端各伸一半 6+6=12 > 8？——地板 6 是
+  // 「再挤也得给省略号留的最小视宽」，极端近距仍可能有轻叠（可接受，不做像素级布局）。
+  const near = planetLabelCaps([
+    { wsPath: 'a', xPct: 20, yPct: 50 },
+    { wsPath: 'b', xPct: 28, yPct: 52 },
+  ])
+  assert.equal(near.get('a'), 6)
+  assert.equal(near.get('b'), 6)
+  // 中距：40-3=37 → 封顶 12（≈132px 量级，随星域宽缩放）
+  const far = planetLabelCaps([
+    { wsPath: 'a', xPct: 20, yPct: 50 },
+    { wsPath: 'b', xPct: 60, yPct: 52 },
+  ])
+  assert.equal(far.get('a'), 12)
+  // 纵向错开 ≥9：标签不在一条带，不设限（不在表）
+  const stacked = planetLabelCaps([
+    { wsPath: 'a', xPct: 20, yPct: 50 },
+    { wsPath: 'b', xPct: 22, yPct: 70 },
+  ])
+  assert.equal(stacked.size, 0)
+  // 单星球：无人相邻 → 免检
+  assert.equal(planetLabelCaps([{ wsPath: 'solo', xPct: 50, yPct: 40 }]).size, 0)
+  // 三连链取最小邻距：中球两侧各 10 → cap 7；端球邻距 10 → cap 7
+  const chain = planetLabelCaps([
+    { wsPath: 'a', xPct: 10, yPct: 50 },
+    { wsPath: 'b', xPct: 20, yPct: 50 },
+    { wsPath: 'c', xPct: 30, yPct: 50 },
+  ])
+  assert.equal(chain.get('a'), 7)
+  assert.equal(chain.get('b'), 7)
+  assert.equal(chain.get('c'), 7)
 })

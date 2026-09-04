@@ -706,6 +706,7 @@ body[data-ds-dark-theme] .war-root .war-chain-hue-7{--chain-hue:#adc0d1}
  * 全 DOM/CSS；浅色=米白海图纸风（细网格+淡染），深色=夜航星图（点状星幕）。
  * 容器与轨道全用 --war-* 令牌系衍生色。 */
 .war-starfield{position:relative;flex:1;min-height:420px;border-radius:14px;overflow:hidden;border:1px solid var(--war-border-soft);
+  container-type:inline-size; /* V19 标签防撞：星球标签 maxWidth 用 cqw（1=星域宽 1%）随窗口缩放 */
   background:var(--war-chart-bg);
   background-size:auto,auto,56px 56px,56px 56px,auto}
 /* 夜间星幕：box-shadow 级联太贵，固定 radial 点阵两层足够氛围（深色专属美术资产） */

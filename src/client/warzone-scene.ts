@@ -759,6 +759,26 @@ function measureArcText(c2: CanvasRenderingContext2D, fs: number, text: string):
   return w
 }
 
+/** 长名弧排省略截断（V19 把玩反馈：缩到 15px 还绕过 ±90° 往下兜，难看）：
+ *  逐字宽累计超出 maxPx 即在容纳处截断补 '…'（'…' 计入预算，绝不超线）；
+ *  放得下原样返回；首字就放不下只留 '…'。纯函数（measure 注入）——tests 管辖。 */
+export function truncateForArc(measure: (ch: string) => number, text: string, maxPx: number): string {
+  const chars = [...text]
+  let total = 0
+  for (const ch of chars) total += measure(ch)
+  if (total <= maxPx) return text
+  const ell = measure('…')
+  let w = 0
+  let cut = 0
+  for (const ch of chars) {
+    const cw = measure(ch)
+    if (w + cw > maxPx - ell) break
+    w += cw
+    cut++
+  }
+  return chars.slice(0, cut).join('') + '…'
+}
+
 export class WarzoneScene {
   readonly renderer: THREE.WebGLRenderer
   readonly scene = new THREE.Scene()
@@ -1755,13 +1775,20 @@ export class WarzoneScene {
     c2 = cv.getContext('2d')
     if (c2 === null) return
     const suf = p.failing > 0 ? activeCopy().starfield.failSuffix(p.failing) : ''
-    // 字号一次性定版（长名缩字号出 84° 扇区，下限 15）；曲率 Rc 由
-    // refreshLabelCurvature 按星球屏半径动态重绘（初值=标称 104）。
+    // 字号一次性定版：长名先缩字号出 84° 扇区（下限 20——V19 原 15 太小难认）；
+    // 缩到下限仍放不下 → truncateForArc 省略号截断（败记后缀预留全额，恒可见）。
+    // 截断后的铭文存 userData.labelName，曲率重绘（refreshLabelCurvature）同源取用。
+    // 曲率 Rc 由 refreshLabelCurvature 按星球屏半径动态重绘（初值=标称 104）。
     c2.font = '600 26px system-ui, sans-serif'
     const span = Math.PI * 84 / 180
+    const budget = span * 104
     let w0 = 0
     for (const ch of [...(planetLabelOf(p) + suf)]) w0 += c2.measureText(ch).width
-    const fs = w0 / 104 > span ? Math.max(15, Math.floor(26 * span / (w0 / 104))) : 26
+    const fs = w0 / 104 > span ? Math.max(20, Math.floor(26 * span / (w0 / 104))) : 26
+    let name = planetLabelOf(p)
+    if (measureArcText(c2, fs, name + suf) / 104 > span) {
+      name = truncateForArc(ch => { c2.font = `600 ${fs}px system-ui, sans-serif`; return c2.measureText(ch).width }, name, budget - measureArcText(c2, fs, suf))
+    }
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: this.darkTheme !== false ? 0.72 : 0.95, depthWrite: false, depthTest: false, fog: false }))
     sprite.renderOrder = 10
     sprite.userData.labelPlanet = p.radius
@@ -1770,6 +1797,7 @@ export class WarzoneScene {
     sprite.userData.labelCanvas = cv
     sprite.userData.labelTopY = 26
     sprite.userData.labelFs = fs
+    sprite.userData.labelName = name
     sprite.userData.labelSuf = suf
     sprite.userData.labelDark = this.darkTheme !== false
     sprite.position.set(0, 0, 0)
@@ -1792,7 +1820,9 @@ export class WarzoneScene {
     const c2 = cv.getContext('2d')
     if (c2 === null) return
     const Rc = Math.min(400, Math.max(104, (planetPx + 4) / scale))
-    const total = measureArcText(c2, fs, planetLabelOf(p) + suf)
+    // 铭文正文取定版截断（addPlanetLabel 存 labelName；缺省回退全名——防御旧 sprite）
+    const text = typeof s.userData.labelName === 'string' ? s.userData.labelName : planetLabelOf(p)
+    const total = measureArcText(c2, fs, text + suf)
     c2.clearRect(0, 0, cv.width, cv.height)
     c2.textBaseline = 'middle'
     const CY = TOP_Y + Rc
@@ -1822,7 +1852,7 @@ export class WarzoneScene {
       c2.strokeStyle = 'rgba(255,255,255,0.9)'
       c2.lineJoin = 'round'
     }
-    let ang = drawArc(planetLabelOf(p), dark ? '#c9cdd2' : '#313842', -Math.PI / 2 - total / Rc / 2)
+    let ang = drawArc(text, dark ? '#c9cdd2' : '#313842', -Math.PI / 2 - total / Rc / 2)
     if (suf !== '') drawArc(suf, '#e5484d', ang)
     ;(s.material as THREE.SpriteMaterial).map!.needsUpdate = true
     s.userData.labelDrawnPr = planetPx
@@ -2409,7 +2439,9 @@ export class WarzoneTactical {
       // V18.2 铭文语言与 3D 同源（定案：名牌变成星球的一部分）：名字沿星球
       //  下缘弧排布（环刻），替换上方悬浮直排；达成数标注退役（达成弧+悬停卡
       //  在场）——盘面保持 项目主四可读：星球名/战斗状态/战线环/执行卡。
-      const nm = planetLabelOf(p).split(' ·')[0]!
+      //  V19：长名 84° 弧预算省略截断（truncateForArc 与 3D 铭文同刀）——
+      //  不再整圈绕球压邻星（把玩实证：20 字任务目录名绕 ~300°）。
+      const nm0 = planetLabelOf(p).split(' ·')[0]!
       g.font = isHl ? 'bold 13px "Microsoft YaHei",Consolas' : '12px "Microsoft YaHei",Consolas'
       const suf = p.failing > 0 ? activeCopy().starfield.failSuffix(p.failing) : ''
       const arcR = rr + 12
@@ -2418,6 +2450,7 @@ export class WarzoneTactical {
         for (const ch of [...text]) w += g.measureText(ch).width
         return w
       }
+      const nm = truncateForArc(ch => g.measureText(ch).width, nm0, (Math.PI * 84 / 180) * arcR - arcW(suf))
       // V18.6：名签与 3D 同语言——星球**上方**外弧（canvas Y 向下，上弧左→右=
       // 角度自 -π/2-δ 递增，rotate(a+π/2) 头朝外）。
       const drawArcText = (text: string, color: string, start: number): number => {
