@@ -411,3 +411,38 @@ test('V19 腿3 会话历史：末条 assistant 正文钉「最终汇报」，过
     historyFixture = { ok: false, error: '测试桩：无此会话' }
   }
 })
+
+test('V19 铺面：链上任务卡计划/任务书走 md-lite——编号步骤成列表、产物可点、版本号不误链', async () => {
+  const task = mkTask({
+    taskId: '20260904-pl1', title: 'CHANGELOG 方案', status: 'closed',
+    workspacePath: '/tmp/w/tasks/pl1',
+    brief: '建 CHANGELOG.md 骨架，版本段从 1.0.0 起。',
+  })
+  const cmd = mkCmd({
+    commandId: 'cmd-pl1', text: '做 CHANGELOG 方案', status: 'approved', taskId: '20260904-pl1',
+    plan: { status: 'approved', text: '目标：建极简 CHANGELOG 维护方案（骨架含 1.0.0 版本段）。\n\n1. 在工作区根建 CHANGELOG.md；\n2. 约定条目格式。' },
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [task], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  // 展开任务段任务卡 → taskPanel（计划+任务书）
+  const card = document.querySelector('.war-cd-stage[data-stage="task"] .war-card-top') as HTMLElement | undefined
+  card?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+  const ol = document.querySelector('.war-cd-stage[data-stage="task"] .war-md-ol')
+  assert.ok(ol !== null, '计划编号步骤渲染成有序列表')
+  // 计划与任务书里的产物文件=可点（任务工作区在场）；版本号 1.0.0 不成按钮
+  const pathBtns = [...document.querySelectorAll('.war-cd-stage[data-stage="task"] button.war-md-path')] as HTMLButtonElement[]
+  const labels = pathBtns.map(b => b.textContent)
+  assert.ok(labels.includes('CHANGELOG.md'), `产物可点（got ${labels.join(',')}）`)
+  assert.ok(!labels.includes('1.0.0'), '版本号不误链')
+  calls.length = 0
+  pathBtns[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 120))
+  assert.ok(calls.some(c => c.url.includes('/warroom/api/workspace/file') && String(c.url).includes(encodeURIComponent('/tmp/w/tasks/pl1'))), '计划产物点击打到 workspace/file（任务工作区锚点）')
+  assert.ok(document.querySelector('[data-war-preview]') !== null, '预览弹窗在场')
+  r.unmount()
+})

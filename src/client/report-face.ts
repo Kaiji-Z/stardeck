@@ -10,12 +10,13 @@
  * @module stardeck/client/report-face
  */
 
-/** 路径形判定：含扩展名（≤8 位字母数字）、无空白、长度 ≥3；允许 ./ ../ 前缀、
- *  正/反斜杠、字母数字-_%. 与 CJK。URL 形（含 ://）不算——那是链接不是文件。 */
+/** 路径形判定：含字母开头扩展名（≤8 位）、无空白、长度 ≥3；允许 ./ ../ 前缀、
+ *  正/反斜杠、字母数字-_%. 与 CJK。URL 形（含 ://）不算；纯数字扩展（1.0.0、
+ *  3.5 这类版本号）不算——真实计划文本实抓的假阳性，V19 铺面轮收紧。 */
 export function looksLikeFilePath(s: string): boolean {
   if (s.length < 3 || /\s/.test(s)) return false
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return false
-  return /^[.\-_/@\\@\w\u4e00-\u9fff]+\.([a-z0-9]{1,8})$/i.test(s)
+  return /^[.\-_/@\\@\w\u4e00-\u9fff]+\.([a-z][a-z0-9]{0,7})$/i.test(s)
 }
 
 export type InlineToken =

@@ -1444,7 +1444,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         // 前置文案都在那，这里不再复读两颗钮）；「大副还在写」只在计划正文
         // 确实还空着时说，不再与已呈原文同屏打架。
         pending && planText === '' ? createElement('div', { className: 'war-sub-value' }, fp.planPending) : null,
-        createElement('div', { className: 'war-sub-value war-plan-body' }, planText),
+        // V19 铺面：计划走 md-lite 结构渲染（命令级呈批面无任务工作区——路径
+        // 只给样式不链化，发布前的文件名没有可解析的锚点）。
+        createElement('div', { className: 'war-sub-value war-plan-body' }, reportBody(planText)),
         pending && (standalone || staffTarget !== null)
           ? subActions([
             createElement('button', { key: 'in', className: 'war-btn', onClick: () => { openStaffPane(staffTarget) } }, fp.planEnterSession),
@@ -1499,15 +1501,21 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   }
   // 链上任务卡的展开（V9.10 补全）：命令级最终计划（若有）+ 该环任务书 + 验收
   // 标准；reported/failed 环给「去验收/去下重试令」直达大副会话（与主界面任务卡同动作）。
-  const taskPanel = (t: BoardTask, key?: string): ReactNode => createElement('div', { key, className: 'war-subdetail' },
-    cmd.plan !== null
-      ? createElement('div', { className: 'war-subdetail-title' }, `${fp.planTitle}（${copy.planTitle[cmd.plan.status]}）`)
-      : null,
-    cmd.plan !== null
-      ? createElement('div', { className: 'war-sub-value war-plan-body' }, cmd.plan.text)
-      : null,
-    subRow(fp.taskBrief, t.brief !== '' ? t.brief : fp.briefMissing),
-    subRow(fp.taskAcceptance, t.acceptance !== '' ? t.acceptance : fp.acceptanceMissing),
+  // V19 铺面：计划/任务书走 md-lite 渲染；任务已物化工作区——计划点名的产物
+  // 文件可点（「计划说建什么→点开看到真建了什么」），与任务回报段同一预览通道。
+  const taskPanel = (t: BoardTask, key?: string): ReactNode => {
+    const taskFileLink = t.workspacePath !== null && t.workspacePath !== ''
+      ? (n: string): void => { setPreview({ ws: t.workspacePath!, name: n }) }
+      : undefined
+    return createElement('div', { key, className: 'war-subdetail' },
+      cmd.plan !== null
+        ? createElement('div', { className: 'war-subdetail-title' }, `${fp.planTitle}（${copy.planTitle[cmd.plan.status]}）`)
+        : null,
+      cmd.plan !== null
+        ? createElement('div', { className: 'war-sub-value war-plan-body' }, reportBody(cmd.plan.text, taskFileLink))
+        : null,
+      subRow(fp.taskBrief, t.brief !== '' ? reportBody(t.brief, taskFileLink) : fp.briefMissing),
+      subRow(fp.taskAcceptance, t.acceptance !== '' ? t.acceptance : fp.acceptanceMissing),
     (t.status === 'reported' || t.status === 'failed') && (standalone || staffTarget !== null)
       ? subActions([createElement('button', {
           className: 'war-btn primary',
@@ -1515,7 +1523,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
           onClick: () => { openStaffPane(staffTarget) },
         }, t.status === 'failed' ? activeCopy().taskCard.handleRetry : activeCopy().taskCard.handleReview)])
       : null,
-  )
+    )
+  }
   return createElement('div', { className: 'war-modal-backdrop', onClick: onClose },
     createElement('div', { className: 'war-modal wide war-cd-modal', onClick: e => e.stopPropagation(), ref: layer.ref, ...layer.props },
       // V9.9：footer 收编为两颗会话跳钮，窗口关闭走右上 ✕（+Esc+点背板）。
@@ -1562,7 +1571,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             // 截 6 行，点开看全文），不再「依据要多点一次才可见」。
             createElement('details', { className: 'war-cd-band-plan' },
               createElement('summary', null, band.planPeek),
-              createElement('div', { className: 'war-plan-body' }, (cmd.plan as { text: string }).text),
+              // V19 铺面：决策带计划速览同走 md-lite（命令级无任务工作区——不链化）。
+              createElement('div', { className: 'war-plan-body' }, reportBody((cmd.plan as { text: string }).text)),
             ),
             // 驳回带意见（2026-09-02 定案）：意见框随置顶决策带常驻（不依赖展开
             // 计划段）——驳回时送达大副重拟，批准时作为批注入账。

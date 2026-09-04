@@ -20,6 +20,11 @@ test('looksLikeFilePath：路径形判定（紧口径——URL/句子/带空格�
   assert.equal(looksLikeFilePath('a b.md'), false, '含空白不放行')
   assert.equal(looksLikeFilePath('.md'), false, '无主干不放行')
   assert.equal(looksLikeFilePath('node:fs'), false, '协议面不放行')
+  // V19 铺面轮收紧：纯数字扩展=版本号不是路径（真实 CHANGELOG 计划里的 [1.0.0] 实抓）
+  assert.equal(looksLikeFilePath('1.0.0'), false, '版本号不放行')
+  assert.equal(looksLikeFilePath('3.5'), false, '短版本号不放行')
+  assert.equal(looksLikeFilePath('v2.tar.gz'), true, '字母扩展的包名照放')
+  assert.equal(looksLikeFilePath('data.json'), true, '字母扩展照放')
 })
 
 test('splitInline：code/bold/路径切词，互不嵌套', () => {

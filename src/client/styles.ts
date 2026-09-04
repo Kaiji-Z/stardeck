@@ -339,7 +339,7 @@ body[data-ds-dark-theme] .war-root{
 /* V5-R3 计划卡（命令详情浮层内） */
 .war-plan{margin-top:10px;border:1px solid var(--war-border);border-radius:var(--war-r-sm);padding:8px 10px}
 .war-plan-head{font-size:12px;font-weight:600;color:var(--war-text-1);margin-bottom:4px}
-.war-plan-body{font-size:12px;white-space:pre-wrap;color:var(--war-text-1);max-height:240px;overflow:auto}
+.war-plan-body{font-size:12px;color:var(--war-text-1);max-height:240px;overflow:auto} /* V19 铺面：pre-wrap 撤除（md 块管间距），段内换行保真移 .war-md-p */
 
 /* quality-tier palette（状态令牌族的刻意映射：common=中性/fine=绿/rare=蓝/
  * epic=琥珀/legendary=红——与 QUALITY_TIERS 对齐，皮肤随令牌走）。 */
@@ -991,7 +991,8 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 .war-md{display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.75;color:var(--war-text-1);word-break:break-word}
 .war-md-h{font-weight:700;color:var(--war-text-1)}
 .war-md-h1{font-size:15px}.war-md-h2{font-size:14px}.war-md-h3,.war-md-h4{font-size:13px}
-.war-md-p{margin:0}
+.war-md-p{margin:0;white-space:pre-wrap}
+.war-md-quote{white-space:pre-wrap}
 .war-md-ul,.war-md-ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .war-md-code{margin:0;padding:10px 12px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-chart-bg);font-family:var(--war-font-code);font-size:11.5px;line-height:1.6;overflow-x:auto;white-space:pre}
 .war-md code{font-family:var(--war-font-code);font-size:11.5px;background:var(--war-chart-bg);border:1px solid var(--war-border-soft);border-radius:4px;padding:0 4px}
