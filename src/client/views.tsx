@@ -1516,13 +1516,6 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         : null,
       subRow(fp.taskBrief, t.brief !== '' ? reportBody(t.brief, taskFileLink) : fp.briefMissing),
       subRow(fp.taskAcceptance, t.acceptance !== '' ? t.acceptance : fp.acceptanceMissing),
-    (t.status === 'failed') && (standalone || staffTarget !== null)
-      ? subActions([createElement('button', {
-          className: 'war-btn primary',
-          title: activeCopy().taskCard.handleRetryTitle,
-          onClick: () => { openStaffPane(staffTarget) },
-        }, activeCopy().taskCard.handleRetry)])
-      : null,
     )
   }
   return createElement('div', { className: 'war-modal-backdrop', onClick: onClose },
@@ -1687,7 +1680,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             ...chain.map(t => [
               TaskCard(t, statuses,
                 () => { setOpen(o => o !== null && o.kind === 'plan' && o.taskId === t.taskId ? null : { kind: 'plan', taskId: t.taskId }) },
-                null, null, () => {}, NO_TRACE),
+                null, () => {}, NO_TRACE),
               open !== null && open.kind === 'plan' && open.taskId === t.taskId ? taskPanel(t, `panel-${t.taskId}`) : null,
             ]),
             ghostVariant !== null
@@ -1902,7 +1895,7 @@ function FormingCard(cmd: BoardCommand, variant: 'plan' | 'talking' | 'drafting'
   )
 }
 
-function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, onOpen: (taskId: string) => void, onHandle: (() => void) | null, lineageCmd: BoardCommand | null, onOpenCommand: (commandId: string) => void, trace: CardTrace, /** V14.1 单代战线星球身份（任务列传参；其他调用点不传不渲染）。 */ bf?: string | null): ReactNode {
+function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, onOpen: (taskId: string) => void, lineageCmd: BoardCommand | null, onOpenCommand: (commandId: string) => void, trace: CardTrace, /** V14.1 单代战线星球身份（任务列传参；其他调用点不传不渲染）。 */ bf?: string | null): ReactNode {
   // V9.11 台账终局态：closed/failed 任务书卡常驻任务列但调暗；reported 是待验收
   // 动作态（收件箱有待办），保持全亮不许被埋。
   const settled = task.status === 'closed' || task.status === 'failed'
@@ -1949,15 +1942,6 @@ function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, o
       ? createElement('div', { className: 'war-waithint' }, activeCopy().waitHint.quotaPaused)
       : null,
     task.status === 'failed' && task.lastError !== null ? createElement('div', { className: 'war-fail', title: activeCopy().taskCard.failTitle }, activeCopy().taskCard.failReason(task.lastError)) : null,
-    onHandle !== null
-      ? createElement('div', { className: 'war-card-top' },
-        createElement('button', {
-          className: 'war-btn primary',
-          title: activeCopy().taskCard.handleRetryTitle,
-          onClick: e => { e.stopPropagation(); onHandle() },
-        }, activeCopy().taskCard.handleRetry),
-      )
-      : null,
   )
 }
 
@@ -2885,18 +2869,6 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       setDetailSegment(segment)
       setDetailCommandId(commandId)
     }
-    const openStaff = (taskId: string): void => {
-      const target = staffFor(taskId)
-      if (target === null) return
-      // 独立形态：宿主会话面缺位——开所属命令的聚焦页（会话历史弹窗/一键验收
-      // 都在那；按钮接线轮 2026-09-02，不再 services.sessions?.open 静默无操作）。
-      if (services.standaloneChrome === true) {
-        const lc = lineageOf(taskId)
-        if (lc !== null) openCommand(lc.commandId)
-        return
-      }
-      services.sessions?.open(target)
-    }
     // V9.9 点击接线梳理（舰长定案）：详情面只剩聚焦页——任务卡有溯源开聚焦页，
     // 孤儿任务（真实流程不会出现）直跳其末次会话，不再进旧任务详情。
     // （V13 上移：taskCardOf 在战线分组装配期即被调用，TDZ 不许声明滞后。）
@@ -3282,12 +3254,8 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // V9.11 任务列=大副侧台账 + V13 Phase B 战线分组：多代战线一组（链色头+代数+
     // 聚合态，成形卡归组首），单代/孤儿保持原排序心智；组与扁平项按最近活动交错。
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
-      // V19.5：reported 卡不再给「去验收·参谋会话」跳钮——验收已在板上闭环
-      //（战报 md+证据+产物预览+通过收官，点卡进聚焦页即达）；V19.6 聚焦页
-      // 动作行会话跳钮也撤（与 ⌁ 任务会话同靶）——卡上只剩 failed 的重试令钮。
-      t.status === 'failed' && staffFor(t.taskId) !== null
-        ? () => { openStaff(t.taskId) }
-        : null,
+      // V19.5-6 舰长定：卡上会话跳钮全撤——验收在板上闭环、打回/重试令真路径是
+      // 板上下令，会话弹窗给不出；卡点开聚焦页底部 ⌁ 任务会话即是唯一会话入口。
       lineageOf(t.taskId), openCommand, traceFor(lineageOf(t.taskId)?.commandId ?? null),
       (() => { const f = taskFront.get(t.taskId); return f !== undefined ? bfNameOf(f.battlefield) : null })())
     const tasksSorted = [...tabTasks].sort((a, b) => {

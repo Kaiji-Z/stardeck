@@ -232,8 +232,6 @@ export const enWarCopy: WarCopy = {
     taskIdTitle: 'Task ID (for traceability)',
     failReason: e => `Cause of defeat: ${e}`,
     failTitle: 'Retries exhausted — waiting for the Sovereign to have staff re-open the case',
-    handleRetry: 'Issue retry order · Staff session',
-    handleRetryTitle: 'Retry authorization is given in the staff session — the board is a read projection; orders go through staff',
   },
   grade: { L0: 'L0 direct', L1: 'L1 plan-approval', L2: 'L2 clarify' },
   chain: {
@@ -778,8 +776,6 @@ export const enPlainCopy: WarCopy = {
     taskIdTitle: 'Task ID (for traceability)',
     failReason: e => `Failure reason: ${e}`,
     failTitle: 'Retries exhausted — waiting for the Planning Agent to re-open the case',
-    handleRetry: 'Issue retry order · Planning Agent session',
-    handleRetryTitle: 'Retry authorization is given in the Planning Agent session — the board is read-only; orders go through the agent',
   },
   grade: { L0: 'L0 direct', L1: 'L1 plan-approval', L2: 'L2 clarify' },
   chain: {
