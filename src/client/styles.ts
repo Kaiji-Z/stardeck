@@ -503,9 +503,6 @@ body[data-ds-dark-theme] .war-root{
 /* V8 决策失败 toast：绝对定位浮层（不推挤列区），岛下方右上。 */
 .war-actionerr{position:absolute;bottom:136px;right:24px;z-index:70;display:flex;align-items:center;gap:8px;max-width:480px;margin:0;padding:6px 10px;border-radius:var(--war-r-sm);border:1px solid var(--war-fail-border);background:var(--war-pop-bg);color:var(--war-fail);font-size:calc(12px*var(--war-fs));box-shadow:var(--war-shadow-2)}
 .war-legend-btn{padding:2px 10px;line-height:calc(18px*var(--war-fs));font-size:calc(12px*var(--war-fs));flex:0 0 auto}
-.war-legend-rows{display:grid;grid-template-columns:max-content 1fr;gap:8px 14px;align-items:baseline}
-.war-legend-sym{font-size:calc(12px*var(--war-fs));font-weight:700;color:var(--war-run-strong);white-space:nowrap}
-.war-legend-text{font-size:calc(12px*var(--war-fs));color:var(--war-text-2)}
 
 /* --- shell entry (sidebar row + center-column takeover) ------------------------ */
 /* war-sidebar-* 挂在宿主侧栏（.war-root 之外）——宿主铬层，刻意保留
