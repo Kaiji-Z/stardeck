@@ -12,7 +12,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { detectCodexBin, detectPiBin, detectOpencodeBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectQwenBin, ADAPTERS } from './executor.ts'
+import { detectCodexBin, detectPiBin, detectOpencodeBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectQwenBin, detectDshBin, ADAPTERS } from './executor.ts'
 
 export interface FleetSeatInfo {
   id: string
@@ -48,6 +48,7 @@ const SEATS: ReadonlyArray<{ id: string; label: string; experimental?: boolean; 
   { id: 'claude', label: 'claude', note: 'Anthropic Claude Code。鉴权二选一：原生 /login 订阅，或环境变量 ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN 指向 anthropic 兼容网关。', noteEn: 'Anthropic Claude Code. Auth is either the native /login subscription, or ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN pointing at an anthropic-compatible gateway.', detect: detectClaudeBin, adapter: true },
   { id: 'gemini', label: 'gemini', experimental: true, note: '实验性：Google Gemini CLI。适配已就绪，配置好 Google API key 即可使用。', noteEn: 'Experimental: Google Gemini CLI. Integration is ready; set up a Google API key to use it.', detect: detectGeminiBin, adapter: true },
   { id: 'qwen', label: 'qwen', experimental: true, note: '实验性：Qwen Code。支持 openai 兼容网关鉴权；部分网关下模型选择的兼容性有限。', noteEn: 'Experimental: Qwen Code. Supports openai-compatible gateway auth; model selection has limited compatibility with some gateways.', detect: detectQwenBin, adapter: true },
+  { id: 'dsh', label: 'dsh', note: 'DeepSeek Harness（本仓血统宿主，独立形态里反过来当外勤）。走源码仓克隆入口：无头 headless 档 + stardeck 外挂模型层；网关用环境变量 DEEPSEEK_API_KEY/BASE_URL（缺席时自动映射 Z_AI_*），模型默认 glm-5.2。', noteEn: 'DeepSeek Harness (this project\'s lineage host, now flying as an away-team member). Runs from a source-tree clone: headless profile + a stardeck model overlay; gateway via DEEPSEEK_API_KEY/BASE_URL env (falls back to Z_AI_*), model defaults to glm-5.2.', detect: detectDshBin, adapter: true },
   { id: 'copilot', label: 'copilot', note: '即将支持：GitHub Copilot CLI（需 Copilot 订阅）。', noteEn: 'Coming soon: GitHub Copilot CLI (requires a Copilot subscription).', detect: (c) => c !== '' ? c : 'copilot' },
   { id: 'amp', label: 'amp', note: '即将支持：Sourcegraph Amp。', noteEn: 'Coming soon: Sourcegraph Amp.', detect: (c) => c !== '' ? c : 'amp' },
   { id: 'cursor', label: 'cursor', note: '即将支持：Cursor CLI（需 Cursor 账号）。', noteEn: 'Coming soon: Cursor CLI (requires a Cursor account).', detect: (c) => c !== '' ? c : 'cursor-agent' },
@@ -104,6 +105,7 @@ export function bindNoteFor(executor: string, model: string): string {
     claude: '网关/订阅认识的模型 id',
     gemini: 'gemini 自身鉴权可用的模型 id（-m 透传）',
     qwen: 'openai 兼容网关的模型 id',
+    dsh: '纯模型 id（默认 glm-5.2；经 DEEPSEEK_API_KEY/BASE_URL 网关，Z_AI_* 自动映射）',
   }
   const hint = semantics[executor] ?? '按该舰队 CLI 的模型语法'
   return model !== ''

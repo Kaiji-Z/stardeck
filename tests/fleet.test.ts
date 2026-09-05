@@ -10,11 +10,11 @@ import { test } from 'node:test'
 import { probeFleet, fleetSeatIds, bindableSeatIds, seatLabelOf, seatStatusOf } from '../src/fleet.ts'
 import { seatStatusOf } from '../src/client/fleet-gate.tsx'
 
-test('席位正典清单：十一席（七实装 + 四契约）；实验性与双语 note 齐；契约席不可绑', () => {
-  assert.deepEqual(fleetSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen', 'copilot', 'amp', 'cursor', 'droid'])
-  assert.deepEqual(bindableSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen'])
+test('席位正典清单：十二席（八实装 + 四契约）；实验性与双语 note 齐；契约席不可绑', () => {
+  assert.deepEqual(fleetSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen', 'dsh', 'copilot', 'amp', 'cursor', 'droid'])
+  assert.deepEqual(bindableSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen', 'dsh'])
   const seats = probeFleet('', () => true) // 探针全真——只验清单形状
-  assert.equal(seats.length, 11)
+  assert.equal(seats.length, 12)
   assert.equal(seats.filter(s => s.experimental === true).map(s => s.id).join(), 'codex,gemini,qwen')
   for (const s of seats) {
     assert.ok(s.note.length > 10, `${s.id} 缺人话说明`)
@@ -46,7 +46,7 @@ test('探测语义：绝对入口 existsSync 定生死（真入口 ok / 假入�
 
 test('探测语义：裸名走 --version 探针（win32 无绝对入口的 PATH 形）', () => {
   const seats = probeFleet('', bin => bin === 'probe-hit')
-  assert.equal(seats.length, 11) // 注入探针不抛错即证明走了探针分支（zcode/qwen 席=包内绝对路径，探针不抛）
+  assert.equal(seats.length, 12) // 注入探针不抛错即证明走了探针分支（zcode/qwen 席=包内绝对路径，探针不抛）
 })
 
 test('席位卡三分语义（绑定门诚实证）：可绑定 / 受限·实验性 / 未检出——codex 不再裸标可绑定', () => {

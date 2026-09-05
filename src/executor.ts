@@ -21,8 +21,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createInterface as readlineCreateInterface } from 'node:readline'
 import { commanderOrderFor } from './prompts.ts'
 
@@ -672,6 +672,7 @@ export const JUMP_TEMPLATES: Record<string, string> = {
   claude: 'claude --resume <会话号>',
   gemini: 'gemini --resume <会话号>',
   qwen: 'qwen --resume <会话号>',
+  dsh: 'dsh --profile tui --resume <会话号>',
 }
 
 /** zcode 视察提示词：在原会话上下文里让外勤汇报（禁工具——只读现场）。 */
@@ -689,6 +690,14 @@ export function jumpArgs(executor: string, sessionId: string): string[] {
   if (executor === 'claude') return ['claude', '--resume', sessionId]
   if (executor === 'gemini') return ['gemini', '--resume', sessionId]
   if (executor === 'qwen') return ['qwen', '--resume', sessionId]
+  if (executor === 'dsh') {
+    const bin = detectDshBin('')
+    if (bin.endsWith('.ts')) {
+      const root = dshCloneRootOf(bin)
+      return [process.execPath, '--import', pathToFileURL(join(root, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href, bin, '--profile', 'tui', '--resume', sessionId]
+    }
+    return ['dsh', '--profile', 'tui', '--resume', sessionId]
+  }
   return ['opencode', '--session', sessionId]
 }
 
@@ -974,6 +983,165 @@ export const zcodeAdapter: ExecutorAdapter = {
   },
 }
 
+// ═══ 第七舰队 dsh（2026-09-05，血统回归：宿主变外勤）═══
+// dsh=DeepSeek Harness（本仓插件形态的宿主）。无头=`--profile headless "<任务>"`
+//（apps/cli/src/bin.ts；官方契约：one task, prints the final assistant text,
+// and exits——2026-09-05 实弹 z.ai GLM 网关首弹即通）。四件要害（源码+实弹双证）：
+//   - 模型路由：dsh 固定 deepseek 目录且无 env 覆盖——stardeck 自带 --patch
+//     外挂层（agent-default-model→GLM），不碰用户 ~/.dsh 任何配置；
+//   - 工具面：dsh 无 MCP 配置面（全仓仅 ACP 包）——简报走 http 教学面（zcode
+//     正典：STARDECK_HTTP + node/UTF-8 纪律）；
+//   - 模块解析：源码仓 bin.ts 依赖 tsconfig paths——spawn 时带
+//     TSX_TSCONFIG_PATH=<clone>/tsconfig.json + 绝对 tsx loader（与 cwd 解耦，
+//     任务工作区无 node_modules 也能起；2026-09-05 实弹验证）；
+//   - 会话存储：stdout 不吐会话号（JSONL 流为测试设施非支持格式）——退场惰扫
+//     ~/.dsh/sessions/<projectKey(cwd)>/session-<uuid>/（编码规则=format.ts
+//     projectKey 字节级复刻）；存档=session.jsonl.zstd（多帧 zstd，node:zlib
+//     公开 API 可解，history.ts 读取器管）。
+
+/** dsh 入口探测：configured 优先；缺省扫本机源码仓克隆（bin.ts 绝对路径，
+ * spawn 时经 node+tsx loader）；再退 PATH 裸名。 */
+export function detectDshBin(configured: string): string {
+  if (configured !== '') return configured
+  const cloned = join(homedir(), 'vibecodingKJ', 'clones', 'deepseek-ai', 'deepseek-harness', 'apps', 'cli', 'src', 'bin.ts')
+  if (existsSync(cloned)) return cloned
+  return 'dsh'
+}
+
+/** dsh 源码仓根（bin.ts 上跳四级：apps/cli/src/bin.ts → 仓根）。 */
+export function dshCloneRootOf(binTs: string): string {
+  return resolve(dirname(dirname(dirname(dirname(binTs)))))
+}
+
+/** dsh 模型串归一：provider/id 形取 id 段；空/缺省 glm-5.2（z.ai 网关正典）。 */
+export function dshModelId(model: string): string {
+  const id = model.includes('/') ? model.slice(model.indexOf('/') + 1) : model
+  return id.trim() !== '' ? id.trim() : 'glm-5.2'
+}
+
+/** dsh --patch 外挂层内容（纯，测试管辖）：agent-default-model 路由 GLM +
+ * llm-deepseek 模型目录补条目——**maxTokens 必须显式**（catalog 缺条目时
+ * provider 默认 max_tokens 非法，z.ai 网关拒收「限制[1,131072]」，2026-09-05
+ * 实弹抓的坑）；128000/8192 为实弹实证组合。 */
+export function dshPatchYml(model: string): string {
+  return `# stardeck 外挂层：headless 外勤席位模型路由（随任务工作区走，不动 ~/.dsh）\n- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: ${dshModelId(model)}\n- id: llm-deepseek\n  config:\n    models:\n      - id: ${dshModelId(model)}\n        name: ${dshModelId(model)}\n        contextWindow: 128000\n        maxTokens: 8192\n`
+}
+
+/** dsh 无头 argv（纯，测试管辖）：node + 绝对 tsx loader（win32 须 file://
+ * URL——裸 C:\ 会被当 'c:' 协议）+ bin.ts + profile headless + --patch 外挂
+ * + 任务正文（尾部位置参数）。 */
+export function dshHeadlessArgs(args: { cloneRoot: string; binTs: string; patchPath: string; prompt: string }): string[] {
+  return [
+    '--import', pathToFileURL(join(args.cloneRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href,
+    args.binTs, '--profile', 'headless', '--patch', args.patchPath,
+    args.prompt,
+  ]
+}
+
+/** dsh 工作区目录键（纯，字节级复刻 dsh format.ts projectKey）：分隔符折叠成
+ * 单 `-`，安全字符直通，其余 ~XXXX 转义；去前导、251 上限、`--…--` 包裹。 */
+export function dshProjectKey(cwd: string): string {
+  let readable = ''
+  let run = false
+  for (let i = 0; i < cwd.length; i++) {
+    const code = cwd.charCodeAt(i)
+    const ch = String.fromCharCode(code)
+    if (ch === '/' || ch === '\\' || ch === ':') {
+      if (!run) readable += '-'
+      run = true
+    } else if (ch !== '~' && /^[A-Za-z0-9._-]$/.test(ch)) {
+      readable += ch
+      run = false
+    } else {
+      readable += `~${code.toString(16).toUpperCase().padStart(4, '0')}`
+      run = false
+    }
+  }
+  const slug = readable.replace(/^-+/, '') || 'root'
+  return `--${slug.slice(0, 251)}--`
+}
+
+/** dsh 会话惰扫（退场时调）：~/.dsh/sessions/<projectKey>/ 下 mtime≥起跑的
+ * 最新 session-<uuid> 目录——stdout 无会话号，这是唯一捕获路（pi 同款惰性）。 */
+export function dshLatestSessionId(workspacePath: string, minMtime: number, root = join(homedir(), '.dsh', 'sessions')): string | null {
+  const dir = join(root, dshProjectKey(workspacePath))
+  let entries: string[] = []
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return null
+  }
+  let best: { id: string; mtime: number } | null = null
+  for (const e of entries) {
+    if (!e.startsWith('session-')) continue
+    try {
+      const st = statSync(join(dir, e))
+      if (st.mtimeMs < minMtime) continue
+      if (best === null || st.mtimeMs > best.mtime) best = { id: e, mtime: st.mtimeMs }
+    } catch { /* race: 目录被清 */
+    }
+  }
+  return best !== null ? best.id : null
+}
+
+/** 无头 dsh agent 框定法（执行者与大副共用）：写简报（http 面）→ 写 --patch
+ * 外挂层 → spawn（node+tsx loader，cwd=工作区）→ 退场惰扫会话入 attach-map。 */
+export async function spawnHeadlessDsh(args: HeadlessAgentArgs): Promise<ExecutorSession> {
+  mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
+  writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
+  const patchPath = join(args.workspacePath, '.stardeck', 'dsh-model.yml')
+  writeFileSync(patchPath, dshPatchYml(args.model ?? ''), 'utf8')
+  const binTs = args.executorBin
+  const isSourceEntry = binTs.endsWith('.ts')
+  const env: NodeJS.ProcessEnv = { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }
+  // 网关映射：DEEPSEEK_* 优先；缺席时 Z_AI_*（本机 GLM 网关正典）补位。
+  if (env.DEEPSEEK_API_KEY === undefined && process.env.Z_AI_API_KEY !== undefined) env.DEEPSEEK_API_KEY = process.env.Z_AI_API_KEY
+  if (env.DEEPSEEK_BASE_URL === undefined && process.env.Z_AI_BASE_URL !== undefined) env.DEEPSEEK_BASE_URL = process.env.Z_AI_BASE_URL
+  const session = isSourceEntry
+    ? spawnCli(process.execPath, dshHeadlessArgs({ cloneRoot: dshCloneRootOf(binTs), binTs, patchPath, prompt: args.prompt ?? PROMPT }),
+        {
+          cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
+          env: { ...env, TSX_TSCONFIG_PATH: join(dshCloneRootOf(binTs), 'tsconfig.json') },
+        })
+    : spawnCli(binTs, ['--profile', 'headless', '--patch', patchPath, args.prompt ?? PROMPT],
+        {
+          cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
+          env,
+        })
+  // 退场惰扫：dsh stdout 无会话号——进程收尾后按 projectKey 反查（执行者/
+  // 大副统一经 attachTaskId 给附着键，与 zcode 行钩/pi 惰扫同款账法）。
+  if (args.attachTaskId !== undefined && args.attachTaskId !== '') {
+    const startedAt = Date.now()
+    session.child.on('exit', () => {
+      const sid = dshLatestSessionId(args.workspacePath, startedAt - 5_000)
+      if (sid !== null) {
+        writeAttachMapEntry(args.stateDir, args.attachTaskId!, { executor: 'dsh', sessionId: sid, workspacePath: args.workspacePath, capturedAt: new Date().toISOString() })
+      }
+    })
+  }
+  return session
+}
+
+/** dsh 适配器（第七舰队）：http 教学面 + 模型外挂层 + 惰扫捕获。 */
+export const dshAdapter: ExecutorAdapter = {
+  id: 'dsh',
+  async spawn(args) {
+    return spawnHeadlessDsh({
+      workspacePath: args.workspacePath,
+      brief: executorBrief(args, 'http'),
+      title: args.title,
+      http: args.http,
+      agentId: args.agentId,
+      stateDir: args.stateDir,
+      role: 'executor',
+      model: args.model,
+      executorBin: args.executorBin,
+      attachTaskId: args.taskId,
+      prompt: PROMPT,
+    })
+  },
+}
+
 // ═══ 第五/六舰队（2026-09-02 定案「扩充舰队支持广度」）═══
 // claude（Anthropic Claude Code 2.1.258）：已验证——`claude -p --output-format
 // json` 无头一次性（尾包 session_id/result），项目级 `.mcp.json` 与 zcode 同构
@@ -1231,4 +1399,4 @@ export const qwenAdapter: ExecutorAdapter = {
 /** 七席注册表（const 不提升——置于文件尾，全部适配器定义之后）。
  * 另有五席契约登记（copilot/amp/cursor/droid/ccr）在 fleet.ts——只有 spawn
  * 契约在档、适配器未实装，绑定门挡住（不装样子）。 */
-export const ADAPTERS: Record<string, ExecutorAdapter> = { opencode: opencodeAdapter, codex: codexAdapter, pi: piAdapter, zcode: zcodeAdapter, claude: claudeAdapter, gemini: geminiAdapter, qwen: qwenAdapter }
+export const ADAPTERS: Record<string, ExecutorAdapter> = { opencode: opencodeAdapter, codex: codexAdapter, pi: piAdapter, zcode: zcodeAdapter, dsh: dshAdapter, claude: claudeAdapter, gemini: geminiAdapter, qwen: qwenAdapter }

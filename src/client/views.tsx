@@ -1004,7 +1004,7 @@ function ArchiveRow(props: { chain: BoardTask[]; cmd: BoardCommand; onArchive: (
 }
 
 /** 有真 TUI 可拉起的舰队（「在 TUI 中打开」行的门禁；zcode 无 TUI——历史弹窗即其会话回看）。 */
-const TUI_FLEETS = new Set(['opencode', 'pi', 'codex'])
+const TUI_FLEETS = new Set(['opencode', 'pi', 'codex', 'dsh'])
 
 /** P0-3 撤令行（2026-09-02 脱离宿主九件）：received/talking 可撤（大副追问中撤
  *  = 放弃意图的正当出口）；approved 出任务的不在此设闸（撤销语义归任务链收官）。

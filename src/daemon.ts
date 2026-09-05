@@ -20,7 +20,7 @@ import { appendEvent, listCampaignIds, loadCampaign } from './events.ts'
 import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives } from './directives.ts'
 import { deliverViaRpc } from './steer.ts'
 import { conscriptPlan } from './rules.ts'
-import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
+import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
 import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor } from './staff.ts'
@@ -88,7 +88,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   let activeExecutor = ADAPTERS[config.executor] !== undefined ? config.executor : 'opencode'
   let activeModel = config.model
   const binFor = (id: string): string =>
-    id === 'codex' ? detectCodexBin(config.executorBin) : id === 'pi' ? detectPiBin(config.executorBin) : id === 'zcode' ? detectZcodeBin(config.executorBin) : id === 'claude' ? detectClaudeBin(config.executorBin) : id === 'gemini' ? detectGeminiBin(config.executorBin) : detectOpencodeBin(config.executorBin)
+    id === 'codex' ? detectCodexBin(config.executorBin) : id === 'pi' ? detectPiBin(config.executorBin) : id === 'zcode' ? detectZcodeBin(config.executorBin) : id === 'claude' ? detectClaudeBin(config.executorBin) : id === 'gemini' ? detectGeminiBin(config.executorBin) : id === 'dsh' ? detectDshBin(config.executorBin) : detectOpencodeBin(config.executorBin)
 
   // ---------- 执行者适配器 → CommanderOps（征召面） ----------
   const newAgentId = (taskId: string): string => `oc-${taskId}-${Date.now().toString(36)}`
@@ -373,11 +373,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendDirectiveEvent(stateDir, { type: 'directive_received', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
       }
       staffSession = await spawnStaffAgent({
-        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' ? 'http' : 'mcp'),
+        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' ? 'http' : 'mcp'),
         workspacePath: join(stateDir, 'staff'),
         http: base,
         agentId,
-        model: staffFleet === 'zcode' ? '' : activeModel, // 大副随舰队：模型串随板面绑定；zcode 引擎吃自身 config 不透传
+        model: staffFleet === 'zcode' ? '' : activeModel, // 大副随舰队：模型串随板面绑定；zcode 引擎吃自身 config 不透传（dsh 串在适配器内归一）
         executor: staffFleet,
         executorBin: binFor(staffFleet),
         stateDir,

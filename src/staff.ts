@@ -19,7 +19,7 @@
 import type { Directive, DirectiveGrade } from './directives.ts'
 import { relayPromptFor, staffPersonaText } from './prompts.ts'
 import type { FeatureFlags } from './flags.ts'
-import { spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, type ExecutorSession } from './executor.ts'
+import { spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, type ExecutorSession } from './executor.ts'
 
 export type StaffWorkKind = 'intake' | 'plan' | 'publish'
 
@@ -192,6 +192,10 @@ export async function spawnStaffAgent(args: StaffSpawnArgs): Promise<ExecutorSes
   }
   if (args.executor === 'pi') {
     return spawnHeadlessPi({ ...common, model: args.model, executorBin: args.executorBin })
+  }
+  if (args.executor === 'dsh') {
+    // dsh 模型串归一在适配器内（provider/id 形取 id；网关 env Z_AI_*→DEEPSEEK_* 映射）。
+    return spawnHeadlessDsh({ ...common, model: args.model, executorBin: args.executorBin })
   }
   return spawnHeadlessOpencode({ ...common, model: args.model, executorBin: args.executorBin })
 }

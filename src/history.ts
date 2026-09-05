@@ -16,10 +16,11 @@
  * @module stardeck/history
  */
 import { DatabaseSync } from 'node:sqlite'
+import * as zlib from 'node:zlib'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { piSessionDirFor } from './executor.ts'
+import { piSessionDirFor, dshProjectKey } from './executor.ts'
 
 export interface HistoryPart {
   kind: 'text' | 'reasoning' | 'tool'
@@ -272,11 +273,79 @@ export function readClaudeHistory(sessionId: string, root = join(homedir(), '.cl
   return { executor: 'claude', sessionId, messages }
 }
 
-/** 四席分发：按 attach 映射的 executor 读对应存档（全只读、零 token）。 */
+/** dsh 会话存档多帧 zstd 解码（纯）：逐帧 zstdDecompressSync + 帧魔数
+ * （28 B5 2F FD）步进拼接。Node <23.8 无 zstd 面时给诚实错误。 */
+export function dshDecodeZstdFrames(buf: Buffer): string {
+  const dec = (zlib as unknown as { zstdDecompressSync?: (b: Buffer) => Buffer }).zstdDecompressSync
+  if (dec === undefined) throw new Error('本机 Node 无 zstd 解压面（需 Node ≥23.8/24）——dsh 会话存档（.jsonl.zstd）读不了')
+  const MAGIC = Buffer.from([0x28, 0xB5, 0x2F, 0xFD])
+  const frames: Buffer[] = []
+  let off = 0
+  while (off < buf.length) {
+    let part: Buffer
+    try {
+      part = dec(buf.subarray(off))
+    } catch {
+      break // 帧损坏/残尾：保已解码前段
+    }
+    if (part.length === 0) break
+    frames.push(part)
+    const next = buf.subarray(off + 4).indexOf(MAGIC)
+    if (next < 0) break
+    off += 4 + next
+  }
+  return Buffer.concat(frames).toString('utf8')
+}
+
+/** dsh session.jsonl 事件行 → 会话消息流（纯）：user/message 与
+ * assistant/message（后者载荷嵌 data.message；reasoning/text 分部件）。 */
+export function dshHistoryFromLines(lines: ReadonlyArray<string>): HistoryMessage[] {
+  const out: HistoryMessage[] = []
+  for (const line of lines) {
+    if (line.trim() === '') continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (typeof parsed !== 'object' || parsed === null) continue
+    const ev = parsed as { type?: unknown; time?: unknown; data?: { content?: ReadonlyArray<{ type?: unknown; text?: unknown }>; role?: unknown; message?: { role?: unknown; content?: ReadonlyArray<{ type?: unknown; text?: unknown }> } } }
+    const ts = typeof ev.time === 'number' ? ev.time : null
+    const partsOf = (content: ReadonlyArray<{ type?: unknown; text?: unknown }>): HistoryPart[] => {
+      const parts: HistoryPart[] = []
+      for (const c of content) {
+        if (c.type === 'text' && typeof c.text === 'string') parts.push({ kind: 'text', text: c.text })
+        else if (c.type === 'reasoning' && typeof c.text === 'string') parts.push({ kind: 'reasoning', text: c.text })
+      }
+      return parts
+    }
+    if (ev.type === 'user/message' && ev.data !== undefined && Array.isArray(ev.data.content)) {
+      out.push({ role: 'user', ts, parts: partsOf(ev.data.content) })
+    } else if (ev.type === 'assistant/message' && ev.data?.message !== undefined && Array.isArray(ev.data.message.content)) {
+      out.push({ role: 'assistant', ts, parts: partsOf(ev.data.message.content) })
+    }
+  }
+  return out
+}
+
+/** 读 dsh 会话存档（~/.dsh/sessions/<projectKey(cwd)>/session-<id>/
+ * session.jsonl.zstd——目录键=dsh format.ts projectKey，executor.ts 复刻）。 */
+export function readDshHistory(sessionId: string, workspacePath: string, root = join(homedir(), '.dsh', 'sessions')): SessionHistory {
+  const id = sessionId.startsWith('session-') ? sessionId : `session-${sessionId}`
+  const file = join(root, dshProjectKey(workspacePath), id, 'session.jsonl.zstd')
+  if (!existsSync(file)) throw new Error(`dsh 会话存档不在 ${file}`)
+  const messages = dshHistoryFromLines(dshDecodeZstdFrames(readFileSync(file)).split('\n'))
+  if (messages.length === 0) throw new Error(`dsh 会话 ${sessionId} 存档里没有消息记录`)
+  return { executor: 'dsh', sessionId: id, messages }
+}
+
+/** 各席分发：按 attach 映射的 executor 读对应存档（全只读、零 token）。 */
 export function readSessionHistory(executor: string, sessionId: string, workspacePath: string): SessionHistory {
   if (executor === 'zcode') return readSqliteHistory(zcodeDbPath(), 'zcode', sessionId)
   if (executor === 'pi') return readPiHistory(workspacePath, sessionId)
   if (executor === 'codex') return readCodexHistory(sessionId)
   if (executor === 'claude') return readClaudeHistory(sessionId)
+  if (executor === 'dsh') return readDshHistory(sessionId, workspacePath)
   return readSqliteHistory(opencodeDbPath(), 'opencode', sessionId)
 }
