@@ -1684,7 +1684,10 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             ...chain.map(t => [
               TaskCard(t, statuses,
                 () => { setOpen(o => o !== null && o.kind === 'plan' && o.taskId === t.taskId ? null : { kind: 'plan', taskId: t.taskId }) },
-                null, () => {}, NO_TRACE, onCompose),
+                null, () => {}, NO_TRACE,
+                // V19.7.1 舰长定：聚焦页任务段 reported 卡不带打回钮——与任务回报段
+                // 动作行同靶重复；failed 留（无战报可展开时它是唯一重试入口）。
+                onCompose !== undefined && t.status === 'failed' ? onCompose : undefined),
               open !== null && open.kind === 'plan' && open.taskId === t.taskId ? taskPanel(t, `panel-${t.taskId}`) : null,
             ]),
             ghostVariant !== null
