@@ -2093,11 +2093,12 @@ export function ExternalThreadCard(thread: BoardThread, services: ClientServices
 // --- 区块与主视图 --------------------------------------------------------------
 
 /** A board column. `key` is the stable style/state hook — 皮肤改标题不破坏类名。 */
-function Zone(key: string, title: string, count: number, empty: string, children: ReactNode[], extra?: ReactNode): ReactNode {
+function Zone(key: string, title: string, count: number, empty: string, children: ReactNode[], extra?: ReactNode, hint = ''): ReactNode {
   return createElement('div', { key, className: `war-col zone-${key}` },
     createElement('div', { className: 'war-col-head' },
       // V9.6：列标题升格 h2——屏幕阅读器有结构可导航（板原先零标题）。
-      createElement('h2', { className: 'war-col-title' }, title),
+      // V19.10 补：hint 悬停解释列语义（「常驻」这类图面猜不出的词就地给答案）。
+      createElement('h2', { className: 'war-col-title', ...(hint !== '' ? { title: hint } : {}) }, title),
       createElement('span', { className: 'war-col-count' }, String(count)),
       extra,
     ),
@@ -3594,9 +3595,9 @@ export function warView(services: ClientServicesFace): () => ReactNode {
             createElement('div', { className: 'war-zone war-field' },
               // V18 critique：执行中列=常驻（与星域同哲学：现在时不随页签切片），
               // 列头 title 声明常驻口径（见 copy.columns.live.resident）。
-              Zone('live', activeCopy().columns.live.title + activeCopy().columns.live.resident, live.length + threads.length, activeCopy().columns.live.empty,
-                [...live.map(({ t, a }) => SessionCard(t, a, (t2, a2) => { openSessionVia(t2, a2, 'battle') }, traceFor(lineageOf(t.taskId)?.commandId ?? null))),
+              Zone('live', activeCopy().columns.live.title + activeCopy().columns.live.resident, live.length + threads.length, activeCopy().columns.live.empty,                [...live.map(({ t, a }) => SessionCard(t, a, (t2, a2) => { openSessionVia(t2, a2, 'battle') }, traceFor(lineageOf(t.taskId)?.commandId ?? null))),
                   ...(mapView ? [] : threadCards)],
+                undefined, activeCopy().columns.live.hint,
               ),
             ),
             createElement('div', { className: 'war-zone war-report' },

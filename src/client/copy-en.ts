@@ -103,7 +103,7 @@ export const enWarCopy: WarCopy = {
   columns: {
     commands: { title: 'Commands', empty: 'Press + to issue the first command' },
     tasks: { title: 'Tasks', empty: 'Awaiting the Staff Officer to post the first bounty' },
-    live: { title: 'In operation', empty: 'After a command is issued, the Field Commander sessions appear here', resident: ' · resident' },
+    live: { title: 'In operation', empty: 'After a command is issued, the Field Commander sessions appear here', resident: ' · resident', hint: 'Field Commander sessions stream here live; externally attached sessions also reside in this column (that is what resident means)' },
     done: { title: 'Completed', empty: 'The report zone is empty — victories and defeats both land here' },
     failed: { title: 'Failed', empty: 'No failed sessions yet' },
   },
@@ -657,7 +657,7 @@ export const enPlainCopy: WarCopy = {
   columns: {
     commands: { title: 'Commands', empty: 'Press + to issue the first command' },
     tasks: { title: 'Tasks', empty: 'Awaiting the Planning Agent to publish the first task' },
-    live: { title: 'Running', empty: 'After a command is issued, execution sessions appear here', resident: ' · resident' },
+    live: { title: 'Running', empty: 'After a command is issued, execution sessions appear here', resident: ' · resident', hint: 'Running sessions stream here; externally attached sessions also stay in this column (that is what resident means)' },
     done: { title: 'Done', empty: 'Empty so far — both finished and failed land here' },
     failed: { title: 'Failed', empty: 'No failed sessions yet' },
   },

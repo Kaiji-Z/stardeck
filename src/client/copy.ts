@@ -180,7 +180,7 @@ export interface WarCopy {
   columns: {
     commands: { title: string; empty: string }
     tasks: { title: string; empty: string }
-    live: { title: string; empty: string; resident: string }
+    live: { title: string; empty: string; resident: string; hint: string }
     done: { title: string; empty: string }
     failed: { title: string; empty: string }
   }
@@ -646,7 +646,7 @@ export const warCopy: WarCopy = {
   columns: {
     commands: { title: '命令', empty: '点 + 下达第一道命令' },
     tasks: { title: '任务', empty: '等参谋发布第一张悬赏' },
-    live: { title: '作战中', empty: '下达命令后，指挥官的作战会话会出现在这里', resident: ' · 常驻' },
+    live: { title: '作战中', empty: '下达命令后，指挥官的作战会话会出现在这里', resident: ' · 常驻', hint: '指挥官的作战会话在此直播；从外部挂载进来的会话也驻留此列（即「常驻」）' },
     done: { title: '已完成', empty: '战报栏还空着——收官与折戟都会落在这里' },
     failed: { title: '已失败', empty: '暂无失败会话' },
   },
@@ -1210,7 +1210,7 @@ export const plainCopy: WarCopy = {
   columns: {
     commands: { title: '命令', empty: '点 + 下达第一条命令' },
     tasks: { title: '任务', empty: '等规划 Agent 发布第一个任务' },
-    live: { title: '执行中', empty: '下达命令后，执行会话会出现在这里', resident: ' · 常驻' },
+    live: { title: '执行中', empty: '下达命令后，执行会话会出现在这里', resident: ' · 常驻', hint: '正在跑的会话在这里直播；手动挂进来的外部会话也停在这列（即「常驻」）' },
     done: { title: '已完成', empty: '这里还空着——完成和失败都会落在这里' },
     failed: { title: '已失败', empty: '暂无失败会话' },
   },
