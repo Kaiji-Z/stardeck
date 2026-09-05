@@ -710,12 +710,21 @@ function CommandGroupCard(props: { rootId: string; cards: BoardCommand[]; render
   )
 }
 
+/** V19.8 播种收官判词：播种令提交成功后回写旧账的定性文本。账本中文正典
+ * （不随 UI 语言/皮肤切换），点名接续命令号让族谱可溯。 */
+export function seedVerdict(kind: 'reject' | 'retry', cmdId: string | null): string {
+  const ref = cmdId !== null ? `（${cmdId}）` : ''
+  return kind === 'reject'
+    ? `打回定性——重做令已下${ref}，重做由该代接续，本账就此收官`
+    : `重试定性——重试令已下${ref}，接续由该代执行，本账就此收官`
+}
+
 /** 调度条 ✚ 的起草器（V9.2 重设计）：先一句话讲清「你能做什么」，再给两组
  * 选项卡——自主度（放权多少）与发布时机（立即 / cron 定时，到点 tick 自动
  * 下达、一次有效）。档位标记仍拼入命令文本（机制不变）；Ctrl+Enter 提交。
  * 真组件（createElement 挂载）：hooks 各归各实例（#310 教训）。 */
-function CommandComposer(props: { onClose: () => void; refresh: () => void; /** V18.8 全板战线（星球→战线融合选择器选项）。 */ fronts?: FrontChoice[]; /** V19.7 打回/重试播种文本（优先于续写草稿）。 */ initialText?: string | null; /** 预选接续（任务回报卡「下续战令」播种：命令 id + 所属星球键）。 */ initialContinueId?: string | null; initialBattlefield?: string | null; /** 星球清单（现存星球，创建序）。 */ battlefields?: Array<{ key: string; name: string }> }): ReactNode {
-  const { onClose, refresh, fronts = [], initialText = null, initialContinueId = null, initialBattlefield = null } = props
+function CommandComposer(props: { onClose: () => void; refresh: () => void; /** V18.8 全板战线（星球→战线融合选择器选项）。 */ fronts?: FrontChoice[]; /** V19.7 打回/重试播种文本（优先于续写草稿）。 */ initialText?: string | null; /** V19.8 播种旧账身份：提交成功后回调父层自动定性收官。 */ seedTask?: { taskId: string; kind: 'reject' | 'retry' } | null; onSeedSettled?: (taskId: string, kind: 'reject' | 'retry', cmdId: string | null) => void; /** 预选接续（任务回报卡「下续战令」播种：命令 id + 所属星球键）。 */ initialContinueId?: string | null; initialBattlefield?: string | null; /** 星球清单（现存星球，创建序）。 */ battlefields?: Array<{ key: string; name: string }> }): ReactNode {
+  const { onClose, refresh, fronts = [], initialText = null, seedTask = null, onSeedSettled, initialContinueId = null, initialBattlefield = null } = props
   const layer = useModalLayer(onClose, activeCopy().composer.title)
   // V10.1 critique P1-3：焦点直落 textarea（此前停在弹窗容器 DIV，多按一次 Tab）。
   const taRef = useRef<HTMLTextAreaElement | null>(null)
@@ -787,6 +796,9 @@ function CommandComposer(props: { onClose: () => void; refresh: () => void; /** 
         setText('')
         refresh()
         onClose()
+        // V19.8 播种收官：令已入账 → 旧账自动定性（元首定案「后者」）；关账失败
+        // 由父层 actNote 出声，不回滚已下之令。
+        if (seedTask !== null && onSeedSettled !== undefined) onSeedSettled(seedTask.taskId, seedTask.kind, result.commandId ?? null)
       } else {
         setError(result.error ?? activeCopy().composer.failFallback)
       }
@@ -1778,7 +1790,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                     : null,
                   // 独立形态收官/打回动作行。V19.6 舰长定：会话跳钮撤（与 ⌁ 任务
                   // 会话同靶）；V19.7 补真动作对——reported 给「通过收官+打回重做」、
-                  // failed 链给「重试」：都是起草器播种（预填文本+续接），不下令。
+                  // failed 链给「重试」：都是起草器播种，不下令；提交成功自动给
+                  // 旧账定性收官（V19.8）。
                   standalone && (failedChain || (lastReport !== undefined && chain.some(t => t.status === 'reported')))
                     ? subActions([
                         !failedChain && lastReport !== undefined
@@ -2721,8 +2734,8 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     }, [detailCommandId])
     // V10 续接播种：任务回报卡「下续战令」→ 预填起草器接续目标。
     const [continueSeed, setContinueSeed] = useState<string | null>(null)
-    // V19.7 打回/重试播种：卡上/聚焦页动作钮 → 起草器预填命令文本（续接仍走 continueSeed）。
-    const [composeTextSeed, setComposeTextSeed] = useState<string | null>(null)
+    // V19.7-8 打回/重试播种：文本+旧账身份进 composeSeed（提交成功后自动定性收官）。
+    const [composeSeed, setComposeSeed] = useState<{ text: string; taskId: string; kind: 'reject' | 'retry' } | null>(null)
     // V10-R3a 星域/列表视图偏好（窄屏强制列表——中庭放不下恒星系）。
     const [viewPref, setViewPref] = useState<'list' | 'map'>(() => {
       try { return localStorage.getItem('warroom-cfg-view') === 'map' ? 'map' : 'list' } catch { return 'list' }
@@ -2902,13 +2915,18 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       setDetailSegment(segment)
       setDetailCommandId(commandId)
     }
-    // V19.7 备书器：打回/重试播种——文本进 composeTextSeed、续接钉任务所属命令
-    //（重做生成同战线新一代，星球随战线走）；起草器里舰长过目可改，提交才入账。
+    // V19.7 备书器：打回/重试播种——文本+旧账身份进 composeSeed、续接钉任务所属
+    // 命令（重做生成同战线新一代，星球随战线走）；起草器里舰长过目可改，提交才入账。
     const composeOrder = (kind: 'reject' | 'retry', t: BoardTask): void => {
       const tc = activeCopy().taskCard
-      setComposeTextSeed(kind === 'reject' ? tc.rejectTemplate(t.taskId) : tc.retryTemplate(t.taskId))
+      setComposeSeed({ text: kind === 'reject' ? tc.rejectTemplate(t.taskId) : tc.retryTemplate(t.taskId), taskId: t.taskId, kind })
       setContinueSeed(lineageOf(t.taskId)?.commandId ?? null)
       setComposerOpen(true)
+    }
+    // V19.8 播种收官：播种令提交成功 → 旧账自动定性（判词点名接续命令号）；
+    // 关账失败必须出声（V7.1），成功即刷新板面。
+    const settleSeedOld = (taskId: string, kind: 'reject' | 'retry', cmdId: string | null): void => {
+      actNote(closeTask(taskId, seedVerdict(kind, cmdId)).then(r => { if (r.ok) refresh(); return r }), activeCopy().actions.failToast('播种收官'))
     }
     // V9.9 点击接线梳理（舰长定案）：详情面只剩聚焦页——任务卡有溯源开聚焦页，
     // 孤儿任务（真实流程不会出现）直跳其末次会话，不再进旧任务详情。
@@ -3297,7 +3315,10 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
       // V19.5-7.2 舰长定：板上台账卡零动作钮（会话跳钮、打回/重试备书钮全撤）——
       // 点卡进聚焦页即达一切动作；备书钮仅存聚焦页 failed 卡（见 FocusPage 链段）。
+      // （V19.8 教训：撤参必须留 undefined 占位——尾参错位曾让 bf 串落进 onCompose
+      // 槽，钮照渲染、点击即炸 `s is not a function`。）
       lineageOf(t.taskId), openCommand, traceFor(lineageOf(t.taskId)?.commandId ?? null),
+      undefined,
       (() => { const f = taskFront.get(t.taskId); return f !== undefined ? bfNameOf(f.battlefield) : null })())
     const tasksSorted = [...tabTasks].sort((a, b) => {
       const la = lineageOf(a.taskId), lb = lineageOf(b.taskId)
@@ -3711,7 +3732,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       // critique 实抓（下续战令被聚焦页遮住）：composer 必须渲染在 FocusPage
       // 之后——两弹窗同用 .war-modal-backdrop（z-index 9000），同 z 时 DOM 靠后
       // 者在上；「下续战令」正是聚焦页里开 composer 的路径。
-      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialText: composeTextSeed, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null); setComposeTextSeed(null) }, refresh }) : null,
+      composerOpen ? createElement(CommandComposer, { key: 'composer', fronts: frontChoices, initialText: composeSeed?.text ?? null, seedTask: composeSeed !== null ? { taskId: composeSeed.taskId, kind: composeSeed.kind } : null, onSeedSettled: settleSeedOld, initialContinueId: continueSeed, initialBattlefield: continueSeed !== null ? cmdFront.get(continueSeed)?.battlefield ?? null : null, battlefields: bfChoices, onClose: () => { setComposerOpen(false); setContinueSeed(null); setComposeSeed(null) }, refresh }) : null,
       settingsOpen ? createElement(SettingsDrawer, {
         key: 'settings',
         onClose: () => { setSettingsOpen(false) },
