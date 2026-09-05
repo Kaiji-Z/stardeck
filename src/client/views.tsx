@@ -1961,7 +1961,9 @@ function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, o
       ? createElement('div', { className: 'war-waithint' }, activeCopy().waitHint.quotaPaused)
       : null,
     task.status === 'failed' && task.lastError !== null ? createElement('div', { className: 'war-fail', title: activeCopy().taskCard.failTitle }, activeCopy().taskCard.failReason(task.lastError)) : null,
-    // V19.7 舰长定：卡上动作钮回归——只备书不下令（弹起草器预填文本+续接本战线）。
+    // V19.7 舰长定：动作钮只备书不下令（弹起草器预填文本+续接本战线）。
+    // V19.7.2 收敛：唯一存续处=聚焦页任务段 failed 卡（板卡无钮、聚焦页 reported
+    // 卡的打回在任务回报段动作行）。
     onCompose !== undefined && (task.status === 'reported' || task.status === 'failed')
       ? createElement('div', { className: 'war-card-top' },
         createElement('button', {
@@ -3293,10 +3295,9 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // V9.11 任务列=大副侧台账 + V13 Phase B 战线分组：多代战线一组（链色头+代数+
     // 聚合态，成形卡归组首），单代/孤儿保持原排序心智；组与扁平项按最近活动交错。
     const taskCardOf = (t: BoardTask): ReactNode => TaskCard(t, statuses, openTaskVia,
-      // V19.5-6 舰长定：卡上会话跳钮全撤——验收在板上闭环、会话弹窗给不出打回；
-      // V19.7 卡上动作钮回归为「备书」播种（弹起草器预填，独立形态限定）。
+      // V19.5-7.2 舰长定：板上台账卡零动作钮（会话跳钮、打回/重试备书钮全撤）——
+      // 点卡进聚焦页即达一切动作；备书钮仅存聚焦页 failed 卡（见 FocusPage 链段）。
       lineageOf(t.taskId), openCommand, traceFor(lineageOf(t.taskId)?.commandId ?? null),
-      services.standaloneChrome === true ? composeOrder : undefined,
       (() => { const f = taskFront.get(t.taskId); return f !== undefined ? bfNameOf(f.battlefield) : null })())
     const tasksSorted = [...tabTasks].sort((a, b) => {
       const la = lineageOf(a.taskId), lb = lineageOf(b.taskId)
