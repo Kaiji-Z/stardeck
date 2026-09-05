@@ -352,6 +352,8 @@ export interface WarCopy {
     talkingGhostCard: string
     talkingGhostNote: string
     talkingEnterBtn: string
+    /** V19.9 可读性④：待翻阅态结论预览（战报首句不点开即可瞄到；预览≠翻阅）。 */
+    reportPreview: (s: string) => string
     /** V9.10 任务卡展开补全：该环任务书+验收标准。 */
     taskBrief: string
     taskAcceptance: string
@@ -507,6 +509,11 @@ export interface WarCopy {
     /** V18 critique：岛计数=全页签口径（切片只作用于三列）。 */
     countsScope: string
     inboxBadge: (n: number) => string
+    /** V19.9 可读性①：徽标分性质——四类计数内联后缀 + 悬停全称（零跳知「等我什么」）。 */
+    inboxKinds: (c: { clarify: number; plan: number; review: number; retry: number }) => string
+    inboxKindsTitle: (c: { clarify: number; plan: number; review: number; retry: number }) => string
+    /** V19.9 可读性③：全局活动脉搏（relTime 文本——舰队最近一次动静）。 */
+    pulse: (t: string) => string
     visitMini: (closed: number, failed: number, commands: number) => string
     pin: string
     unpin: string
@@ -912,6 +919,7 @@ export const warCopy: WarCopy = {
     talkingGhostCard: '参谋在等你回答——点开进对话',
     talkingGhostNote: '任务卡在等你的回答成形——进对话答一句，参谋就能继续。',
     talkingEnterBtn: '进入对话回答',
+    reportPreview: s => `战报预览 · ${s}`,
     taskBrief: '任务书',
     taskAcceptance: '验收标准',
     briefMissing: '（参谋未附任务书正文）',
@@ -1067,6 +1075,9 @@ export const warCopy: WarCopy = {
       ].filter(x => x !== null),
     countsScope: '计数为全页签口径（页签只切三列）',
     inboxBadge: n => `✉ ${n}`,
+    inboxKinds: c => [c.review > 0 ? `阅${c.review}` : '', c.plan > 0 ? `批${c.plan}` : '', c.clarify > 0 ? `答${c.clarify}` : '', c.retry > 0 ? `试${c.retry}` : ''].filter(s => s !== '').join('·'),
+    inboxKindsTitle: c => `收件箱 ${c.clarify + c.plan + c.review + c.retry} 件：${[c.review > 0 ? `待翻阅战报 ${c.review}` : '', c.plan > 0 ? `待批计划 ${c.plan}` : '', c.clarify > 0 ? `待答问 ${c.clarify}` : '', c.retry > 0 ? `待重试 ${c.retry}` : ''].filter(s => s !== '').join(' · ')}`,
+    pulse: t => `最近动静 ${t}`,
     // V10.1 审查：▲收官→✓收官（善终语义，与凯旋印记同符）。
     visitMini: (closed, failed, commands) =>
       [closed > 0 ? `✓收官 ${closed}` : '', failed > 0 ? `✕折戟 ${failed}` : '', commands > 0 ? `✚新令 ${commands}` : '']
@@ -1143,6 +1154,7 @@ export const plainCopy: WarCopy = {
     clarifyHint: '规划 Agent 在等你回话',
     clarifyBtn: '去对话',
     reviewHint: '结果已核好，等你过目',
+    reviewBtn: '去看结果',
     reviewBtn: '去看结果',
     retryHint: '有失败的，等你定',
     retryBtn: '去看失败',
@@ -1470,6 +1482,7 @@ export const plainCopy: WarCopy = {
     talkingGhostCard: '规划 Agent 在等你回答——点开进对话',
     talkingGhostNote: '任务卡要等你的回答才能成形——进对话说一句，规划 Agent 就能继续。',
     talkingEnterBtn: '进入对话回答',
+    reportPreview: s => `先看一眼 · ${s}`,
     taskBrief: '任务说明',
     taskAcceptance: '验收标准',
     briefMissing: '（规划 Agent 没附任务说明）',
@@ -1620,6 +1633,9 @@ export const plainCopy: WarCopy = {
       ].filter(x => x !== null),
     countsScope: '计数为全看板口径（页签只切三列）',
     inboxBadge: n => `✉ ${n}`,
+    inboxKinds: c => [c.review > 0 ? `看${c.review}` : '', c.plan > 0 ? `批${c.plan}` : '', c.clarify > 0 ? `答${c.clarify}` : '', c.retry > 0 ? `试${c.retry}` : ''].filter(s => s !== '').join('·'),
+    inboxKindsTitle: c => `待办 ${c.clarify + c.plan + c.review + c.retry} 件：${[c.review > 0 ? `待过目结果 ${c.review}` : '', c.plan > 0 ? `待批准计划 ${c.plan}` : '', c.clarify > 0 ? `待回答提问 ${c.clarify}` : '', c.retry > 0 ? `待重试 ${c.retry}` : ''].filter(s => s !== '').join(' · ')}`,
+    pulse: t => `最近活动 ${t}`,
     visitMini: (closed, failed, commands) =>
       [closed > 0 ? `✓完成 ${closed}` : '', failed > 0 ? `✕失败 ${failed}` : '', commands > 0 ? `＋新命令 ${commands}` : '']
         .filter(s => s !== '').join(' · '),

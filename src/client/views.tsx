@@ -1750,8 +1750,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                 setOpen(o => o !== null && o.kind === 'report' ? null : { kind: 'report' })
               }, NO_TRACE),
               open !== null && open.kind === 'report'
-                ? createElement('div', { className: 'war-subdetail' },
-                  verdictTask !== undefined && verdictTask.closedVerdict !== null ? subRow(fp.reportVerdict, verdictTask.closedVerdict) : null,
+                ? createElement('div', { className: 'war-subdetail' },                  verdictTask !== undefined && verdictTask.closedVerdict !== null ? subRow(fp.reportVerdict, verdictTask.closedVerdict) : null,
                   // V19 腿2：战报走 markdown-lite 渲染（标题/列点/代码块），产物路径
                   // 链化可点→板内预览（腿1 教外勤「结论先行+产物给相对路径」，这里兑现读侧）。
                   lastReport !== undefined ? subRow(fp.reportLatest, createElement('span', null,
@@ -1827,7 +1826,14 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       }, activeCopy().chain.continueBtn)])
                     : null,
                 )
-                : null)
+                // V19.9 可读性④：未展开态结论预览——战报首句不点开即可瞄到（已读
+                // 门槛不撤：预览≠翻阅，markReportSeen 仍只在点开时落）。
+                : lastReport !== undefined
+                  ? createElement('div', {
+                      className: 'war-report-preview',
+                      title: lastReport.r.text.split('\n').map(x => x.trim()).find(x => x !== '') ?? '',
+                    }, fp.reportPreview((lastReport.r.text.split('\n').map(x => x.trim()).find(x => x !== '') ?? '').slice(0, 64)))
+                  : null)
             : createElement('div', { className: 'war-tour-hint' },
               liveAttempts.length > 0
                 ? (() => { const la = liveAttempts[0]!.a; return fp.reportLive(la.activity?.label ?? activeCopy().starfield.orbIdle, la.n, relTime(la.startedAt)) })()
@@ -2214,8 +2220,10 @@ function WarIsland(props: {
   onInboxAct: (it: InboxItem) => void
   /** V13：收件项→多代战线归属（分组头展示；动作粒度不变）。 */
   inboxFrontOf?: (it: InboxItem) => { key: string; label: string; hueSlot: number } | null
+  /** V19.9 可读性③：全局活动脉搏（舰队的最近一次动静，relTime 文本；null=无数据）。 */
+  pulseAgo?: string | null
 }): ReactNode {
-  const { active, hydrated, counts, inbox, visit, lastSeen, now, focusText, onExitFocus, onSettings, onInboxAct, inboxFrontOf } = props
+  const { active, hydrated, counts, inbox, visit, lastSeen, now, focusText, onExitFocus, onSettings, onInboxAct, inboxFrontOf, pulseAgo } = props
   const [hover, setHover] = useState(false)
   const [pinned, setPinned] = useState(false)
   const copy = activeCopy().island
@@ -2295,9 +2303,16 @@ function WarIsland(props: {
       ? createElement('button', {
           type: 'button',
           className: `war-island-badge${inbox.some(i => i.tone === 'err') ? ' hot' : ' wait'}`,
-          title: activeCopy().inbox.title,
+          // V19.9 可读性①：徽标分性质——计数后缀四类标记（阅/批/答/试），
+          // 悬停给全称；「等我什么」从开浮层降为零跳。
+          title: copy.inboxKindsTitle({ clarify: inbox.filter(i => i.kind === 'clarify').length, plan: inbox.filter(i => i.kind === 'plan').length, review: inbox.filter(i => i.kind === 'review').length, retry: inbox.filter(i => i.kind === 'retry').length }),
           onClick: e => { e.stopPropagation(); setPinned(true) },
-        }, copy.inboxBadge(inbox.length))
+        }, `${copy.inboxBadge(inbox.length)} ${copy.inboxKinds({ clarify: inbox.filter(i => i.kind === 'clarify').length, plan: inbox.filter(i => i.kind === 'plan').length, review: inbox.filter(i => i.kind === 'review').length, retry: inbox.filter(i => i.kind === 'retry').length })}`.trim())
+      : null,
+    // V19.9 可读性③：全局活动脉搏——舰队最近一次动静（与到访摘要互补：那是
+    //「你不在时变了什么」，这是「离现在多近还有生命」）。
+    pulseAgo !== null && pulseAgo !== undefined && pulseAgo !== ''
+      ? createElement('span', { className: 'war-island-pulse', title: activeCopy().island.pulse(pulseAgo) }, activeCopy().island.pulse(pulseAgo))
       : null,
     visit.any
       ? createElement('span', {
@@ -3431,6 +3446,17 @@ export function warView(services: ClientServicesFace): () => ReactNode {
         onExitFocus: () => { setFocusCommandId(null) },
         onSettings: () => { setSettingsOpen(true) },
         onInboxAct: inboxAct,
+        // V19.9 可读性③：脉搏=全板最新时间戳（命令/任务/尝试/战报取 max）的 relTime。
+        pulseAgo: (() => {
+          if (data === null) return null
+          let latest = 0
+          for (const c of data.commands) { const t = Date.parse(c.createdAt); if (Number.isFinite(t) && t > latest) latest = t }
+          for (const t of data.tasks) {
+            const ts = [Date.parse(t.startedAt), ...(t.reports ?? []).map(r => Date.parse(r.ts)), ...(t.attemptLog ?? []).flatMap(a => [Date.parse(a.startedAt), a.endedAt === null ? 0 : Date.parse(a.endedAt)])]
+            for (const x of ts) if (Number.isFinite(x) && x > latest) latest = x
+          }
+          return latest > 0 ? relTime(new Date(latest).toISOString(), now) : null
+        })(),
         inboxFrontOf: it => {
           const f = it.kind === 'clarify' || it.kind === 'plan'
             ? cmdFront.get(it.refId)

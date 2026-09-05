@@ -375,6 +375,7 @@ export const enWarCopy: WarCopy = {
     talkingGhostCard: 'Staff awaits your answer — click to enter the dialogue',
     talkingGhostNote: 'The task card is waiting for your answer to take shape — answer once in the dialogue and staff can proceed.',
     talkingEnterBtn: 'Enter dialogue and answer',
+    reportPreview: s => `Report preview · ${s}`,
     taskBrief: 'Task brief',
     taskAcceptance: 'Acceptance criteria',
     briefMissing: '(staff attached no brief text)',
@@ -525,6 +526,9 @@ export const enWarCopy: WarCopy = {
       ].filter(x => x !== null),
     countsScope: 'Counts cover all tabs (tabs only switch the three columns)',
     inboxBadge: n => `✉ ${n}`,
+    inboxKinds: c => [c.review > 0 ? `${c.review} read` : '', c.plan > 0 ? `${c.plan} approve` : '', c.clarify > 0 ? `${c.clarify} answer` : '', c.retry > 0 ? `${c.retry} retry` : ''].filter(s => s !== '').join(' · '),
+    inboxKindsTitle: c => `Inbox ${c.clarify + c.plan + c.review + c.retry}: ${[c.review > 0 ? `${c.review} to read` : '', c.plan > 0 ? `${c.plan} to approve` : '', c.clarify > 0 ? `${c.clarify} to answer` : '', c.retry > 0 ? `${c.retry} to retry` : ''].filter(s => s !== '').join(' · ')}`,
+    pulse: t => `last activity ${t}`,
     visitMini: (closed, failed, commands) =>
       [closed > 0 ? `✓settled ${closed}` : '', failed > 0 ? `✕defeats ${failed}` : '', commands > 0 ? `✚new ${commands}` : '']
         .filter(s => s !== '').join(' · '),
@@ -925,6 +929,7 @@ export const enPlainCopy: WarCopy = {
     talkingGhostCard: 'The Planning Agent awaits your answer — click to enter the dialogue',
     talkingGhostNote: 'The task card needs your answer to take shape — say one line in the dialogue and the agent can proceed.',
     talkingEnterBtn: 'Enter dialogue and answer',
+    reportPreview: s => `Quick look · ${s}`,
     taskBrief: 'Task spec',
     taskAcceptance: 'Acceptance criteria',
     briefMissing: '(the Planning Agent attached no spec text)',
@@ -1075,6 +1080,9 @@ export const enPlainCopy: WarCopy = {
       ].filter(x => x !== null),
     countsScope: 'Counts cover the whole board (tabs only switch the three columns)',
     inboxBadge: n => `✉ ${n}`,
+    inboxKinds: c => [c.review > 0 ? `${c.review} check` : '', c.plan > 0 ? `${c.plan} approve` : '', c.clarify > 0 ? `${c.clarify} answer` : '', c.retry > 0 ? `${c.retry} retry` : ''].filter(s => s !== '').join(' · '),
+    inboxKindsTitle: c => `To-dos ${c.clarify + c.plan + c.review + c.retry}: ${[c.review > 0 ? `${c.review} to check` : '', c.plan > 0 ? `${c.plan} to approve` : '', c.clarify > 0 ? `${c.clarify} to answer` : '', c.retry > 0 ? `${c.retry} to retry` : ''].filter(s => s !== '').join(' · ')}`,
+    pulse: t => `last activity ${t}`,
     visitMini: (closed, failed, commands) =>
       [closed > 0 ? `✓done ${closed}` : '', failed > 0 ? `✕failed ${failed}` : '', commands > 0 ? `＋new ${commands}` : '']
         .filter(s => s !== '').join(' · '),
