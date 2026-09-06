@@ -134,13 +134,15 @@ test('staffOrderFor：大副边界红线——人设正典 + MCP 接入面 + 不
   assert.ok(!text.includes('war_submit({task_id')) // 出口协议教学只属执行者征召令
 })
 
-test('staffExecutorFor：大副随舰队——zcode/pi/claude 直跑，gemini/codex/未知诚实回退 opencode', () => {
+test('staffExecutorFor：大副随舰队——双席正典（V19.13）：pi/zcode/claude/codex/dsh 直跑，双席不全的回退 opencode', () => {
   assert.equal(staffExecutorFor('zcode'), 'zcode')
   assert.equal(staffExecutorFor('pi'), 'pi')
   assert.equal(staffExecutorFor('claude'), 'claude')
+  assert.equal(staffExecutorFor('codex'), 'codex') // V19.13 垫片 + http 面——双席接通
+  assert.equal(staffExecutorFor('dsh'), 'dsh') // http 面大副通道（dispatch 在档）
   assert.equal(staffExecutorFor('opencode'), 'opencode')
-  assert.equal(staffExecutorFor('codex'), 'opencode') // Windows 实弹受阻（README 在档）——回退不静默
-  assert.equal(staffExecutorFor('gemini'), 'opencode') // 本机无 GEMINI_API_KEY——回退不静默
+  assert.equal(staffExecutorFor('gemini'), 'opencode') // 双席不全（外勤未实弹+无大副通道）——舰队门已不可选，此处兜底
+  assert.equal(staffExecutorFor('qwen'), 'opencode') // 同上
   assert.equal(staffExecutorFor(''), 'opencode')
 })
 

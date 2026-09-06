@@ -31,6 +31,10 @@ export interface FleetSeatInfo {
   /** spawn 适配器已实装（可真派活）；false=契约席（档案在档、适配器未写，
    * 绑定门挡住——不装样子）。 */
   adapter: boolean
+  /** V19.13 双席正典：大副+外勤双接通（可选的充分条件）。false=只能外勤
+   * 或两者都未实弹——不可选（舰长令 2026-09-06：大副接不通的舰队不算稳定
+   * 舰队）。契约席恒 false。 */
+  staffReady: boolean
 }
 
 /** 席位正典清单——顺序即绑定门展示序。契约席（2026-09-02 收编轮，证据源=
@@ -40,15 +44,15 @@ export interface FleetSeatInfo {
  * stream-json（MCP ~/.cursor/mcp.json）；droid=droid exec --output-format
  * stream-json（MCP ~/.factory/mcp.json）。CCR（claude-code-router）仅在 VK
  * 名单无执行器——路线图注记。 */
-const SEATS: ReadonlyArray<{ id: string; label: string; experimental?: boolean; note: string; noteEn: string; detect: (configured: string) => string; adapter?: boolean }> = [
-  { id: 'opencode', label: 'opencode', note: '开源 coding agent，支持多家模型供应商。模型与登录走它自身配置，这里留空即可。', noteEn: 'Open-source coding agent with multi-provider model support. Model and auth come from its own config — leave the model field empty.', detect: detectOpencodeBin, adapter: true },
-  { id: 'pi', label: 'pi', note: '轻量 coding agent。模型形如 zai/glm-5.2（provider/id），API key 走对应环境变量。', noteEn: 'Lightweight coding agent. Model looks like zai/glm-5.2 (provider/id); API key via the matching env var.', detect: detectPiBin, adapter: true },
-  { id: 'codex', label: 'codex', experimental: true, note: '实验性：OpenAI Codex CLI。Windows 上暂不可用（上游 CLI 已知限制，详见 README）；macOS/Linux 可用。', noteEn: 'Experimental: OpenAI Codex CLI. Currently unavailable on Windows (a known upstream CLI limitation — see README); works on macOS/Linux.', detect: detectCodexBin, adapter: true },
-  { id: 'zcode', label: 'zcode', note: 'GLM 系 coding agent。登录与模型走 zcode 自身配置——模型不在这里填。', noteEn: 'GLM-family coding agent. Login and model live in zcode\'s own config — no model needed here.', detect: detectZcodeBin, adapter: true },
-  { id: 'claude', label: 'claude', note: 'Anthropic Claude Code。鉴权二选一：原生 /login 订阅，或环境变量 ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN 指向 anthropic 兼容网关。', noteEn: 'Anthropic Claude Code. Auth is either the native /login subscription, or ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN pointing at an anthropic-compatible gateway.', detect: detectClaudeBin, adapter: true },
-  { id: 'gemini', label: 'gemini', experimental: true, note: '实验性：Google Gemini CLI。适配已就绪，配置好 Google API key 即可使用。', noteEn: 'Experimental: Google Gemini CLI. Integration is ready; set up a Google API key to use it.', detect: detectGeminiBin, adapter: true },
-  { id: 'qwen', label: 'qwen', experimental: true, note: '实验性：Qwen Code。支持 openai 兼容网关鉴权；部分网关下模型选择的兼容性有限。', noteEn: 'Experimental: Qwen Code. Supports openai-compatible gateway auth; model selection has limited compatibility with some gateways.', detect: detectQwenBin, adapter: true },
-  { id: 'dsh', label: 'dsh', note: 'DeepSeek Harness（本仓血统宿主，独立形态里反过来当外勤）。走源码仓克隆入口：无头 headless 档 + stardeck 外挂模型层；网关用环境变量 DEEPSEEK_API_KEY/BASE_URL（缺席时自动映射 Z_AI_*），模型默认 glm-5.2。', noteEn: 'DeepSeek Harness (this project\'s lineage host, now flying as an away-team member). Runs from a source-tree clone: headless profile + a stardeck model overlay; gateway via DEEPSEEK_API_KEY/BASE_URL env (falls back to Z_AI_*), model defaults to glm-5.2.', detect: detectDshBin, adapter: true },
+const SEATS: ReadonlyArray<{ id: string; label: string; experimental?: boolean; note: string; noteEn: string; detect: (configured: string) => string; adapter?: boolean; staffReady?: boolean }> = [
+  { id: 'opencode', label: 'opencode', note: '开源 coding agent，支持多家模型供应商。模型与登录走它自身配置，这里留空即可。', noteEn: 'Open-source coding agent with multi-provider model support. Model and auth come from its own config — leave the model field empty.', detect: detectOpencodeBin, adapter: true, staffReady: true },
+  { id: 'pi', label: 'pi', note: '轻量 coding agent。模型形如 zai/glm-5.2（provider/id），API key 走对应环境变量。', noteEn: 'Lightweight coding agent. Model looks like zai/glm-5.2 (provider/id); API key via the matching env var.', detect: detectPiBin, adapter: true, staffReady: true },
+  { id: 'codex', label: 'codex', note: 'OpenAI Codex CLI。GLM 经 Responses→chat 垫片直驱（stardeck codex-shim）；工具通道走 HTTP 直连（MCP 工具面待上游 exec 路径）。', noteEn: 'OpenAI Codex CLI. GLM drives it via the Responses→chat shim (stardeck codex-shim); tools go over direct HTTP (MCP tool surface pending upstream exec support).', detect: detectCodexBin, adapter: true, staffReady: true },
+  { id: 'zcode', label: 'zcode', note: 'GLM 系 coding agent。登录与模型走 zcode 自身配置——模型不在这里填。', noteEn: 'GLM-family coding agent. Login and model live in zcode\'s own config — no model needed here.', detect: detectZcodeBin, adapter: true, staffReady: true },
+  { id: 'claude', label: 'claude', note: 'Anthropic Claude Code。鉴权二选一：原生 /login 订阅，或环境变量 ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN 指向 anthropic 兼容网关。', noteEn: 'Anthropic Claude Code. Auth is either the native /login subscription, or ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN pointing at an anthropic-compatible gateway.', detect: detectClaudeBin, adapter: true, staffReady: true },
+  { id: 'gemini', label: 'gemini', experimental: true, note: '暂不可绑：双席未接通（外勤契约在档未实弹——本机无 Google API key；大副通道未建）。配好 key 实弹转正后再开放。', noteEn: 'Not bindable yet: dual-role incomplete (executor contract on file but never live-fired — no Google API key here; staff channel not built). Opens up once a key is set and both roles pass live-fire.', detect: detectGeminiBin, adapter: true, staffReady: false },
+  { id: 'qwen', label: 'qwen', experimental: true, note: '暂不可绑：双席未接通（外勤半证——网关模型选择兼容性有限；大副通道未建）。实弹转正后再开放。', noteEn: 'Not bindable yet: dual-role incomplete (executor half-proven — limited gateway model-selection compatibility; staff channel not built). Opens up after both roles pass live-fire.', detect: detectQwenBin, adapter: true, staffReady: false },
+  { id: 'dsh', label: 'dsh', note: 'DeepSeek Harness（本仓血统宿主，独立形态里反过来当外勤）。走源码仓克隆入口：无头 headless 档 + stardeck 外挂模型层；网关用环境变量 DEEPSEEK_API_KEY/BASE_URL（缺席时自动映射 Z_AI_*），模型默认 glm-5.2。', noteEn: 'DeepSeek Harness (this project\'s lineage host, now flying as an away-team member). Runs from a source-tree clone: headless profile + a stardeck model overlay; gateway via DEEPSEEK_API_KEY/BASE_URL env (falls back to Z_AI_*), model defaults to glm-5.2.', detect: detectDshBin, adapter: true, staffReady: true },
   { id: 'copilot', label: 'copilot', note: '即将支持：GitHub Copilot CLI（需 Copilot 订阅）。', noteEn: 'Coming soon: GitHub Copilot CLI (requires a Copilot subscription).', detect: (c) => c !== '' ? c : 'copilot' },
   { id: 'amp', label: 'amp', note: '即将支持：Sourcegraph Amp。', noteEn: 'Coming soon: Sourcegraph Amp.', detect: (c) => c !== '' ? c : 'amp' },
   { id: 'cursor', label: 'cursor', note: '即将支持：Cursor CLI（需 Cursor 账号）。', noteEn: 'Coming soon: Cursor CLI (requires a Cursor account).', detect: (c) => c !== '' ? c : 'cursor-agent' },
@@ -75,7 +79,13 @@ export function probeFleet(executorBinOverride = '', probe: VersionProbe = defau
   return SEATS.map(seat => {
     const bin = seat.detect(executorBinOverride)
     const ok = isAbsolute(bin) || bin.includes('\\') || bin.includes('/') ? existsSync(bin) : probe(bin)
-    return { id: seat.id, label: seat.label, ok, bin, ...(seat.experimental === true ? { experimental: true } : {}), note: seat.note, noteEn: seat.noteEn, adapter: seat.adapter === true || ADAPTERS[seat.id] !== undefined }
+    return {
+      id: seat.id, label: seat.label, ok, bin,
+      ...(seat.experimental === true ? { experimental: true } : {}),
+      note: seat.note, noteEn: seat.noteEn,
+      adapter: seat.adapter === true || ADAPTERS[seat.id] !== undefined,
+      staffReady: seat.staffReady === true,
+    }
   })
 }
 
@@ -84,9 +94,10 @@ export function fleetSeatIds(): string[] {
   return SEATS.map(s => s.id)
 }
 
-/** 可绑定席位（适配器已实装——POST /fleet 的硬校验面；契约席只登记可看）。 */
+/** 可绑定席位（V19.13 双席正典的硬校验面：适配器已实装 **且** 大副+外勤双
+ * 接通——POST /fleet 拒绝双席不全的席；契约席/半证席只登记可看不可选）。 */
 export function bindableSeatIds(): string[] {
-  return SEATS.filter(s => s.adapter === true || ADAPTERS[s.id] !== undefined).map(s => s.id)
+  return SEATS.filter(s => (s.adapter === true || ADAPTERS[s.id] !== undefined) && s.staffReady === true).map(s => s.id)
 }
 
 /** 绑定回执一句（纯，POST /fleet 响应的 note 字段——定案 2026-09-02「回执

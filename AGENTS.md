@@ -25,8 +25,8 @@
 | `tool.ts` | **defineTool shim**（对齐 dsh-tools 契约：参数描述→JSON Schema + 执行前校验 + `invalid arguments:` 教学错误；子集=string/text/number/boolean/array） |
 | `config.ts` | 独立配置：`~/.stardeck/config.json` + `STARDECK_*` env（PORT/STATE_DIR/WAR_ROOT/MODEL/EXECUTOR_BIN）+ CLI 覆盖 |
 | `tools.ts` | war_* 工具 24 件（与插件仓同名同义；唯一分叉点=defineTool import） |
-| `staff.ts` | **大副外聘**（HANDOFF①落地）：staffWorklist 工单判定（纯：终态/未到点/计划待批不出单）+ staffOrderFor 征召令（staffPersonaText 正典 + MCP 接入面 + relayPromptFor 内嵌；快照门在 tests/staff.test.ts）+ spawnStaffAgent；大副无 attemptId/war_submit——产出即账本 |
-| `fleet.ts` | **舰队兵种面**（UI 入口绑定，2026-09-01）：probeFleet 三席探测（绝对入口 existsSync/裸名 --version 探针；codex 实验性标记）+ fleetSeatIds 校验；daemon 持 activeExecutor 运行态（`GET/POST /warroom/api/fleet`，切换只影响后续征召，大副固定 opencode）；绑定门 UI 在 client-standalone.tsx |
+| `staff.ts` | **大副外聘**（HANDOFF①落地）：staffWorklist 工单判定（纯：终态/未到点/计划待批不出单）+ staffOrderFor 征召令（staffPersonaText 正典 + 接入面 face=mcp/http/pi-extension + relayPromptFor 内嵌；快照门在 tests/staff.test.ts）+ spawnStaffAgent（zcode/pi/claude/dsh/codex/opencode 六席 dispatch）；staffExecutorFor=**双席正典闸**（V19.13：可选舰队必须大副+外勤双接通） |
+| `fleet.ts` | **舰队兵种面**（UI 入口绑定，2026-09-01）：probeFleet 十二席探测（绝对入口 existsSync/裸名 --version 探针）+ fleetSeatIds 校验 + **bindableSeatIds 双席判别式（adapter && staffReady——gemini/qwen 降不可选）**；daemon 持 activeExecutor 运行态（`GET/POST /warroom/api/fleet`，切换只影响后续征召，大副随舰队过 staffExecutorFor 闸）；绑定门 UI 在 fleet-gate.tsx |
 | `dashboard.ts` | /warroom/api/* 全路由（板投影/board SSE/commands/trace/archive…单 prefix、handler 内自分发） |
 | `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1） |
 | `rules.ts`/`workspace.ts`/`schedule.ts`/`state.ts`/`fold-cache.ts` | 征召计划/工作区物化与释放/cron/全局态/装载缓存（1:1） |
@@ -94,14 +94,14 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 - **派生面要过语义关**：host-workspaces 拿 war_root 扫描派生=错（内部任务目录≠用户工作区），会顶掉 HQ 弹窗手动注册区（用户实抓）；独立形态「清单缺席→手动区」本就是正解，别手痒补派生。
 - Node 在 Windows 上 process.exit 时 fetch 句柄未排干会崩 libuv 断言（UV_HANDLE_CLOSING）——CLI 面用 process.exitCode 自然退场，不硬 exit。
 - **esbuild 对非法类型语法静默回退**（2026-09-06 实弹确认）：`new Promise<{kind:'x' as const}>` 的类型实参里写 as 表达式（=表达式语法进类型位置，非法 TS）——esbuild 不报错、把 `<...>` 回退解析成**比较表达式** `new Promise() < {...} > (...)`，运行时才炸「Promise resolver undefined is not a function」且行号误导；类型实参保持纯类型（字面量直接写 `'timeout'`），`as const` 只用在表达式侧。tsx 不做类型检查，tsc 门口也拦不住看不见的转换——这类坑靠「同形最小复现二分」定位。
-- **codex 0.153 三坑（V19.13 实弹，DESIGN D21）**：①**win32 新沙箱（restricted token）拦一切 exec_command**——workspace-write 下内联/写脚本/stdin 三连拒，适配器已平台分野（win32=danger-full-access）；②**exec 一次性形态 MCP 工具不进模型工具面**（deferred/tool_search 新架构；我们的桥与标准探测服、`-c` 与 config.toml、fallback 与目录 slug 全不露）——codex 席工具通道走 **http 面正典**（zcode 同款，简报教 STARDECK_HTTP 直连）；③**GLM 直驱靠垫片**：`stardeck codex-shim`（Z_AI_* env）+ `STARDECK_CODEX_SHIM_BASE=http://127.0.0.1:3975/v1` 起 daemon——适配器自动注入 provider 五旗；要完整模型元数据可 slug 骗面（`-m gpt-5.2-codex`，垫片改写真模型）。0.153.4 隔离前缀在 `clones/codex-0153`（全局 0.44 钉版不动）。
+- **codex 0.153 四坑（V19.13 实弹，DESIGN D21/D22）**：①**win32 新沙箱（restricted token）拦一切 exec_command**——workspace-write 下内联/写脚本/stdin 三连拒，适配器已平台分野（win32=danger-full-access）；②**exec 一次性形态 MCP 工具不进模型工具面**（deferred/tool_search 新架构；我们的桥与标准探测服、`-c` 与 config.toml、fallback 与目录 slug 全不露）——codex 席工具通道走 **http 面正典**（zcode 同款，简报教 STARDECK_HTTP 直连）；③**GLM 直驱靠垫片**：`stardeck codex-shim`（Z_AI_* env）+ `STARDECK_CODEX_SHIM_BASE=http://127.0.0.1:3975/v1` 起 daemon——适配器自动注入 provider 五旗；要完整模型元数据可 slug 骗面（`-m gpt-5.2-codex`，垫片改写真模型）；④**CODEX_HOME 必须隔离**（用户 ~/.codex 里 0.44 时代 chat-wire provider 会让 0.153 启动即硬拒）——codex spawn 一律 `codexHomeFor(workspacePath)` 工作区内自足空 home，不读也不写用户 ~/.codex。0.153.4 隔离前缀在 `clones/codex-0153`（全局 0.44 钉版不动；live 门 codex 相位按席 bin 走 STARDECK_LIVE_CODEX_BIN，别动全局 STARDECK_EXECUTOR_BIN——会误伤主环 opencode）。
 - pnpm v10 默认拦构建脚本——本仓 package.json 已带 `pnpm.onlyBuiltDependencies: ["esbuild"]`，新装依赖若含 postinstall 需补白名单。
 
 ## 降级面与迭代候选（2026-09-01 更新）
 
 已接线（本轮）：**大副外聘**（draft/定时令全自动派发，`STARDECK_STAFF` 开关）；**bound 工作区配置合并注入**（逐键合并+首动备份+坏 JSON 拒绝覆盖）；**监督层**（promptfoo 三维门，`pnpm verify:eval`，自 dsh 插件版 1:1 移植+首弹已证）；**pi 执行者适配器转正**（源码仓契约实证+实弹门相位取证）；**codex 适配器契约实装**（源码实证注入面+argv，实机受阻记录在案）。
 
-仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递的**执行者侧**注入（pi=steer 帧已通；**板上答复双席已通**——pi RPC + opencode run -s 续跑，2026-09-06；其余席待接入）/批注转达仍 pi-only（relayTo）；staff-goal 不适用；**codex 席实用可用（V19.13 垫片已通，工具通道=http 面；MCP 工具面待上游，见环境坑）**。
+仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递的**执行者侧**注入（pi=steer 帧已通；**板上答复双席已通**——pi RPC + opencode run -s 续跑，2026-09-06；其余席待接入）/批注转达仍 pi-only（relayTo）；staff-goal 不适用；**codex 席双席接通（V19.13 垫片 + http 面 + 隔离 CODEX_HOME；工具通道=http 面，MCP 工具面待上游，见环境坑）**；**gemini/qwen 双席不全降不可选**（D22 双席正典——外勤未实弹/半证+大副通道未建，转正条件写在席卡 note）。
 
 候选（按建议顺序）：
 1. **中途投递余下席**：板上答复/批注转达扩到 zcode（`--resume --prompt` 视察汇报模式可复用）/claude（`--resume <id> -p`）/dsh（tui resume 通道）——契约已在，逐席实弹取证。

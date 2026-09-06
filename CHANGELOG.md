@@ -6,6 +6,8 @@
 
 ### Added
 
+- **双席正典：可选舰队=大副+外勤双接通（V19.13，DESIGN D22，舰长令 2026-09-06）**——`bindableSeatIds` 判别式升级为 `adapter && staffReady`（绑定门 UI 同步：staffReady=false 落 absent 档，转正条件写在席卡 note）。**codex 大副转正**：`spawnHeadlessCodexStaff`（staff 简报 face=http + shim provider 五旗 + 模型串归一 provider/id→裸 id + `thread.started` 行钩捕获入 attach-map）+ **隔离 CODEX_HOME**（`codexHomeFor`：用户 ~/.codex 里 0.44 时代 chat-wire provider 会让 0.153 启动即硬拒——spawn 不读也不写用户 ~/.codex）；codex 外勤适配器同轮修正（face=http、STARDECK_HTTP/AGENT env 挂 agent 进程、撤死重注桥）。**dsh 大副放闸**（http 面，与 zcode 同构）、claude 大副补实弹。**gemini/qwen 降不可选**（外勤未实弹/半证+大副通道未建）。可选席名册：opencode/pi/codex/zcode/claude/dsh 六席。staffExecutorFor/fleet 测试随正典更新；三席 staff 相位实弹（STARDECK_LIVE_STAFF_EXECUTOR=claude/dsh/codex，codex 另起垫片+STARDECK_LIVE_CODEX_BIN 按席 bin 防全局逃生阀误伤主环）。
+
 - **独立纪项目主刀**：从 dsh-plugin-warroom 1:1 迁移内核 27 模块（账本 fold/规则状态机/workspace/prompts/schedule/fold-cache 及 44 测试文件 266 测），`tools.ts` 唯一改动=defineTool 换本地 shim（`src/tool.ts`，契约对齐：schema 编译+执行前校验+`invalid arguments:` 教学错误）。
 - **零宿主 daemon**（`src/daemon.ts` + `src/cli.ts` + bin）：dashboard 路由鸭子直挂 + war_* 工具注册表（24 件）+ `/warroom/api/mcp/*` 调用端点 + 15s 巡检（失联回收/补征召）+ 板 UI 静态服务 + 优雅关停。默认 `http://127.0.0.1:3970`，配置走 `~/.stardeck/config.json` 与 `STARDECK_*` env。
 - **执行者适配层**（`src/executor.ts`）：ExecutorAdapter 接口 + opencode 适配器（cwd 框定+征召令简报+项目级 MCP 注入）；进程即生命，重启由巡检回收。

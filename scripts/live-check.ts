@@ -79,7 +79,9 @@ try {
   const mcpTools = await (await fetch(`${base}/warroom/api/mcp/tools`)).json() as Array<{ name: string }>
   check('MCP 工具面列出 war_* 注册表', mcpTools.length >= 10 && mcpTools.some(t => t.name === 'war_claim') && mcpTools.some(t => t.name === 'war_submit'), `${mcpTools.length} 个工具`)
   const fleetGet = await apiJson('/warroom/api/fleet')
-  check('舰队兵种面（GET /fleet 十一席：七实装 + 四契约）', fleetGet.ok === true && fleetGet.active.executor === 'opencode' && Array.isArray(fleetGet.seats) && fleetGet.seats.length === 11 && ['pi', 'zcode', 'claude', 'gemini', 'qwen'].every((id: string) => fleetGet.seats.some((s: { id: string }) => s.id === id)) && (fleetGet.seats as Array<{ adapter?: boolean }>).filter(s => s.adapter === false).length === 4, `active=${fleetGet.active.executor} 席位=${(fleetGet.seats as Array<{ id: string; ok: boolean }>).map(s => `${s.id}${s.ok ? '✓' : '✗'}`).join('/')}`)
+  // V19.13 双席正典：十二席=六可选（adapter && staffReady）+ gemini/qwen（staffReady=false）+ 四契约。
+  const fleetSeats = fleetGet.seats as Array<{ id: string; ok: boolean; adapter?: boolean; staffReady?: boolean }>
+  check('舰队兵种面（GET /fleet 十二席：六双席可选 + 二半证 + 四契约）', fleetGet.ok === true && fleetGet.active.executor === 'opencode' && Array.isArray(fleetGet.seats) && fleetGet.seats.length === 12 && fleetSeats.filter(s => s.adapter === false).length === 4 && fleetSeats.filter(s => s.adapter !== false && s.staffReady === false).map(s => s.id).join() === 'gemini,qwen' && ['opencode', 'pi', 'codex', 'zcode', 'claude', 'dsh'].every((id: string) => { const s = fleetSeats.find(x => x.id === id); return s !== undefined && s.staffReady === true }), `active=${fleetGet.active.executor} 席位=${fleetSeats.map(s => `${s.id}${s.ok ? '✓' : '✗'}${s.staffReady === false ? '(双席未通)' : ''}`).join('/')}`)
   const fleetPost = await apiJson('/warroom/api/fleet', { method: 'POST', body: JSON.stringify({ executor: 'pi', model: 'zai/glm-5.2' }) })
   const fleetBack = await apiJson('/warroom/api/fleet', { method: 'POST', body: JSON.stringify({ executor: 'opencode', model: '' }) })
   check('舰队兵种绑定往返（POST /fleet 切 pi 再切回）', fleetPost.ok === true && fleetPost.active.executor === 'pi' && fleetBack.ok === true && fleetBack.active.executor === 'opencode', `主环执行者已复位 opencode`)
@@ -184,7 +186,15 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
   try {
     daemon2 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
       cwd: repoRoot,
-      env: { ...process.env, STARDECK_CONFIG: join(stateDir2, 'config.json'), STARDECK_STATE_DIR: stateDir2, STARDECK_WAR_ROOT: warRoot2, STARDECK_PORT: String(PORT2), STARDECK_STAFF: '1', STARDECK_STAFF_TIMEOUT_MIN: '10', ...(staffFleetLive !== 'opencode' ? { STARDECK_EXECUTOR: staffFleetLive } : {}), ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.2' : 'zai-coding-plan/glm-5.2' }) },
+      env: {
+        ...process.env,
+        STARDECK_CONFIG: join(stateDir2, 'config.json'), STARDECK_STATE_DIR: stateDir2, STARDECK_WAR_ROOT: warRoot2, STARDECK_PORT: String(PORT2), STARDECK_STAFF: '1', STARDECK_STAFF_TIMEOUT_MIN: '10',
+        ...(staffFleetLive !== 'opencode' ? { STARDECK_EXECUTOR: staffFleetLive } : {}),
+        // codex 席入口按席给定（STARDECK_EXECUTOR_BIN 是全局逃生阀——会误伤
+        // 主环 opencode，故走独立变量只在本相位 daemon 生效）。
+        ...(staffFleetLive === 'codex' && process.env.STARDECK_LIVE_CODEX_BIN ? { STARDECK_EXECUTOR_BIN: process.env.STARDECK_LIVE_CODEX_BIN } : {}),
+        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.2' : 'zai-coding-plan/glm-5.2' }),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })

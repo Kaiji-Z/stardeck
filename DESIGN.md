@@ -115,6 +115,22 @@
 
 **理由**：垫片把「等 z.ai 出 Responses 面」的不可控等待变成 3975 端口上的一把本地锁；MCP 工具面不进模型列表是上游 exec 形态的新阻碍，但 zcode 已立 http 面正典证明这不是席位级障碍——codex 席自此实用可用。
 
+## D22 双席正典：可选舰队=大副+外勤双接通（2026-09-06，舰长令）
+
+**背景**：舰长令——「大副和执行一定要都接通到舰队选择才行；只有外勤能接通、大副不能接通的舰队不能作为稳定舰队」。此前 codex/dsh 绑定后大副由 opencode 代跑（staffExecutorFor 资格闸），gemini/qwen 挂实验性可绑但双席都未实证。
+
+**定案**：
+- **可选判别式**：`bindableSeatIds = adapter 实装 && staffReady`——staffReady=大副+外勤双通道实弹接通。POST /fleet 硬校验 + 绑定门 UI（fleet-gate seatStatusOf：staffReady=false 落 absent 档，说明由席卡 note 承载）。
+- **codex 大副转正**（新 dispatch spawnHeadlessCodexStaff）：staff 简报 face=http（exec 形态 MCP 工具不进模型面——D21 双证，不注桥）+ shim provider 五旗 GLM 直驱 + 模型串归一（provider/id→裸 id，dsh 同款）+ `thread.started` 行钩捕获会话号入 attach-map（键=staff-<id>）。executor 侧同轮修正：codexAdapter 简报改 face=http、STARDECK_HTTP/AGENT env 直接挂 agent 进程、撤死重注桥。
+- **dsh 大副放闸**：dispatch 已在（staff.ts），staffExecutorFor 放行 dsh——http 面通道与 zcode 同构。
+- **claude 大副**：dispatch 与资格闸早已在（mcp 面，.mcp.json 注桥），本轮补实弹。
+- **gemini/qwen 降不可选**：adapter 在场但 staffReady=false（外勤未实弹/半证+大副通道未建）——席卡诚实说明转正条件，契约档案保留。
+- **可选席名册（V19.13 后）**：opencode / pi / codex / zcode / claude / dsh 六席；copilot/amp/cursor/droid 契约席照旧。
+
+**证据**：staffExecutorFor/fleet 双测更新（22 测）；三席 staff 相位实弹（`STARDECK_LIVE_STAFF_EXECUTOR=codex|dsh|claude`，codex 带 shim+按席 bin 变量 STARDECK_LIVE_CODEX_BIN 防全局逃生阀误伤主环 opencode）——结果见本轮 verify 记录。
+
+**理由**：大副是舰队的参谋岗，绑定门把「能干活」当可选标准却放行「只能干活不能参谋」的席，等于舰长每次都要吃一行「大副由 opencode 代跑」的暗降级——双席正典把这个语义摆上台面：接不通就别选，选了就全通。
+
 ---
 
 ### 后续决策（待记）

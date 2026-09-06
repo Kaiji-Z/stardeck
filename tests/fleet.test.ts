@@ -10,26 +10,29 @@ import { test } from 'node:test'
 import { probeFleet, fleetSeatIds, bindableSeatIds, seatLabelOf, seatStatusOf } from '../src/fleet.ts'
 import { seatStatusOf } from '../src/client/fleet-gate.tsx'
 
-test('席位正典清单：十二席（八实装 + 四契约）；实验性与双语 note 齐；契约席不可绑', () => {
+test('席位正典清单：十二席（双席正典后六席可选 + 二半证降不可选 + 四契约）；双语 note 齐', () => {
   assert.deepEqual(fleetSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen', 'dsh', 'copilot', 'amp', 'cursor', 'droid'])
-  assert.deepEqual(bindableSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'gemini', 'qwen', 'dsh'])
+  // V19.13 双席正典：可选=大副+外勤双接通——gemini/qwen（双席不全）降不可选。
+  assert.deepEqual(bindableSeatIds(), ['opencode', 'pi', 'codex', 'zcode', 'claude', 'dsh'])
   const seats = probeFleet('', () => true) // 探针全真——只验清单形状
   assert.equal(seats.length, 12)
-  assert.equal(seats.filter(s => s.experimental === true).map(s => s.id).join(), 'codex,gemini,qwen')
+  assert.equal(seats.filter(s => s.experimental === true).map(s => s.id).join(), 'gemini,qwen')
   for (const s of seats) {
     assert.ok(s.note.length > 10, `${s.id} 缺人话说明`)
     assert.ok((s.noteEn ?? '').length > 10, `${s.id} 缺英译说明（i18n 绑定门）`)
     assert.ok(s.bin.length > 0)
-    assert.equal(s.adapter, bindableSeatIds().includes(s.id), `${s.id} adapter 标记与可绑清单不一致`)
+    // 可选判别式=adapter 且 staffReady（gemini/qwen adapter 在场但双席不全）。
+    assert.equal(bindableSeatIds().includes(s.id), s.adapter && s.staffReady, `${s.id} 可选标记与双席正典不一致`)
   }
   assert.equal(seatLabelOf('pi'), 'pi')
   assert.equal(seatLabelOf('不存在的'), 'opencode')
 })
 
-test('契约席三分语义：adapter=false 一律不可选（装了二进制也不开——适配器未实装不装样子）', () => {
+test('契约席三分语义：adapter=false / staffReady=false 一律不可选（装了二进制也不开——不装样子）', () => {
   assert.equal(seatStatusOf({ ok: true, adapter: false }), 'absent')
-  assert.equal(seatStatusOf({ ok: true, experimental: true, adapter: true }), 'limited')
-  assert.equal(seatStatusOf({ ok: false, adapter: true }), 'absent')
+  assert.equal(seatStatusOf({ ok: true, experimental: true, adapter: true, staffReady: true }), 'limited')
+  assert.equal(seatStatusOf({ ok: false, adapter: true, staffReady: true }), 'absent')
+  assert.equal(seatStatusOf({ ok: true, adapter: true, staffReady: false }), 'absent', '双席不全=不可选（V19.13 舰长令）')
 })
 
 test('探测语义：绝对入口 existsSync 定生死（真入口 ok / 假入口 not ok）', () => {

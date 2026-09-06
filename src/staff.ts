@@ -19,7 +19,7 @@
 import type { Directive, DirectiveGrade } from './directives.ts'
 import { relayPromptFor, staffPersonaText } from './prompts.ts'
 import type { FeatureFlags } from './flags.ts'
-import { spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, type ExecutorSession } from './executor.ts'
+import { spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, spawnHeadlessCodexStaff, type ExecutorSession } from './executor.ts'
 
 export type StaffWorkKind = 'intake' | 'plan' | 'publish'
 
@@ -85,7 +85,7 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】你是 stardeck 舰的外聘大副——本进程已通过 MCP 桥（server 名 stardeck）直连舰桥，war_* 工具全量可用。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
     : face === 'http'
-      ? '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程经 HTTP 直连舰桥（zcode 无头模式不加载项目 MCP：若本进程工具面里没有 war_* 工具，一律走这条通道，不要探测别的端口）。POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）、war_board 看全局、war_abandon_command 弃案。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
+      ? '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程经 HTTP 直连舰桥（zcode/codex/dsh 无头形态不加载项目 MCP 或 MCP 工具不进模型面：若本进程工具面里没有 war_* 工具，一律走这条通道，不要探测别的端口）。POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）、war_board 看全局、war_abandon_command 弃案。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
       : '【stardeck 工具接入面】你是 stardeck 舰的外聘大副——本进程已由 stardeck 扩展注册大副侧工具（war_triage / war_plan / war_publish / war_board / war_abandon_command，经 HTTP 回连舰桥，与 MCP 同名同义）。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
   const sections: string[] = [
     staffPersonaText(0),
@@ -153,14 +153,16 @@ export interface StaffSpawnArgs {
   executor: string
   executorBin: string
   stateDir: string
+  /** V19.13 codex 垫片基址（codex 席大副的 GLM 直驱面；余席忽略）。 */
+  codexShimBase?: string
 }
 
-/** 大副席别解析（纯）：舰队绑谁大副就跑谁——zcode/pi/claude 各自框定；
- * gemini/codex 实弹受阻（gemini 本机无 GEMINI_API_KEY；codex Windows 起不了
- * MCP 桥——README「执行者适配器」在档）——诚实回退 opencode，daemon 侧
- * 打点，不静默。 */
-export function staffExecutorFor(fleet: string): 'opencode' | 'pi' | 'zcode' | 'claude' {
-  if (fleet === 'pi' || fleet === 'zcode' || fleet === 'claude') return fleet
+/** 大副席别解析（纯）：**双席正典（V19.13）——可选舰队必须大副+外勤双接通**。
+ * pi/zcode/claude/codex/dsh 各自框定（codex=http 面+垫片；dsh=http 面）；
+ * 双席不全的（gemini/qwen 外勤未实弹且无大副通道）在舰队门即不可选，这里
+ * 兜底回退 opencode 仅作防御，daemon 侧打点不静默。 */
+export function staffExecutorFor(fleet: string): 'opencode' | 'pi' | 'zcode' | 'claude' | 'codex' | 'dsh' {
+  if (fleet === 'pi' || fleet === 'zcode' || fleet === 'claude' || fleet === 'codex' || fleet === 'dsh') return fleet
   return 'opencode'
 }
 
@@ -196,6 +198,11 @@ export async function spawnStaffAgent(args: StaffSpawnArgs): Promise<ExecutorSes
   if (args.executor === 'dsh') {
     // dsh 模型串归一在适配器内（provider/id 形取 id；网关 env Z_AI_*→DEEPSEEK_* 映射）。
     return spawnHeadlessDsh({ ...common, model: args.model, executorBin: args.executorBin })
+  }
+  if (args.executor === 'codex') {
+    // codex 大副（V19.13 双席正典）：http 面教学（exec 形态 MCP 工具不进模型
+    // 面——D21 双证）+ shim provider 五旗（GLM 直驱）+ 线程号行钩捕获。
+    return spawnHeadlessCodexStaff({ ...common, model: args.model, executorBin: args.executorBin, codexShimBase: args.codexShimBase })
   }
   return spawnHeadlessOpencode({ ...common, model: args.model, executorBin: args.executorBin })
 }

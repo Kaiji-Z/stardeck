@@ -81,7 +81,7 @@ export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extensi
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】本工作区已接入 stardeck MCP 服务（server 名 stardeck，war_* 工具全量可用）：'
     : face === 'http'
-      ? '【stardeck 工具接入面】经 HTTP 直连舰桥（zcode 无头模式不加载项目 MCP：若本进程工具面里没有 war_* 工具，一律走这条通道）：POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。'
+      ? '【stardeck 工具接入面】经 HTTP 直连舰桥（zcode/codex/dsh 无头形态不加载项目 MCP 或 MCP 工具不进模型面：若本进程工具面里没有 war_* 工具，一律走这条通道）：POST 端点=环境变量 STARDECK_HTTP 的值 + "/warroom/api/tools/call"；请求体 JSON：{"name":"<工具名>","arguments":{…},"agentId":环境变量 STARDECK_AGENT 的值}。必须用 node（process.execPath 或 node 脚本）发请求，恒 UTF-8——禁用 Windows 控制台 curl 拼 JSON（GBK 编码会把中文拼成乱码，乱码哨会拒收并打回重交）。'
       : '【stardeck 工具接入面】本工作区已由 stardeck 扩展注册 war_claim / war_submit / war_fail 工具（经 HTTP 回连舰桥，与 MCP 同名同义）：'
   return [
     order,
@@ -428,6 +428,8 @@ export interface HeadlessAgentArgs {
   prompt?: string
   /** 附着面：给执行者进程挂原生会话号捕获（写 attach-map.json）。大副不挂。 */
   attachTaskId?: string
+  /** V19.13 codex 垫片基址（codex 席 GLM 直驱；余席忽略）。 */
+  codexShimBase?: string
 }
 
 /** spawn 后接管日志/退场记账的共用段（三适配器与大副共用）。
@@ -532,6 +534,64 @@ export async function spawnHeadlessClaude(args: HeadlessAgentArgs): Promise<Exec
     })
 }
 
+/** codex 模型串归一（纯）：provider/id 形取 id（codex 吃裸模型 id；dsh 同款
+ * 归一语义）。空串/裸 id 原样。 */
+export function codexModelId(model: string): string {
+  const idx = model.indexOf('/')
+  return idx >= 0 ? model.slice(idx + 1) : model
+}
+
+/** codex 隔离 CODEX_HOME（V19.13）：用户 ~/.codex 可能带 0.44 时代 chat-wire
+ *  provider（0.153 启动即硬拒）或其它与我们 -c 注入相冲的配置——stardeck 的
+ *  codex spawn 一律指向工作区内自足的空 home（provider 经 -c 五旗注入，
+ *  不读也不写用户 ~/.codex）。 */
+export function codexHomeFor(workspacePath: string): string {
+  const home = join(workspacePath, '.stardeck', 'codex-home')
+  mkdirSync(home, { recursive: true })
+  return home
+}
+
+/** codex 事件行→线程号（纯）：JSONL `thread.started` 首包的 thread_id（uuid 形，
+ * 区别于 zcode 的 sess_ 与 opencode 的 ses_）。 */
+export function codexThreadIdFromLine(line: string): string | null {
+  const m = /"thread_id"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/.exec(line)
+  return m !== null ? m[1]! : null
+}
+
+/** codex 线程号捕获器（行钩）：首中即写映射并闭锁（thread.started 在流首）。 */
+export function codexSessionCapture(opts: { stateDir: string; taskId: string; workspacePath: string }): (line: string) => void {
+  let done = false
+  return (line: string) => {
+    if (done) return
+    const sessionId = codexThreadIdFromLine(line)
+    if (sessionId === null) return
+    done = true
+    writeAttachMapEntry(opts.stateDir, opts.taskId, {
+      executor: 'codex', sessionId, workspacePath: opts.workspacePath, capturedAt: new Date().toISOString(),
+    })
+  }
+}
+
+/**
+ * 无头 codex 大副框定法（V19.13 双席正典）：写简报 → spawn（exec 一次性 +
+ * shim provider 五旗 GLM 直驱）。工具通道=http 面教学（exec 形态 MCP 工具
+ * 不进模型面——D21 双证，故不注 MCP 桥，简报 face=http）；win32 沙箱分野
+ * 在 codexExecArgs 内。线程号行钩捕获入 attach-map（键=staff-<agentId>）。
+ */
+export function spawnHeadlessCodexStaff(args: HeadlessAgentArgs): ExecutorSession {
+  mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
+  writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
+    return spawnCli(args.executorBin, codexExecArgs({
+      workspacePath: args.workspacePath, model: codexModelId(args.model), codexShimBase: args.codexShimBase, prompt: args.prompt ?? PROMPT,
+    }), {
+      cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
+      env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) },
+      onStdoutLine: args.attachTaskId !== undefined
+        ? codexSessionCapture({ stateDir: args.stateDir, taskId: args.attachTaskId, workspacePath: args.workspacePath })
+        : undefined,
+    })
+}
+
 /** codex argv 构造（纯，测试管辖）：exec 一次性 + JSONL 事件流 + 工作区沙箱。
  * MCP 注入走 `-c` 命令行覆盖（**版本稳定通道**——0.44 等旧版不加载项目级
  * .codex/config.toml，首测确认；-c 覆盖全版本生效，值按 TOML 透传）。
@@ -604,13 +664,17 @@ export const codexAdapter: ExecutorAdapter = {
   id: 'codex',
   async spawn(args) {
     mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
-    writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), executorBrief(args), 'utf8')
-    injectCodexMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
+    // V19.13：简报 face=http（exec 形态 MCP 工具不进模型面——注桥是死重，
+    // 工具通道教 HTTP 直连，STARDECK_HTTP/AGENT env 直接挂 agent 进程）。
+    writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), executorBrief(args, 'http'), 'utf8')
     return spawnCli(args.executorBin, codexExecArgs({
-      workspacePath: args.workspacePath, model: args.model, modelProvider: args.modelProvider, codexShimBase: args.codexShimBase, prompt: PROMPT,
-      mcp: { command: process.execPath, args: [mcpBridgePath()], env: { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId } },
+      workspacePath: args.workspacePath, model: codexModelId(args.model), modelProvider: args.modelProvider, codexShimBase: args.codexShimBase, prompt: PROMPT,
     }),
-      { cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId })
+      {
+        cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
+        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) },
+        onStdoutLine: codexSessionCapture({ stateDir: args.stateDir, taskId: args.taskId, workspacePath: args.workspacePath }),
+      })
   },
 }
 

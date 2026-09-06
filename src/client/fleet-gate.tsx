@@ -9,17 +9,18 @@
 import { createElement, useState, useSyncExternalStore } from 'react'
 import { langId, subscribeLang } from './copy.ts'
 
-export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean }
+export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
 export interface FleetState { active: { executor: string; model: string }; seats: Seat[] }
 
-/** 席位三分语义（纯）：可绑定（实证在役）/ 受限·实验性（契约在档但本机有已知阻碍）/ 未检出。
- * 修复「codex 标可绑定实为本机起不了」的诚实证——不再裸标可绑定。
- * 契约席（adapter=false）：适配器未实装——比 absent 更进一步的「档案在档」，
- * 卡可看不可选（v1 不加第四档徽标，按不可绑处理）。 */
+/** 席位三分语义（纯）：可绑定（大副+外勤双接通且实证在役）/ 受限·实验性（契约
+ * 在档但本机有已知阻碍）/ 未检出。V19.13 双席正典：**staffReady=false=不可选**
+ * （舰长令 2026-09-06：大副接不通的舰队不算稳定舰队）——与 adapter=false 同落
+ * absent 档，说明文案由 note 承载。 */
 export type SeatStatus = 'ready' | 'limited' | 'absent'
 
-export function seatStatusOf(seat: { ok: boolean; experimental?: boolean; adapter?: boolean }): SeatStatus {
+export function seatStatusOf(seat: { ok: boolean; experimental?: boolean; adapter?: boolean; staffReady?: boolean }): SeatStatus {
   if (seat.adapter === false) return 'absent'
+  if (seat.staffReady === false) return 'absent'
   if (!seat.ok) return 'absent'
   return seat.experimental === true ? 'limited' : 'ready'
 }

@@ -368,8 +368,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     staffSpawning = true
     try {
       const agentId = `staff-${Date.now().toString(36)}`
-      // 大副随舰队（定案 2026-09-02）：舰队绑谁大副跑谁；codex 实弹受阻
-      //（README 在档）诚实回退 opencode 并打点。
+      // 大副随舰队 + 双席正典（V19.13）：可选舰队必须大副+外勤双接通——
+      // pi/zcode/claude/codex/dsh 亲自出；双席不全的（gemini/qwen）在舰队门
+      // 已不可选，这里回退 opencode 仅作防御并打点。
       staffFleet = staffExecutorFor(activeExecutor)
       if (staffFleet !== activeExecutor) console.log(`[stardeck] 大副随舰队：${activeExecutor} 实弹受阻，本轮大副由 ${staffFleet} 代跑`)
       // 引信替位：draft 工单落 session_opened + received（宿主态 relay 面的对位
@@ -382,14 +383,15 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendDirectiveEvent(stateDir, { type: 'directive_received', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
       }
       staffSession = await spawnStaffAgent({
-        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' ? 'http' : 'mcp'),
+        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' || staffFleet === 'codex' ? 'http' : 'mcp'),
         workspacePath: join(stateDir, 'staff'),
         http: base,
         agentId,
-        model: staffFleet === 'zcode' ? '' : activeModel, // 大副随舰队：模型串随板面绑定；zcode 引擎吃自身 config 不透传（dsh 串在适配器内归一）
+        model: staffFleet === 'zcode' ? '' : activeModel, // 大副随舰队：模型串随板面绑定；zcode 引擎吃自身 config 不透传（dsh/codex 串在适配器内归一）
         executor: staffFleet,
         executorBin: binFor(staffFleet),
         stateDir,
+        codexShimBase: config.codexShimBase,
       })
       console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件，日志 ${staffSession.logPath}）`)
     } finally {
