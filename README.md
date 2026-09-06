@@ -39,13 +39,13 @@ stardeck 是一个**本地优先**的多 agent 编排器：它不替 agent 干�
 点任意命令卡展开全生命周期：命令原文 → 大副计划（待批可带意见驳回）→ 执行会话 → 任务回报与证据，全程可溯源。
 
 **🤖 大副 + 外勤双层编制**
-AI 大副分诊你的命令（L0 直发 / L1 计划后做 / L2 先澄清），起草任务书呈你批准；批准后自动物化隔离工作区并征召外勤执行。**舰队绑定跟随你选的 CLI**——大副和外勤都跑在你选的 agent 上。
+AI 大副分诊你的命令（L0 直发 / L1 计划后做 / L2 先澄清），起草任务书呈你批准；批准后自动物化隔离工作区并征召外勤执行。**舰队绑定跟随你选的 CLI——大副和外勤都跑在你选的 agent 上**；只有双席都接通的 CLI 才会出现在绑定门里（当前六席）。
 
 **🔒 证据核验（KillCredit）**
 外勤交证不是打个「完成」：checks 逐项过、测试真实跑、无越界文件改动——机械判据全绿才算交付，最后由你翻阅收官。
 
 **💬 板内答复与中途投递**
-大副追问时在聚焦页直接答复（经 RPC 续跑送进大副会话，不丢上下文）；批注可转达进行中的外勤。
+大副追问时在**聚焦页的答复框**直接作答（不走大副的原生会话窗口），答复自动送进大副会话续跑、不丢上下文；批注可转达进行中的外勤。答复通道按大副席别分流：pi（RPC 帧）与 opencode（`run -s` 续跑）已实弹接通，其余席暂以诚实文案拒答（契约在档逐席接入）。
 
 **🌐 中英双语 + 三皮肤**
 设置抽屉一键切换 中文/English，全板措辞实时换库（词典完备性由测试锁死，不静默回落）；军事/平话/星际迷航三套措辞皮肤。
@@ -53,7 +53,7 @@ AI 大副分诊你的命令（L0 直发 / L1 计划后做 / L2 先澄清），�
 ## 界面
 
 <div align="center">
-<img src="docs/screenshots/fleet-zh.png" alt="舰队选择门：十一席，模型输入随所选席位卡内展开" width="72%">
+<img src="docs/screenshots/fleet-zh.png" alt="舰队选择门：双席正典——可选=大副+外勤双接通（六席），未接通的席明示原因" width="72%">
 <p><sub>舰队选择门：按你安装的 CLI 自动探测可用席位；模型输入随所选席位卡内展开（zcode 的模型在它自己那里配，卡内给出说明）</sub></p>
 </div>
 
@@ -110,15 +110,18 @@ pnpm live                      # 端到端实机门：真 CLI 外勤全链（需
 
 ## 支持的舰队
 
+**双席正典**：一个舰队能被选中，必须**大副 + 外勤两个岗位都接通**——大副分诊呈批、外勤干活交证，都跑在你选的 CLI 上。
+
 | 状态 | CLI | 说明 |
 |---|---|---|
 | ✅ 稳定 | [opencode](https://opencode.ai) | 开源、多供应商；项目级 `opencode.json` 注入 MCP 桥 |
 | ✅ 稳定 | [pi](https://github.com/badlogic/pi-mono) | 轻量；扩展件注册出口协议工具 |
 | ✅ 稳定 | zcode | GLM 系；模型走其自身配置 |
 | ✅ 稳定 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 原生订阅或 anthropic 兼容网关 |
-| 🧪 实验性 | Codex CLI | Windows 上游限制暂不可用；macOS/Linux 可用 |
-| 🧪 实验性 | Gemini CLI | 配置 Google API key 后可用 |
-| 🧪 实验性 | Qwen Code | openai 兼容网关；模型选择兼容性有限 |
+| ✅ 稳定 | [Codex CLI](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连 |
+| ✅ 稳定 | dsh（DeepSeek Harness） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*） |
+| 🚧 暂不可绑 | Gemini CLI | 双席未接通（外勤契约在档未实弹、大副通道未建）——配好 key 实弹转正后开放 |
+| 🚧 暂不可绑 | Qwen Code | 双席未接通（外勤半证、大副通道未建）——实弹转正后开放 |
 | 🚧 即将支持 | Copilot CLI / Amp / Cursor CLI / Droid | 适配进行中（部分走 ACP 协议） |
 
 ## 架构速览
@@ -189,13 +192,13 @@ Tasks column (execution status) · Mission logs column (evidence & closure) · b
 Click any command card for its full lifecycle: original order → staff plan (reject with a note while pending) → execution sessions → mission report & evidence, all traceable.
 
 **🤖 Two-tier crew: first mate + field agents**
-An AI first mate triages your orders (L0 direct / L1 plan-first / L2 clarify-first), drafts task briefs for your approval; approved orders get an isolated workspace and a field agent conscripted. **The fleet binding follows your chosen CLI** — both the first mate and field agents run on the agent you pick.
+An AI first mate triages your orders (L0 direct / L1 plan-first / L2 clarify-first), drafts task briefs for your approval; approved orders get an isolated workspace and a field agent conscripted. **The fleet binding follows your chosen CLI** — both the first mate and field agents run on the agent you pick; only CLIs with both roles wired appear in the binding gate (six today).
 
 **🔒 Evidence verification (KillCredit)**
 "Done" is not a claim: every check passes, tests really run, no out-of-bounds file changes — all mechanical criteria green before it counts as delivered, and you give the final review.
 
 **💬 In-board answers & mid-flight delivery**
-When the first mate asks a clarifying question, answer right on the focus page (delivered via RPC session resume — no lost context); comments can be relayed to in-flight agents.
+When the first mate asks a clarifying question, answer right in the **focus-page answer box** (no need to open the mate's native session) — the reply is delivered into the mate's session and it resumes with full context; comments can be relayed to in-flight agents. The answer channel is per-seat: pi (RPC frames) and opencode (run -s resume) are live-wired; other seats reject honestly until their contracts land.
 
 **🌐 Bilingual UI + three skins**
 Switch 中文/English in the settings drawer — the whole board re-renders live (dictionary completeness is test-enforced, no silent fallback); Military / Plain / Star Trek wording skins.
@@ -203,7 +206,7 @@ Switch 中文/English in the settings drawer — the whole board re-renders live
 ## Screenshots
 
 <div align="center">
-<img src="docs/screenshots/fleet-en.png" alt="Fleet gate: eleven seats, model input expands inside the selected seat card" width="72%">
+<img src="docs/screenshots/fleet-en.png" alt="Fleet gate: dual-role canon — selectable means both staff and executor wired (six seats); unwired seats state why" width="72%">
 <p><sub>Fleet gate: seats probed from your installed CLIs; the model input expands inside the selected seat card (zcode's model lives in its own config — the card explains it)</sub></p>
 </div>
 
@@ -260,15 +263,18 @@ Fleet binding is persisted to the config file and survives restarts; rebind anyt
 
 ## Supported fleets
 
+**Dual-role canon**: a fleet is selectable only when **both roles are wired** — the first mate (triage & briefing) and the field agents (work & evidence) all run on the CLI you pick.
+
 | Status | CLI | Notes |
 |---|---|---|
 | ✅ Stable | [opencode](https://opencode.ai) | Open-source, multi-provider; MCP bridge injected via project `opencode.json` |
 | ✅ Stable | [pi](https://github.com/badlogic/pi-mono) | Lightweight; an extension registers the exit-protocol tools |
 | ✅ Stable | zcode | GLM family; model lives in its own config |
 | ✅ Stable | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native subscription or an anthropic-compatible gateway |
-| 🧪 Experimental | Codex CLI | Unavailable on Windows (upstream limitation); works on macOS/Linux |
-| 🧪 Experimental | Gemini CLI | Ready once a Google API key is configured |
-| 🧪 Experimental | Qwen Code | openai-compatible gateway; limited model-selector compatibility |
+| ✅ Stable | [Codex CLI](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP |
+| ✅ Stable | dsh (DeepSeek Harness) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_*) |
+| 🚧 Not bindable yet | Gemini CLI | Dual-role incomplete (executor contract never live-fired, no staff channel) — opens after a key + live-fire |
+| 🚧 Not bindable yet | Qwen Code | Dual-role incomplete (executor half-proven, no staff channel) — opens after live-fire |
 | 🚧 Coming soon | Copilot CLI / Amp / Cursor CLI / Droid | Adapters in progress (some via ACP) |
 
 ## Architecture
