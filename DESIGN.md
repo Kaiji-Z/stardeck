@@ -70,6 +70,16 @@
 **实弹战果**：pi 全链 PASS（实弹门执行者相位 5 断言）；codex 受阻于 codex-cli 自身——0.44 Windows 无法 spawn node 常驻 stdio MCP 服（八变体探测：capture 服 BOOT 文件从不出现），0.152+ 移除 chat wire 且 z.ai 无 Responses 面——诚实记录，换机/版本考古再战。
 **理由**：验证先行的落地形态=「源码证据→实装→单测锁死→实弹取证」四段；实弹被外部依赖挡住时，把阻塞点钉到证据级精度比降级断言更有迭代价值。
 
+## D19 codex 0.153.4 版本考古：MCP 阻碍解除，模型层成唯一锁（2026-09-06）
+
+**背景**：上游 codex 高频迭代（0.44→0.153.4 跨 100+ 小版本），按元首令拉最新稳定版复核适配面。0.153.4 装隔离前缀（`clones/codex-0153`，全局 0.44 钉版不动），上游克隆 checkout `rust-v0.153.4`，探测脚本 `.goal/codex-probe/`（capture 服 BOOT 判据承 D12 八变体法）。
+**定案（证据五条）**：
+- **MCP spawn 阻碍已解除**：0.153.4 换 rmcp 客户端（tokio::process）——Windows 上 node 常驻 stdio MCP 服完整握手成功（BOOT 出现 + initialize→initialized→tools/list 全链，LOG-*.txt 在案）。**两条通道都验：CODEX_HOME config.toml 与我们适配器的 `-c` 三键注入（生产通道）都直通**。0.44 阻碍是版本缺陷非形态缺失，此判定成立。
+- **适配器契约零破坏**：`exec --skip-git-repo-check --json --sandbox workspace-write -C -m -c` 全部实弹受认；JSONL 事件流带 `thread.started`（thread_id=UUID，backfill 捕获判型兼容）；rollout 落盘布局不变（`sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`，history 读取器兼容）；顶层 `codex resume [SESSION_ID] [PROMPT]` 在（跳窗契约兼容，且新增 `--last`/线程名）。
+- **chat wire 永久移除**：`wire_api="chat"` 运行时硬拒（"no longer supported"，官方迁移指引 discussion 7782；源码 `WireApi` 枚举仅剩 Responses）。中途投递契约转活：`codex exec resume <uuid> <prompt>` 已存在（待接线）。
+- **模型层=本机唯一残余锁**：z.ai 无 Responses 面（`{Z_AI_BASE_URL}/responses` 404 复测 2026-09-06）且 codex 只认 Responses——GLM 直驱 codex 仍不可行。解锁路三选：本机 Responses→chat 垫片代理（自写 node 垫片或 LiteLLM）/ z.ai 出 Responses 面 / 换 OpenAI 鉴权机。
+**理由**：版本考古的价值在把「阻碍」钉到证据级——0.44 时代的「codex 阻碍=环境锁」结论要随版本更新重判；这次 MCP 面已解锁，工具桥、会话捕获、跳窗、投递四条契约全部就绪，只差模型供给一刀。
+
 ---
 
 ### 后续决策（待记）
