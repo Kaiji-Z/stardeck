@@ -29,6 +29,8 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-07
+
 ### Added
 
 - **codex 垫片转正：GLM 直驱 codex（V19.13，DESIGN D21）**——`src/codex-shim.ts` Responses→chat 翻译面（协议按 rust-v0.153.4 源码钉死：SSE created→output_item.done→completed，usage 三字段映射）+ 回环服（`stardeck codex-shim` 子命令，仅绑 127.0.0.1，key 只进本进程内存）；适配器接线=config `codexShimBase`（STARDECK_CODEX_SHIM_BASE），非空时 codexExecArgs 注入 provider 定义五旗压过裸 modelProvider；slug 骗面支持（`-m` 目录内 slug 拿完整元数据，垫片改写真模型）。**适配器同步修**：0.153 新 Windows 沙箱（restricted token）拦一切 exec_command（实弹三连拒）——codexExecArgs 平台分野 win32=danger-full-access。**实弹 scripts/live-codex-shim.ts 5 断言 PASS**：相位①模型线（codex→垫片→GLM 真话音）+ 相位②舰队线（隔离 daemon，codex 经 http 面查账本报出种子任务号）。**坑录**：0.153 `exec` 一次性形态 MCP 工具不进模型工具面（deferred/tool_search 架构，桥/探测服×`-c`/config.toml×fallback/目录 slug 全不露）——codex 席工具通道走 http 面正典（zcode 同款）；/responses/compact 诚实 404。verify PASS（399 测）。
