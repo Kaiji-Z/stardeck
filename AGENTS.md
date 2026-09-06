@@ -35,7 +35,8 @@
 | `client/` | 板 UI 前端（views.tsx 三级布局/皮肤词典/星域/到访件…1:1，除 shell-entry 已由独立入口替代）。**i18n**（2026-09-02）：copy.ts=皮肤×语言双语层（setLang/subscribeLang 与皮肤轴共用监听；activeCopy 按两轴取典）+ copy-en.ts=war/plain 两份英典（键形与中文词典逐键对齐，tests/copy-lang.test.ts 锁完备性——缺键即 FAIL 不许静默回落）+ EN trek 词表派生第三皮肤；fleet-gate.tsx 自带双语门面文案；账本与提示词资产保持中文单一源（agent 面正典不随语言切换） |
 | `client-standalone.tsx` | 板 UI 独立入口：warView 整页挂载（services 传空=全量降级）+ lastSeen 离页落（原 shell-entry 职责） |
 | `units.ts`/`toml.ts`/`dossier.ts`/`activity.ts`/`report-capture.ts`/`v5spike.ts`/`types.ts`/`flags.ts` | 与插件仓 1:1（v5spike 留作宿主契约考古，路由缺省不注册） |
-| `steer.ts` | **pi RPC 客户端**（P0-1）：JSONL 手切帧（禁 readline——U+2028/29）+ prompt/steer/follow_up 帧 + response 按 id 关联 + agent_settled 收割；deliverViaRpc=续跑投递（板内答复/批注转达共用） |
+| `steer.ts` | **pi RPC 客户端**（P0-1）：JSONL 手切帧（禁 readline——U+2028/29）+ prompt/steer/follow_up 帧 + response 按 id 关联 + agent_settled 收割；deliverViaRpc=续跑投递（板内答复/批注转达共用）；deliverViaOpencode=opencode 席 `run -s` 续跑（观察窗三态，D20） |
+| `codex-shim.ts` | **Responses→chat 垫片**（V19.13）：GLM 直驱 codex 的翻译面（SSE created→output_item.done→completed）+ 回环服（`stardeck codex-shim` 启动，仅绑 127.0.0.1，key 不入 codex 配置）；codexShimProviderArgs=适配器 `-c` 五旗 |
 | `backfill.ts` | **attach-map 补齐**（P1-6）：自家日志反查老会话（ses_/sess_/uuid 三席判型），daemon 启动时补缺失键、不覆盖既有 |
 
 tests/ 与内核一一对应（46 文件 281 测；新增 staff.test.ts 工单/征召令快照 + executor-face.test.ts 合并注入/适配器面）+ `prompts-snapshots/` 快照 fixtures + `staff-snapshots/`；`scripts/verify.mjs` 三段式验收门（+opt-in 旗面双跑矩阵）、`scripts/build.mjs` esbuild 构建、`scripts/live-check.ts` 实弹门（+opt-in 大副相位）。
@@ -93,17 +94,18 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 - **派生面要过语义关**：host-workspaces 拿 war_root 扫描派生=错（内部任务目录≠用户工作区），会顶掉 HQ 弹窗手动注册区（用户实抓）；独立形态「清单缺席→手动区」本就是正解，别手痒补派生。
 - Node 在 Windows 上 process.exit 时 fetch 句柄未排干会崩 libuv 断言（UV_HANDLE_CLOSING）——CLI 面用 process.exitCode 自然退场，不硬 exit。
 - **esbuild 对非法类型语法静默回退**（2026-09-06 实弹确认）：`new Promise<{kind:'x' as const}>` 的类型实参里写 as 表达式（=表达式语法进类型位置，非法 TS）——esbuild 不报错、把 `<...>` 回退解析成**比较表达式** `new Promise() < {...} > (...)`，运行时才炸「Promise resolver undefined is not a function」且行号误导；类型实参保持纯类型（字面量直接写 `'timeout'`），`as const` 只用在表达式侧。tsx 不做类型检查，tsc 门口也拦不住看不见的转换——这类坑靠「同形最小复现二分」定位。
+- **codex 0.153 三坑（V19.13 实弹，DESIGN D21）**：①**win32 新沙箱（restricted token）拦一切 exec_command**——workspace-write 下内联/写脚本/stdin 三连拒，适配器已平台分野（win32=danger-full-access）；②**exec 一次性形态 MCP 工具不进模型工具面**（deferred/tool_search 新架构；我们的桥与标准探测服、`-c` 与 config.toml、fallback 与目录 slug 全不露）——codex 席工具通道走 **http 面正典**（zcode 同款，简报教 STARDECK_HTTP 直连）；③**GLM 直驱靠垫片**：`stardeck codex-shim`（Z_AI_* env）+ `STARDECK_CODEX_SHIM_BASE=http://127.0.0.1:3975/v1` 起 daemon——适配器自动注入 provider 五旗；要完整模型元数据可 slug 骗面（`-m gpt-5.2-codex`，垫片改写真模型）。0.153.4 隔离前缀在 `clones/codex-0153`（全局 0.44 钉版不动）。
 - pnpm v10 默认拦构建脚本——本仓 package.json 已带 `pnpm.onlyBuiltDependencies: ["esbuild"]`，新装依赖若含 postinstall 需补白名单。
 
 ## 降级面与迭代候选（2026-09-01 更新）
 
 已接线（本轮）：**大副外聘**（draft/定时令全自动派发，`STARDECK_STAFF` 开关）；**bound 工作区配置合并注入**（逐键合并+首动备份+坏 JSON 拒绝覆盖）；**监督层**（promptfoo 三维门，`pnpm verify:eval`，自 dsh 插件版 1:1 移植+首弹已证）；**pi 执行者适配器转正**（源码仓契约实证+实弹门相位取证）；**codex 适配器契约实装**（源码实证注入面+argv，实机受阻记录在案）。
 
-仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递的**执行者侧**注入（pi=steer 帧已通；**板上答复双席已通**——pi RPC + opencode run -s 续跑，2026-09-06；其余席待接入）/批注转达仍 pi-only（relayTo）；staff-goal 不适用；codex 实弹待机（见环境坑）。
+仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递的**执行者侧**注入（pi=steer 帧已通；**板上答复双席已通**——pi RPC + opencode run -s 续跑，2026-09-06；其余席待接入）/批注转达仍 pi-only（relayTo）；staff-goal 不适用；**codex 席实用可用（V19.13 垫片已通，工具通道=http 面；MCP 工具面待上游，见环境坑）**。
 
 候选（按建议顺序）：
 1. **中途投递余下席**：板上答复/批注转达扩到 zcode（`--resume --prompt` 视察汇报模式可复用）/claude（`--resume <id> -p`）/dsh（tui resume 通道）——契约已在，逐席实弹取证。
 2. GitHub 仓 + npm 发布（发版需定案——**2026-09-01 项目主已示「先不发版」**；npm 首发前在 npmjs 预登记 pending publisher——参照 warroom 的 release.mjs/OIDC 惯例可整体移植）。
 3. 板 UI critique 轮（impeccable 双子代理，warroom 的 35/40 口径）。
-4. codex 版本考古或换机实弹（前置：找到「chat wire + 能 spawn node MCP」的 Windows 版本，或非 Windows 机；DESIGN D19 已把 MCP 阻碍解除——0.153.4 可 spawn，模型层成唯一锁）。
+4. codex 席收尾：MCP 工具面待上游 exec 路径（deferred/tool_search 架构不露工具，DESIGN D21 双证）；`codex exec resume <uuid> <prompt>` 中途投递接线（契约已实弹在档）。
 5. 模糊输入集与监督用例扩容（VERIFICATION.md P2）：从 `.goal/evidence/live/` 实弹轨迹沉淀野输入语料；每道新特性补一正一负监督用例。

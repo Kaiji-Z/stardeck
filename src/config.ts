@@ -22,6 +22,8 @@ export interface StardeckConfig {
   model: string
   /** 模型供应商直通（codex 语义：spawn 时 `-c model_provider=<it>`；空=codex 自身默认。pi 走 model 的 provider/id 形）。 */
   modelProvider: string
+  /** codex 垫片基址（如 http://127.0.0.1:3975/v1）：非空=codex 模型面走 Responses→chat 垫片（V19.13）。 */
+  codexShimBase: string
   /** 执行者二进制路径（默认按平台常见安装位探测）。 */
   executorBin: string
   /** 每任务重试上限（war_fail 语义）。 */
@@ -49,6 +51,7 @@ interface ConfigFilePart {
   executor?: unknown
   model?: unknown
   modelProvider?: unknown
+  codexShimBase?: unknown
   executorBin?: unknown
   maxAttempts?: unknown
   maxExecutors?: unknown
@@ -76,7 +79,10 @@ export function loadConfig(overrides: Partial<StardeckConfig> = {}): StardeckCon
     executor: pick(file.executor, env.STARDECK_EXECUTOR, 'opencode'),
     model: pick(file.model, env.STARDECK_MODEL, ''),
     modelProvider: pick(file.modelProvider, env.STARDECK_MODEL_PROVIDER, ''),
-    executorBin: pick(file.executorBin, env.STARDECK_EXECUTOR_BIN, ''),
+    // V19.13 codex 垫片基址（如 http://127.0.0.1:3975/v1）：非空=codex 舰的
+    // 模型面改走 Responses→chat 垫片（codex 0.152+ 只认 Responses、GLM 只有
+    // chat——垫片 `stardeck codex-shim` 先起，key 只活在垫片进程）。
+    codexShimBase: pick(file.codexShimBase, env.STARDECK_CODEX_SHIM_BASE, ''),    executorBin: pick(file.executorBin, env.STARDECK_EXECUTOR_BIN, ''),
     maxAttempts: Number(env.STARDECK_MAX_ATTEMPTS ?? file.maxAttempts ?? 3),
     maxExecutors: Number(env.STARDECK_MAX_EXECUTORS ?? file.maxExecutors ?? 3),
     maxUnits: 0,

@@ -125,20 +125,28 @@ test('pi 注入：.pi/extensions/stardeck-tools.ts 注册出口协议三工具�
 })
 
 test('argv 构造（纯）：codex exec 框定旗序 / pi -p 一次性 + --approve 放行项目扩展', () => {
+  // V19.13 win32 沙箱分野：0.153 新沙箱拦一切命令（实弹三连拒）——win32=
+  // danger-full-access，其余平台 workspace-write（期望值按平台同式计算）。
+  const sandbox = process.platform === 'win32' ? 'danger-full-access' : 'workspace-write'
   assert.deepEqual(
     codexExecArgs({ workspacePath: '/w/t1', model: '', prompt: 'P' }),
-    ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write', '-C', '/w/t1', 'P'],
+    ['exec', '--skip-git-repo-check', '--json', '--sandbox', sandbox, '-C', '/w/t1', 'P'],
   )
   assert.deepEqual(
     codexExecArgs({ workspacePath: '/w/t1', model: 'glm-5.2', prompt: 'P' }),
-    ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write', '-C', '/w/t1', '-m', 'glm-5.2', 'P'],
+    ['exec', '--skip-git-repo-check', '--json', '--sandbox', sandbox, '-C', '/w/t1', '-m', 'glm-5.2', 'P'],
   )
   assert.deepEqual(piPrintArgs({ model: '', prompt: 'P' }), ['--approve', '-p', 'P'])
   assert.deepEqual(piPrintArgs({ model: 'zai/glm-5.2', prompt: 'P' }), ['--approve', '-p', '--model', 'zai/glm-5.2', 'P'])
   assert.deepEqual(
     codexExecArgs({ workspacePath: '/w', model: 'glm-5.2', modelProvider: 'zai', prompt: 'P' }),
-    ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write', '-C', '/w', '-c', 'model_provider=zai', '-m', 'glm-5.2', 'P'],
+    ['exec', '--skip-git-repo-check', '--json', '--sandbox', sandbox, '-C', '/w', '-c', 'model_provider=zai', '-m', 'glm-5.2', 'P'],
   )
+  // V19.13 垫片优先：codexShimBase 非空=完整 provider 定义五旗压过裸 modelProvider。
+  const shimArgv = codexExecArgs({ workspacePath: '/w', model: 'glm-5.2', modelProvider: 'zai', codexShimBase: 'http://127.0.0.1:3975/v1/', prompt: 'P' })
+  assert.ok(shimArgv.includes('-c') && shimArgv.some(a => a.startsWith('model_provider=stardeck_shim')), shimArgv.join(' '))
+  assert.ok(shimArgv.some(a => a === 'model_providers.stardeck_shim.base_url="http://127.0.0.1:3975/v1"'))
+  assert.ok(!shimArgv.some(a => a.startsWith('model_provider=zai')), '垫片在场时裸 provider 不落')
   // MCP 注入走 -c 覆盖（0.44 实测：项目级 .codex/config.toml 旧版不加载）。
   const mcpArgv = codexExecArgs({ workspacePath: '/w', model: '', prompt: 'P', mcp: { command: 'node', args: ['b.mjs'], env: { STARDECK_HTTP: 'http://h', STARDECK_AGENT: 'oc-x' } } })
   assert.ok(mcpArgv.includes('-c') && mcpArgv.some(a => a.startsWith('mcp_servers.stardeck.command="node"')), mcpArgv.join(' '))

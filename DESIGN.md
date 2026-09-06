@@ -100,6 +100,23 @@
 
 ---
 
+## D21 codex 垫片转正：GLM 直驱 codex 的解锁刀（2026-09-06，V19.13）
+
+**背景**：D19 判定「模型层成唯一锁」（chat wire 永久移除 + z.ai 无 Responses 面）。解锁刀=Responses→chat 垫片：codex 说 Responses、垫片翻译成 chat/completions 打 z.ai，GLM 话音直驱 codex。
+
+**定案**：
+- **垫片**（src/codex-shim.ts）：翻译纯函数（请求/应答双面，协议形状按 rust-v0.153.4 源码钉死——SSE 帧按 data JSON 的 `type` 判型，最小闭合面 created→output_item.done→completed，usage 字段 input_tokens/output_tokens/total_tokens）+ 回环 HTTP 服（仅绑 127.0.0.1，key 只进本进程内存永不入 codex 配置）。启动=`stardeck codex-shim`（--upstream/--key 或 Z_AI_* env，缺 key 拒启）。适配器接线=config `codexShimBase`（env STARDECK_CODEX_SHIM_BASE），非空时 codexExecArgs 注入 provider 定义五旗（压过裸 modelProvider）。
+- **slug 骗面**：`-m` 传目录内 slug（如 gpt-5.2-codex）可拿完整模型元数据，垫片 `model` 参数把实际请求改写真模型——glm-5.2 与目录 slug 双验均可完成回合（fallback 元数据也能跑，前者仅报一条 metadata warning）。
+- **win32 沙箱分野**：0.153 新 Windows 沙箱（restricted token）把 exec_command 全拦（实弹三连拒：内联/写脚本/stdin 全灭）——workspace-write 在 win32 等于废人。codexExecArgs 平台分野：win32=danger-full-access（stardeck 执行者本与 opencode/pi 同级全权），其余平台维持 workspace-write。
+- **工具通道=http 面正典（zcode 同款）**：实弹双证（我们的桥 24 工具 + 标准探测服 1 工具）——0.153 `exec` 一次性形态下 MCP 工具**不进模型工具面**（deferred/tool_search 新架构，`-c` 与 config.toml、fallback 与目录 slug 四组合全不露）。codex 席的 stardeck 工具通道走 HTTP 直连（简报教法与 zcode http 面同款），MCP 工具面待上游 exec 路径修复后再换回。
+- **已知限**：/responses/compact 压缩面未实现（诚实 404，长会话触发时 codex 报错不崩）；翻译为整件直达（无增量 delta——codex 兼容）。
+
+**证据**：codex-shim.test 6 测（翻译双面+服务器集成+provider 五旗）+executor-face 扩测（沙箱分野/垫片优先/裸 provider 压制）；实弹 scripts/live-codex-shim.ts 5 断言 PASS——相位①模型线（codex→垫片→GLM 真话音「收到」）+相位②舰队线（隔离 daemon 种子任务，codex 经 http 面查账本报出 ZEBRA-PROBE 任务号——不经账本链不可能知道）。
+
+**理由**：垫片把「等 z.ai 出 Responses 面」的不可控等待变成 3975 端口上的一把本地锁；MCP 工具面不进模型列表是上游 exec 形态的新阻碍，但 zcode 已立 http 面正典证明这不是席位级障碍——codex 席自此实用可用。
+
+---
+
 ### 后续决策（待记）
 
 - npm 发布管线（release.mjs/OIDC 移植）

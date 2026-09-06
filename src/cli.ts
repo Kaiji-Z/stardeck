@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { startDaemon, packageVersion } from './daemon.ts'
 import { loadConfig, stardeckHome } from './config.ts'
+import { startCodexShim } from './codex-shim.ts'
 
 interface CliOptions {
   port?: number
@@ -21,6 +22,9 @@ interface CliOptions {
   model?: string
   executor?: string
   executorBin?: string
+  /** codex-shim 面：上游 chat 基址与 key（缺省走 Z_AI_BASE_URL/Z_AI_API_KEY env）。 */
+  upstream?: string
+  key?: string
 }
 
 function parseArgs(argv: string[]): { command: string; options: CliOptions } {
@@ -35,6 +39,8 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions } {
     else if (a === '--model' && next !== undefined) { options.model = next; i++ }
     else if (a === '--executor' && next !== undefined) { options.executor = next; i++ }
     else if (a === '--executor-bin' && next !== undefined) { options.executorBin = next; i++ }
+    else if (a === '--upstream' && next !== undefined) { options.upstream = next; i++ }
+    else if (a === '--key' && next !== undefined) { options.key = next; i++ }
     else { console.error(`未知参数：${a}`); process.exit(2) }
   }
   return { command, options }
@@ -109,6 +115,27 @@ async function cmdStop(): Promise<number> {
   }
 }
 
+/** codex Responses→chat 垫片（V19.13）：GLM 直驱 codex 的解锁刀。
+ *  key 来源优先级：--key > Z_AI_API_KEY env > 拒启（诚实报缺——key 永不落盘）。 */
+async function cmdCodexShim(options: CliOptions): Promise<void> {
+  const upstream = options.upstream ?? process.env.Z_AI_BASE_URL ?? ''
+  const apiKey = options.key ?? process.env.Z_AI_API_KEY ?? ''
+  if (upstream === '' || apiKey === '') {
+    console.error('codex-shim 缺配置：需要 --upstream + --key（或 env Z_AI_BASE_URL / Z_AI_API_KEY）——不给 key 不起服。')
+    process.exitCode = 2
+    return
+  }
+  const port = options.port ?? 3975
+  const shim = await startCodexShim({ port, upstream, apiKey })
+  console.log(`[stardeck] codex-shim 已上线 http://127.0.0.1:${port}/v1（上游 ${upstream.replace(/\/\/[^/]+@/, '//')}，chat wire 翻译面）`)
+  console.log('[stardeck] codex 侧：STARDECK_CODEX_SHIM_BASE=http://127.0.0.1:' + port + '/v1 起 daemon（或 -c model_providers… 见 AGENTS.md）')
+  const shutdown = (): void => {
+    void shim.close().then(() => { console.log('[stardeck] codex-shim 已收摊'); process.exitCode = 0 })
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+}
+
 // 主入口守卫：直接执行（node cli.ts / dist/cli.mjs）才分发命令——测试 import 取纯函数零副作用。
 const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href
 const { command, options } = isMain ? parseArgs(process.argv.slice(2)) : { command: '', options: {} as CliOptions }
@@ -122,8 +149,9 @@ if (isMain) {
     console.log([
       'stardeck — agent 舰队的作战看板与守护进程',
       '',
-      '用法：stardeck [start|open|status|stop|version] [--port N] [--state-dir DIR] [--war-root DIR] [--model PROVIDER/MODEL] [--executor ID]',
+      '用法：stardeck [start|open|status|stop|codex-shim|version] [--port N] [--state-dir DIR] [--war-root DIR] [--model PROVIDER/MODEL] [--executor ID]',
       '  start 起 daemon（前台）；open 同 start 并拉起浏览器；status 探活；stop 优雅停服',
+      '  codex-shim 起 Responses→chat 垫片（GLM 直驱 codex；--upstream/--key 或 Z_AI_* env）',
       `默认状态目录：${stardeckHome()}（STARDECK_HOME 可改；支持 ~/.stardeck/config.json）`,
     ].join('\n'))
     process.exit(0)
@@ -132,8 +160,10 @@ if (isMain) {
     void cmdStatus().then(code => { process.exitCode = code })
   } else if (command === 'stop') {
     void cmdStop().then(code => { process.exitCode = code })
+  } else if (command === 'codex-shim') {
+    void cmdCodexShim(options)
   } else if (command !== 'start' && command !== 'open') {
-    console.error(`未知命令：${command}（可用：start | open | status | stop | version | help）`)
+    console.error(`未知命令：${command}（可用：start | open | status | stop | codex-shim | version | help）`)
     process.exit(2)
   } else {
     runDaemon(command, options)

@@ -107,6 +107,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       agentId,
       model: activeModel,
       modelProvider: config.modelProvider,
+      codexShimBase: config.codexShimBase,
       executorBin: binFor(activeExecutor),
       stateDir,
     })

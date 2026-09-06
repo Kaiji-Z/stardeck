@@ -25,6 +25,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createInterface as readlineCreateInterface } from 'node:readline'
 import { commanderOrderFor } from './prompts.ts'
+import { codexShimProviderArgs } from './codex-shim.ts'
 
 /** MCP 桥的绝对路径（随包发布；dist 构建后与 daemon 同目录）。 */
 export function mcpBridgePath(): string {
@@ -44,6 +45,8 @@ export interface ExecutorSpawnArgs {
   model: string
   /** codex 语义：spawn 时 `-c model_provider=<it>`（空=codex 自身默认）。 */
   modelProvider: string
+  /** V19.13 codex 垫片基址（非空=codex 模型面走 Responses→chat 垫片，压过 modelProvider）。 */
+  codexShimBase?: string
   executorBin: string
   stateDir: string
 }
@@ -535,18 +538,27 @@ export async function spawnHeadlessClaude(args: HeadlessAgentArgs): Promise<Exec
  * 契约实证：codex-rs/exec/src/cli.rs（--json/--skip-git-repo-check）、
  * utils/cli/src/shared_options.rs（-C/--cd、-m、-s、-c 覆盖）。
  * 沙箱=workspace-write（写工作区免批；MCP 工具调用不经沙箱——桥进程自己回连）。 */
-export function codexExecArgs(args: { workspacePath: string; model: string; modelProvider?: string; mcp?: { command: string; args: string[]; env: Record<string, string> }; prompt: string }): string[] {
+export function codexExecArgs(args: { workspacePath: string; model: string; modelProvider?: string; codexShimBase?: string; mcp?: { command: string; args: string[]; env: Record<string, string> }; prompt: string }): string[] {
   const mcp = args.mcp
   const tomlInlineEnv = (env: Record<string, string>): string => `{ ${Object.entries(env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }` // TOML 内联表（key = "v"）——JSON 冒号语法 codex 不认（复测确认）
+  // V19.13 垫片优先：codexShimBase 非空=模型面走 Responses→chat 垫片（完整
+  // provider 定义经 -c 注入——0.153.4 实弹直通；压过裸 modelProvider 直通）。
+  const providerFlags = args.codexShimBase !== undefined && args.codexShimBase !== ''
+    ? codexShimProviderArgs(args.codexShimBase)
+    : (args.modelProvider !== undefined && args.modelProvider !== '' ? ['-c', `model_provider=${args.modelProvider}`] : [])
+  // V19.13 沙箱实测分野：0.153 新 Windows 沙箱（restricted token）把
+  // exec_command 全拦（实弹三连拒）——workspace-write 在 win32 等于废人；
+  // stardeck 执行者本就与 opencode/pi 同级全权，win32 直言 danger-full-access。
+  const sandbox = process.platform === 'win32' ? 'danger-full-access' : 'workspace-write'
   return [
-    'exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write',
+    'exec', '--skip-git-repo-check', '--json', '--sandbox', sandbox,
     '-C', args.workspacePath,
     ...(mcp !== undefined ? [
       '-c', `mcp_servers.stardeck.command=${JSON.stringify(mcp.command)}`,
       '-c', `mcp_servers.stardeck.args=${JSON.stringify(mcp.args)}`,
       '-c', `mcp_servers.stardeck.env=${tomlInlineEnv(mcp.env)}`,
     ] : []),
-    ...(args.modelProvider !== undefined && args.modelProvider !== '' ? ['-c', `model_provider=${args.modelProvider}`] : []),
+    ...providerFlags,
     ...(args.model !== '' ? ['-m', args.model] : []),
     args.prompt,
   ]
@@ -595,7 +607,7 @@ export const codexAdapter: ExecutorAdapter = {
     writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), executorBrief(args), 'utf8')
     injectCodexMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
     return spawnCli(args.executorBin, codexExecArgs({
-      workspacePath: args.workspacePath, model: args.model, modelProvider: args.modelProvider, prompt: PROMPT,
+      workspacePath: args.workspacePath, model: args.model, modelProvider: args.modelProvider, codexShimBase: args.codexShimBase, prompt: PROMPT,
       mcp: { command: process.execPath, args: [mcpBridgePath()], env: { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId } },
     }),
       { cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId })
