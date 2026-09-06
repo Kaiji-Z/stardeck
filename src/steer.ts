@@ -13,6 +13,8 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { createWriteStream, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 export interface RpcFrame { id: string; type: 'prompt' | 'steer' | 'follow_up'; message: string }
 
@@ -177,4 +179,63 @@ export async function deliverViaRpc(args: {
   // 回执成功≠跑完：等 settled 再收割（防僵尸）；上限到点也收（诚实放弃等待）。
   const settled = handle.awaitSettled(args.settledTimeoutMs ?? 15 * 60_000).then(done => { handle.kill(); return done })
   return { ...out, settled }
+}
+
+/** opencode 席答复续跑的 argv（纯）：`run --auto --format json --dir <cwd> -s <会话> [model] <答复>`。
+ * 与 spawnHeadlessOpencode 同款无头框定（--auto/--format json），差异=续跑既有会话
+ * （-s）、不设新标题。工作区 opencode.json 的 stardeck 桥自原次 spawn 已在——
+ * 续跑进程加载同一项目配置，war_* 全量可用（agentId 是不透明标签，daemon
+ * tools/call 不校验注册表活体，免重注入）。 */
+export function opencodeAnswerArgv(args: { cwd: string; sessionId: string; model?: string; message: string }): string[] {
+  return [
+    'run', ...(args.model !== undefined && args.model !== '' ? ['--model', args.model] : []),
+    '--auto', '--format', 'json', '--dir', args.cwd,
+    '-s', args.sessionId,
+    args.message,
+  ]
+}
+
+/** opencode 席一次性答复投递（P0-1 收尾：大副默认席的续跑通道）。受理语义=
+ * 续跑进程活过观察窗（grace 内非零即退=会话号失效/参数被拒，如实败）；活过
+ * 即受理成立，settled=进程退场（code 0=消化完），上限到点 kill 诚实放弃等待
+ * （pi 同款 15min）。日志落 stateDir/logs/staff-answer-<sessionId>.log 供翻阅。 */
+export async function deliverViaOpencode(args: {
+  bin: string
+  cwd: string
+  sessionId: string
+  model?: string
+  message: string
+  stateDir: string
+  graceMs?: number
+  settledTimeoutMs?: number
+}): Promise<{ ok: boolean; error?: string; settled: Promise<boolean> }> {
+  const logDir = join(args.stateDir, 'logs')
+  mkdirSync(logDir, { recursive: true })
+  const logPath = join(logDir, `staff-answer-${args.sessionId}.log`)
+  // JS 入口经 execPath（同 startPiRpc 家法：win32 免 .cmd 垫片；测试 stub=.mjs 也走这条）。
+  const isJs = /\.(js|mjs|cjs)$/.test(args.bin)
+  const argv = opencodeAnswerArgv({ cwd: args.cwd, sessionId: args.sessionId, model: args.model, message: args.message })
+  const child = isJs
+    ? spawn(process.execPath, [args.bin, ...argv], { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true })
+    : spawn(args.bin, argv, { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true })
+  const log = createWriteStream(logPath, { flags: 'a' })
+  child.stdout?.pipe(log)
+  child.stderr?.pipe(log)
+  const exited = new Promise<number | null>(resolve => {
+    child.on('exit', c => { log.close(); resolve(c) })
+    child.on('error', () => { log.close(); resolve(-1) })
+  })
+  const early = await Promise.race([
+    exited.then(code => ({ kind: 'exit' as const, code })),
+    new Promise<{ kind: 'timeout' }>(r => { setTimeout(() => r({ kind: 'timeout' }), args.graceMs ?? 5000) }),
+  ])
+  if (early.kind === 'exit') {
+    return early.code === 0
+      ? { ok: true, settled: Promise.resolve(true) }
+      : { ok: false, error: `续跑进程即退（code ${String(early.code)}）——会话号失效或参数被拒；日志 ${logPath}`, settled: Promise.resolve(false) }
+  }
+  const cap = setTimeout(() => { child.kill() }, args.settledTimeoutMs ?? 15 * 60_000)
+  const settled = exited.then(code => code === 0)
+  void settled.then(() => { clearTimeout(cap) })
+  return { ok: true, settled }
 }

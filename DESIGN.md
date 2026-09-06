@@ -82,6 +82,24 @@
 
 ---
 
+## D20 板上答复 opencode 席：run -s 续跑的受理语义（2026-09-06，P0-1 收尾）
+
+**背景**：P0-1（2026-09-02）板上答复只走 pi RPC——大副默认席 opencode 反而被拒（「其余席的续跑通道待接入」）。插件仓 M2-件B 同期在宿主形态用 followup 收件箱实现了同语义（方向独立演进，结论同构：板上作答→会话续跑）。
+
+**定案**：
+- **通道**：`opencode run -s <会话> --auto --format json --dir <工作区> <答复文本>`——一次性续跑进程，与 pi RPC 的差异=无受理回执面（opencode CLI 无早期 ack）。**受理语义改为「活过观察窗」**：默认 5s 内非零即退（会话号失效/参数被拒）=如实败；活过窗=受理成立，settled=真退场（code 0=消化完），15min 上限 kill 诚实放弃（pi 同款）。即退 0（窗口内速答完成）=受理且已消化。
+- **免重注入**：工作区 opencode.json 的 stardeck 桥自原次 staff spawn 已在；续跑进程加载同一项目配置。agentId 是不透明标签（daemon tools/call 无注册表活体校验，缺省 anonymous）——旧 agentId 照用，不重写配置。
+- **审计**：directive_answered 事件 channel='opencode-run'（pi 路径 'pi-rpc' 原样）；单飞守卫（answering set）持续到 settled——防双进程续跑同一会话文件。
+- **wrapper 共用**：`【舰长答复】<文本>\n（请继续按既定流程推进…）`——pi/opencode 同一段（措辞属 daemon 层非提示词资产，快照门不涉）。
+
+**坑（已录 AGENTS）**：esbuild 对 `new Promise<{kind:'x' as const}>` 的非法类型实参静默回退成比较表达式——运行时「Promise resolver undefined is not a function」且行号误导；同形最小复现二分定位。
+
+**证据**：steer.test 8/8（观察窗三态 stub 级 + daemon 级 opencode 席投递——stub 双面化按 argv 分形）；verify PASS；实弹 scripts/live-answer-oc.ts——真 opencode 会话 ACK1 → 续跑 settled → sqlite 历史同会话双回合 ACK1+ACK2（上下文存续实锤）。
+
+**余下席（候选①续）**：zcode（`--resume --prompt` 视察汇报模式）/claude（`--resume <id> -p`）/dsh（tui resume）——契约在档，逐席实弹后放开拒绝闸。
+
+---
+
 ### 后续决策（待记）
 
 - npm 发布管线（release.mjs/OIDC 移植）

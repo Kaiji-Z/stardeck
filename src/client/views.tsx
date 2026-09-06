@@ -1490,6 +1490,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                   className: 'war-cd-answer', rows: 3, placeholder: fp.answerPh,
                   value: answerText,
                   onChange: e => { setAnswerText(String(e.target.value ?? '')) },
+                  onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
                 }),
                 subActions([
                   createElement('button', {

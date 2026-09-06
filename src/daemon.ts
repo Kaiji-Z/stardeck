@@ -18,7 +18,7 @@ import { materializeTaskWorkspace, materializeInstanceWorkspace, releaseTaskWork
 import { runtimeFlags } from './flags.ts'
 import { appendEvent, listCampaignIds, loadCampaign } from './events.ts'
 import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives } from './directives.ts'
-import { deliverViaRpc } from './steer.ts'
+import { deliverViaOpencode, deliverViaRpc } from './steer.ts'
 import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
@@ -136,6 +136,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
 
   // ---------- P0-1 板内答复（talking 命令 → 大副会话续跑）----------
   // 单飞守卫：同一命令同时只允许一封在途（重试风暴防线）；答复只认 talking 态。
+  // 席别分发（P0-1 收尾）：pi=RPC prompt 帧（受理回执即返）；opencode=run -s
+  // 续跑（活过观察窗即受理——大副默认席自此可答）；其余席仍诚实拒绝。
   const answering = new Set<string>()
   const answerCommand = async (commandId: string, text: string): Promise<{ ok: true; note: string } | { ok: false; error: string }> => {
     const directive = loadDirectives(stateDir).find(d => d.id === commandId)
@@ -144,22 +146,28 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     if (directive.staffSessionId === undefined || directive.staffSessionId === null) return { ok: false, error: '该命令没有大副会话捕获（早于会话捕获功能的旧命令）——请直接下新命令。' }
     const entry = readAttachMap(stateDir)[directive.staffSessionId]
     if (entry === undefined) return { ok: false, error: `大副会话映射缺失（${directive.staffSessionId}）——无法续跑投递。` }
-    if (entry.executor !== 'pi') return { ok: false, error: `答复通道现只支持 pi 席（该会话属 ${entry.executor}）——其余席的续跑通道待接入。` }
+    if (entry.executor !== 'pi' && entry.executor !== 'opencode') return { ok: false, error: `答复通道现支持 pi / opencode 席（该会话属 ${entry.executor}）——其余席的续跑通道待接入。` }
     if (answering.has(commandId)) return { ok: false, error: '该命令已有一封答复在途——等大副消化完再发。' }
     answering.add(commandId)
+    const message = `【舰长答复】${text}\n（请继续按既定流程推进：需要呈批用 war_plan，可直接发布用 war_publish。）`
     let settled: Promise<boolean> | null = null
     try {
-      const out = await deliverViaRpc({
-        bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel,
-        message: `【舰长答复】${text}\n（请继续按既定流程推进：需要呈批用 war_plan，可直接发布用 war_publish。）`,
-        kind: 'prompt',
-      })
+      const out = entry.executor === 'pi'
+        ? await deliverViaRpc({
+          bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel,
+          message, kind: 'prompt',
+        })
+        : await deliverViaOpencode({
+          bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel,
+          message, stateDir,
+        })
       if (!out.ok) return { ok: false, error: `答复投递失败：${out.error ?? '未知'}` }
       settled = out.settled
+      const channel = entry.executor === 'pi' ? 'pi-rpc' : 'opencode-run'
       // 审计入账（append-only；不改 fold 状态——talking 态由大副后续动作推进）。
-      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel: 'pi-rpc' })
-      console.log(`[stardeck] 舰长答复已送达 ${commandId} → pi 会话 ${entry.sessionId}（RPC 续跑）`)
-      return { ok: true, note: '答复已送达大副会话（pi 续跑）——它将继续推进；进展看命令卡与任务链。' }
+      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel })
+      console.log(`[stardeck] 舰长答复已送达 ${commandId} → ${entry.executor} 会话 ${entry.sessionId}（${channel} 续跑）`)
+      return { ok: true, note: `答复已送达大副会话（${channel} 续跑）——它将继续推进；进展看命令卡与任务链。` }
     } finally {
       // 在途守卫持续到「消化完」（settled）——受理即放行会双进程续跑同一会话文件。
       void (settled ?? Promise.resolve(false)).finally(() => { answering.delete(commandId) })

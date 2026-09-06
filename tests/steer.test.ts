@@ -5,11 +5,13 @@
  * - 假 pi RPC stub（真子进程说协议）：startPiRpc 回执关联/agent_settled 收割/超时诚实；
  * - deliverViaRpc follow_up 通道（回执成功 + settled 后进程收割）；
  * - 真 daemon /commands/answer：pi 席续跑投递（stub 收到【舰长答复】帧）+
- *   directive_answered 审计入账 + 非 talking 诚实拒绝 + 非 pi 席诚实拒绝。
+ *   directive_answered 审计入账 + opencode 席 run -s 续跑（argv 落盘断言）+
+ *   非 talking 诚实拒绝 + 其余席（zcode）诚实拒绝；
+ * - deliverViaOpencode 观察窗三态（速答成立/即退如实败/活过窗受理+settled）。
  * @module stardeck/tests/steer
  */
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -17,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import {
   promptFrame, steerFrame, followUpFrame, piRpcArgv, splitRpcFrames, startPiRpc, deliverViaRpc,
+  opencodeAnswerArgv, deliverViaOpencode,
 } from '../src/steer.ts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -47,12 +50,20 @@ test('steer：LF 手切帧——\\r 容忍、U+2028/29 是串内字符不切、�
   assert.equal(rest, '{"c":')
 })
 
-/** 假 pi RPC：逐行回 response（按帧的 type/command 回 command 名）+ agent_settled；收到的帧落盘供断言。 */
-function writeStub(dir: string): { stubPath: string; framesPath: string } {
+/** 假 pi RPC（双面 stub）：argv 带 `run`（opencode 续跑形态）→ argv 落盘 + 退 0
+ * （模拟一次成功的 run -s 续跑）；否则走 pi RPC 模式——逐行回 response + agent_settled，
+ * 收到的帧落盘供断言。STARDECK_EXECUTOR_BIN 单一覆盖下两席共用同一 bin。 */
+function writeStub(dir: string): { stubPath: string; framesPath: string; argvPath: string } {
   const stubPath = join(dir, 'fake-pi-rpc.mjs')
   const framesPath = join(dir, 'frames.jsonl')
-  writeFileSync(stubPath, `import { appendFileSync, readFileSync } from 'node:fs'
+  const argvPath = join(dir, 'opencode-argv.json')
+  writeFileSync(stubPath, `import { appendFileSync } from 'node:fs'
 const frames = ${JSON.stringify(framesPath)}
+const argvOut = ${JSON.stringify(argvPath)}
+if (process.argv.slice(2).includes('run')) {
+  appendFileSync(argvOut, JSON.stringify(process.argv.slice(2)) + '\\n')
+  process.exit(0)
+}
 let buf = ''
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', chunk => {
@@ -73,7 +84,7 @@ process.stdin.on('data', chunk => {
 })
 process.stdin.on('end', () => process.exit(0))
 `, 'utf8')
-  return { stubPath, framesPath }
+  return { stubPath, framesPath, argvPath }
 }
 
 test('steer：startPiRpc 真子进程协议往返——回执按 id 关联 + settled 收割', { timeout: 30_000 }, async () => {
@@ -136,7 +147,7 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
   mkdirSync(stateDir, { recursive: true })
   mkdirSync(join(stateDir, 'campaigns'), { recursive: true })
   mkdirSync(ws, { recursive: true })
-  const { stubPath, framesPath } = writeStub(dir)
+  const { stubPath, framesPath, argvPath } = writeStub(dir)
   // 种子：talking 命令（staffSessionId=staff-abc）+ received 命令 + attach 映射（pi 席 + opencode 席两键）。
   const now = new Date().toISOString()
   writeFileSync(join(stateDir, 'directives.jsonl'), [
@@ -146,12 +157,16 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
     JSON.stringify({ type: 'directive_talking', ts: now, directiveId: 'cmd-talk' }),
     JSON.stringify({ type: 'directive_created', ts: now, directiveId: 'cmd-recv', text: '普通命令' }),
     JSON.stringify({ type: 'directive_received', ts: now, directiveId: 'cmd-recv', staffSessionId: 'staff-abc' }),
+    JSON.stringify({ type: 'directive_created', ts: now, directiveId: 'cmd-zc', text: '又一条' }),
+    JSON.stringify({ type: 'directive_received', ts: now, directiveId: 'cmd-zc', staffSessionId: 'staff-zc' }),
+    JSON.stringify({ type: 'directive_talking', ts: now, directiveId: 'cmd-zc' }),
   ].join('\n') + '\n', 'utf8')
   writeFileSync(join(stateDir, 'attach-map.json'), JSON.stringify({
     'staff-abc': { executor: 'pi', sessionId: 'sess-staff-1', workspacePath: ws, capturedAt: now },
     'staff-oc': { executor: 'opencode', sessionId: 'ses_oc_1', workspacePath: ws, capturedAt: now },
+    'staff-zc': { executor: 'zcode', sessionId: 'sess_zc_1', workspacePath: ws, capturedAt: now },
   }), 'utf8')
-  // cmd-oc：talking 但会话属 opencode 席。
+  // cmd-oc：talking 且会话属 opencode 席（大副默认席——P0-1 收尾的主判据）。
   const fd = readFileSync(join(stateDir, 'directives.jsonl'), 'utf8')
   writeFileSync(join(stateDir, 'directives.jsonl'), fd + [
     JSON.stringify({ type: 'directive_created', ts: now, directiveId: 'cmd-oc', text: '另一条' }),
@@ -194,14 +209,29 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
     assert.equal(recv.status, 200, 'dashboard send 家法=恒 200，状态在 body')
     assert.equal(recvBody.ok, false)
     assert.ok(recvBody.error?.includes('不是追问中'))
-    // ③ 非 pi 席 → 409 诚实拒绝（通道现只支持 pi）。
+    // ③ opencode 席（大副默认席）→ run -s 续跑投递：argv 落盘 + 审计 channel=opencode-run。
     const oc = await fetch(`${base}/warroom/api/commands/answer`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commandId: 'cmd-oc', text: 'x' }),
+      body: JSON.stringify({ commandId: 'cmd-oc', text: '就按轻方案办。' }),
     })
-    const ocBody = await oc.json() as { ok?: boolean; error?: string }
-    assert.equal(ocBody.ok, false)
-    assert.ok(ocBody.error?.includes('pi'))
+    const ocBody = await oc.json() as { ok?: boolean; note?: string; error?: string }
+    assert.equal(ocBody.ok, true, `opencode 席应可答：${ocBody.error ?? ''}`)
+    assert.ok(ocBody.note?.includes('opencode-run'), `回执点名通道：${ocBody.note ?? ''}`)
+    await new Promise(r => setTimeout(r, 800))
+    const argvLines = readFileSync(argvPath, 'utf8').trim()
+    assert.ok(argvLines.includes('"-s","ses_oc_1"'), `续跑点名既有会话：${argvLines}`)
+    assert.ok(argvLines.includes('【舰长答复】就按轻方案办。'), '答复文本经 argv 原样送达')
+    assert.ok(argvLines.includes('war_plan'), '续跑指引在 argv')
+    const ledgerOc = readFileSync(join(stateDir, 'directives.jsonl'), 'utf8')
+    assert.ok(ledgerOc.includes('"channel":"opencode-run"'), '审计事件带 opencode-run 通道')
+    // ③b 其余席（zcode）→ 诚实拒绝（通道名单点名 pi / opencode）。
+    const zc = await fetch(`${base}/warroom/api/commands/answer`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ commandId: 'cmd-zc', text: 'x' }),
+    })
+    const zcBody = await zc.json() as { ok?: boolean; error?: string }
+    assert.equal(zcBody.ok, false)
+    assert.ok(zcBody.error?.includes('pi / opencode'), `拒绝文案点名支持席：${zcBody.error ?? ''}`)
     // ④ 未知命令 → 404。
     const none = await fetch(`${base}/warroom/api/commands/answer`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -213,6 +243,46 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
   } finally {
     daemon.kill()
     await new Promise(r => setTimeout(r, 500))
+    rm(dir)
+  }
+})
+
+test('steer：opencodeAnswerArgv（纯）——续跑形态与模型可选', () => {
+  assert.deepEqual(opencodeAnswerArgv({ cwd: 'D:/w', sessionId: 'ses_1', message: '答复' }), [
+    'run', '--auto', '--format', 'json', '--dir', 'D:/w', '-s', 'ses_1', '答复',
+  ])
+  assert.deepEqual(opencodeAnswerArgv({ cwd: 'D:/w', sessionId: 'ses_2', model: 'zai-coding-plan/glm-5.2', message: 'x' }), [
+    'run', '--model', 'zai-coding-plan/glm-5.2', '--auto', '--format', 'json', '--dir', 'D:/w', '-s', 'ses_2', 'x',
+  ])
+  assert.deepEqual(opencodeAnswerArgv({ cwd: 'D:/w', sessionId: 'ses_3', model: '', message: 'x' }), [
+    'run', '--auto', '--format', 'json', '--dir', 'D:/w', '-s', 'ses_3', 'x',
+  ], '空模型串不落 --model（daemon 默认模型留空=执行者自选）')
+})
+
+test('steer：deliverViaOpencode——观察窗三态（即退 0=速答成立 / 即退非零=如实败 / 活过窗=受理+settled 收割）', { timeout: 30_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'stardeck-steer-oc-'))
+  try {
+    const stub = (name: string, body: string): string => {
+      const p = join(dir, name)
+      writeFileSync(p, body, 'utf8')
+      return p
+    }
+    // ① 即退 0（观察窗内速答完成——stub 经 isJs 分支由 execPath 起跑）。
+    const a = await deliverViaOpencode({ bin: stub('fast0.mjs', 'process.exit(0)\n'), cwd: dir, sessionId: 'ses_a', message: 'm', stateDir: dir, graceMs: 3000 })
+    assert.equal(a.ok, true, '即退 0=受理且已消化')
+    assert.equal(await a.settled, true)
+    // ② 即退非零（会话号失效的诚实败）。
+    const b = await deliverViaOpencode({ bin: stub('fast3.mjs', 'process.exit(3)\n'), cwd: dir, sessionId: 'ses_b', message: 'm', stateDir: dir, graceMs: 3000 })
+    assert.equal(b.ok, false, '即退非零=拒收')
+    assert.ok(b.error !== undefined && b.error.includes('code 3'), `败因带退出码：${b.error ?? ''}`)
+    assert.equal(await b.settled, false)
+    // ③ 活过观察窗（慢消化）：受理即返，settled 随真退场翻转。
+    const c = await deliverViaOpencode({ bin: stub('slow.mjs', 'setTimeout(() => process.exit(0), 600)\n'), cwd: dir, sessionId: 'ses_c', message: 'm', stateDir: dir, graceMs: 200, settledTimeoutMs: 5000 })
+    assert.equal(c.ok, true, '活过观察窗=受理')
+    assert.equal(await c.settled, true, '600ms 后真退场（code 0）')
+    // 日志面：stateDir/logs/staff-answer-<ses>.log 在场（翻阅面）。
+    assert.ok(existsSync(join(dir, 'logs', 'staff-answer-ses_c.log')), '续跑日志落盘')
+  } finally {
     rm(dir)
   }
 })

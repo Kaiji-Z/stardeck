@@ -92,17 +92,18 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 - **live 门/测试起 daemon 必须隔离 STARDECK_CONFIG**（指到临时目录）：P0-2 起 POST /fleet 会写配置文件——不隔离会把测试绑定泄漏进用户全局 config（实测确认一次）；另 staff 相位模型串要 fleet-aware（pi=zai/glm-5.2，其余=zai-coding-plan/glm-5.2——pi 被灌 opencode 格式串起不来，实测确认一次）。
 - **派生面要过语义关**：host-workspaces 拿 war_root 扫描派生=错（内部任务目录≠用户工作区），会顶掉 HQ 弹窗手动注册区（用户实抓）；独立形态「清单缺席→手动区」本就是正解，别手痒补派生。
 - Node 在 Windows 上 process.exit 时 fetch 句柄未排干会崩 libuv 断言（UV_HANDLE_CLOSING）——CLI 面用 process.exitCode 自然退场，不硬 exit。
+- **esbuild 对非法类型语法静默回退**（2026-09-06 实弹确认）：`new Promise<{kind:'x' as const}>` 的类型实参里写 as 表达式（=表达式语法进类型位置，非法 TS）——esbuild 不报错、把 `<...>` 回退解析成**比较表达式** `new Promise() < {...} > (...)`，运行时才炸「Promise resolver undefined is not a function」且行号误导；类型实参保持纯类型（字面量直接写 `'timeout'`），`as const` 只用在表达式侧。tsx 不做类型检查，tsc 门口也拦不住看不见的转换——这类坑靠「同形最小复现二分」定位。
 - pnpm v10 默认拦构建脚本——本仓 package.json 已带 `pnpm.onlyBuiltDependencies: ["esbuild"]`，新装依赖若含 postinstall 需补白名单。
 
 ## 降级面与迭代候选（2026-09-01 更新）
 
 已接线（本轮）：**大副外聘**（draft/定时令全自动派发，`STARDECK_STAFF` 开关）；**bound 工作区配置合并注入**（逐键合并+首动备份+坏 JSON 拒绝覆盖）；**监督层**（promptfoo 三维门，`pnpm verify:eval`，自 dsh 插件版 1:1 移植+首弹已证）；**pi 执行者适配器转正**（源码仓契约实证+实弹门相位取证）；**codex 适配器契约实装**（源码实证注入面+argv，实机受阻记录在案）。
 
-仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递（war_orders/war_comment 转达——通道已勘明：pi RPC steer/follow_up、codex exec resume，待接线）未接线；staff-goal 不适用；codex 实弹待机（见环境坑）。
+仍降级（README 已明说）：深编制（war_deploy_unit）/中途投递的**执行者侧**注入（pi=steer 帧已通；**板上答复双席已通**——pi RPC + opencode run -s 续跑，2026-09-06；其余席待接入）/批注转达仍 pi-only（relayTo）；staff-goal 不适用；codex 实弹待机（见环境坑）。
 
 候选（按建议顺序）：
-1. **中途投递**（war_orders/war_comment）：pi RPC（`--mode rpc` 常驻 + steer/follow_up 帧，契约已实证）先行——stardeck 侧挂常驻会话注册表；codex 待实弹机。
+1. **中途投递余下席**：板上答复/批注转达扩到 zcode（`--resume --prompt` 视察汇报模式可复用）/claude（`--resume <id> -p`）/dsh（tui resume 通道）——契约已在，逐席实弹取证。
 2. GitHub 仓 + npm 发布（发版需定案——**2026-09-01 项目主已示「先不发版」**；npm 首发前在 npmjs 预登记 pending publisher——参照 warroom 的 release.mjs/OIDC 惯例可整体移植）。
 3. 板 UI critique 轮（impeccable 双子代理，warroom 的 35/40 口径）。
-4. codex 版本考古或换机实弹（前置：找到「chat wire + 能 spawn node MCP」的 Windows 版本，或非 Windows 机）。
+4. codex 版本考古或换机实弹（前置：找到「chat wire + 能 spawn node MCP」的 Windows 版本，或非 Windows 机；DESIGN D19 已把 MCP 阻碍解除——0.153.4 可 spawn，模型层成唯一锁）。
 5. 模糊输入集与监督用例扩容（VERIFICATION.md P2）：从 `.goal/evidence/live/` 实弹轨迹沉淀野输入语料；每道新特性补一正一负监督用例。
