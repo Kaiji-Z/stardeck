@@ -1757,7 +1757,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                     createElement('span', { className: 'war-report-time' }, detailCopy.reportPrefix(relTime(lastReport.r.ts))),
                     reportBody(lastReport.r.text, reportHost !== undefined ? (n) => { setPreview({ ws: reportHost.workspacePath, name: n }) } : undefined),
                   )) : null,
-                  evSummary !== null && lastReport?.r.evidence !== null && lastReport?.r.evidence !== undefined ? Fold(evSummary, [EvidenceBlock(lastReport.r.evidence!)]) : null,
+                  evSummary !== null && lastReport?.r.evidence !== null && lastReport?.r.evidence !== undefined ? Fold(evSummary, [EvidenceBlock(lastReport.r.evidence!, lastReport.r.testsTrail ?? undefined)]) : null,
                   // V9.10 收获三件：任务产出/交付物 + 历次执行会话（逐次可跳）+ 待定夺动作
                   // （V9.12 正名：reported 链→去验收 / 败链→去下重试令，都落大副会话）。
                   // V19 腿2：files 交付物的每个文件路径=可点 chip→板内预览（summary 留标签）。
@@ -1995,13 +1995,17 @@ function TaskCard(task: BoardTask, statuses: Map<string, BoardTask['status']>, o
   )
 }
 
-function EvidenceBlock(evidence: NonNullable<BoardTask['reports'][number]['evidence']>): ReactNode {
+function EvidenceBlock(evidence: NonNullable<BoardTask['reports'][number]['evidence']>, testsTrail?: string): ReactNode {
   const rows: ReactNode[] = []
   for (const [i, c] of evidence.checks.entries()) {
     rows.push(createElement('span', { key: `c${i}`, className: c.passed ? 'ok' : 'bad' }, `${c.passed ? '✓' : '✗'} ${c.item}`))
   }
   if (evidence.tests !== undefined) {
     rows.push(createElement('span', { key: 't', className: evidence.tests.exitCode === 0 ? 'ok' : 'bad' }, activeCopy().focusPage.evidenceTests(evidence.tests.command, evidence.tests.exitCode, evidence.tests.passed, evidence.tests.failed)))
+    // V19.12 取证轨迹注记（账本原文直出——缺轨迹/已核对一目了然）。
+    if (testsTrail !== undefined && testsTrail !== '') {
+      rows.push(createElement('span', { key: 'tr', className: testsTrail.includes('无取证轨迹') ? 'bad' : 'ok', title: testsTrail }, testsTrail))
+    }
   }
   if (evidence.diffstat !== undefined) {
     rows.push(createElement('span', { key: 'd' }, `Δ ${evidence.diffstat}`))

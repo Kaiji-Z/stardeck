@@ -113,6 +113,7 @@ test('pi 注入：.pi/extensions/stardeck-tools.ts 注册出口协议三工具�
     assert.ok(src.includes('/warroom/api/tools/call'))
     assert.ok(src.includes(JSON.stringify('http://h')))
     assert.ok(src.includes('attempt_id'))
+    assert.ok(src.includes('tests_evidence'), '取证轨迹参数缺席（V19.12 出口协议教学）')
     // 幂等：同身份重写内容相同→无备份；异源同名文件→首动备份一次。
     injectPiExtension(dir, { http: 'http://h', agentId: 'oc-p' })
     assert.ok(!existsSync(join(dir, '.stardeck', 'pi-extension.pre-stardeck')))

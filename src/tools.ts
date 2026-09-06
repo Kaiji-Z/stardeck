@@ -19,7 +19,7 @@
 
 import { defineTool } from './tool.ts'
 import { randomUUID } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, isAbsolute } from 'node:path'
 import { appendDirectiveEvent, loadDirectives, overrideMarkerOf, type DirectiveGrade } from './directives.ts'
 import { registerPlanet } from './planets.ts'
@@ -260,7 +260,8 @@ function recordDossier(deps: WarToolsDeps, taskId: string): void {
 /**
  * V5-R2 KillCredit 机械全绿判据（flag staff-auto-close 的收官门槛）：
  * checks 非空且全部 passed + tests 存在且退出码 0 + files（若有）全部在
- * 任务工作区内（越界一票否决）。纯函数——系统核对，不靠自报。
+ * 任务工作区内（越界一票否决）。纯函数——机械核的是自报证据的形状与边界
+ * （取证轨迹另过 testsTrailVerdict；内容真实性归舰长翻阅）。
  */
 export function killCreditAllGreen(evidence: SubmissionEvidence, workspacePath: string | undefined): { green: boolean; why: string } {
   if (evidence.checks.length === 0) return { green: false, why: '无验收项核对记录' }
@@ -281,6 +282,68 @@ export function killCreditAllGreen(evidence: SubmissionEvidence, workspacePath: 
     if (outside.length > 0) return { green: false, why: `越界一票否决：${outside.length} 个文件在工作区外（${outside[0]}…）` }
   }
   return { green: true, why: `验收 ${evidence.checks.length} 项全过；${evidence.tests.command} 退出码 0；无越界` }
+}
+
+/** 取证轨迹尾部退出码行的匹配：最后一行非空且是纯数字（`echo $?` 的产物）。 */
+function trailExitCode(text: string): number | undefined {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '')
+  const last = lines[lines.length - 1]
+  if (last === undefined || !/^\d+$/.test(last)) return undefined
+  return Number(last)
+}
+
+/**
+ * V19.12 取证轨迹判据（BYOK 世界里 KillCredit 机械核验的诚实天花板）：
+ * tests 声明要配套一份真实运行的落盘日志（重定向输出）。三查：工作区内
+ * 存在、mtime 不早于本次领取时刻、尾部含退出码行；退出码与自报相悖直接
+ * 打回。缺轨迹不硬拒（BYOK 下舰桥无力重放，强制会误伤合法提交）——账本
+ * 标注「无取证轨迹」，舰长翻阅时一眼可见。内容真实性归舰长，机械只核轨迹。
+ */
+export type TrailVerdict = { ok: true; note: string } | { ok: false; reason: string }
+
+export const NO_TRAIL_NOTE = '（tests 无取证轨迹——舰长翻阅时重点核此条）'
+
+export function testsTrailVerdict(input: {
+  trailPath: string | undefined
+  evidence: SubmissionEvidence
+  workspacePath: string | undefined
+  claimedAt: string | undefined
+}): TrailVerdict {
+  const { trailPath, evidence, workspacePath, claimedAt } = input
+  if (evidence.tests === undefined) {
+    if (trailPath !== undefined && trailPath.trim() !== '') {
+      return { ok: false, reason: '传了 tests_evidence 但 evidence 里没有 tests：二者必须配套——没跑测试就别带轨迹，跑了测试就要在 evidence 里如实写 tests。' }
+    }
+    return { ok: true, note: '' }
+  }
+  if (trailPath === undefined || trailPath.trim() === '') return { ok: true, note: NO_TRAIL_NOTE }
+  if (workspacePath === undefined) {
+    return { ok: false, reason: `任务未绑定工作区，无法核对取证轨迹 ${trailPath}——请去掉 tests_evidence 重交（此时账本会标注无取证轨迹），或先让舰长补绑工作区。` }
+  }
+  const wsRoot = resolve(workspacePath)
+  const abs = isAbsolute(trailPath) ? resolve(trailPath) : resolve(wsRoot, trailPath)
+  const rel = relative(wsRoot, abs)
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    return { ok: false, reason: `取证轨迹 ${trailPath} 在任务工作区外：轨迹必须落在工作区内（如 .stardeck/evidence/tests.log），越界轨迹不收。` }
+  }
+  if (!existsSync(abs)) {
+    return { ok: false, reason: `取证轨迹 ${trailPath} 不存在：请真实运行 tests 命令并把输出落盘（如 ${evidence.tests.command} > ${trailPath} 2>&1; echo $? >> ${trailPath}），再带 tests_evidence 重交；没跑就别传 tests_evidence。` }
+  }
+  if (claimedAt !== undefined) {
+    const claimMs = Date.parse(claimedAt)
+    if (Number.isFinite(claimMs) && statSync(abs).mtimeMs < claimMs - 1_000) {
+      return { ok: false, reason: `取证轨迹 ${trailPath} 的修改时间早于本次领取时刻：轨迹必须是本次尝试真实运行的输出（旧轨迹不算数）——重跑命令重新落盘再交。` }
+    }
+  }
+  const text = readFileSync(abs, 'utf8')
+  const exit = trailExitCode(text)
+  if (exit === undefined) {
+    return { ok: false, reason: `取证轨迹 ${trailPath} 尾部没有退出码行：命令跑完后要 echo $? 追加一行（纯数字）到日志尾——补上后重交。` }
+  }
+  if (exit !== evidence.tests.exitCode) {
+    return { ok: false, reason: `取证轨迹与自报相悖：日志尾部退出码是 ${exit}，evidence 里报的是 ${evidence.tests.exitCode}。轨迹相悖直接打回——回去重跑重修，修不动就 war_fail。` }
+  }
+  return { ok: true, note: `（取证轨迹已核对：${trailPath} 尾部退出码 ${exit}）` }
 }
 
 /** Shared close path (V5-R2 抽取)：落 task_closed + 归档 + goal 结算 + 同工作区接力征召。 */
@@ -625,12 +688,13 @@ export function warTools(deps: WarToolsDeps) {
 
   const warSubmit = defineTool({
     name: 'war_submit',
-    description: '外勤小队提交汇报（KillCredit 制）：验收证据不全不给过——checks 必须覆盖验收标准且全部通过，tests 的退出码必须为 0。证据由系统核对，不靠自报。未全过就继续修，修不动就 war_fail。',
+    description: '外勤小队提交汇报（KillCredit 制）：验收证据不全不给过——checks 必须覆盖验收标准且全部通过，tests 的退出码必须为 0，tests 声明须附取证轨迹（tests_evidence 指向 .stardeck/evidence/ 下的真实运行日志，舰桥核对存在性与时间序）。舰桥核对的是格式、边界与轨迹；内容真实性由舰长翻阅把关。未全过就继续修，修不动就 war_fail。',
     parameters: {
       task_id: { type: 'string', required: true, description: '任务 id。' },
       attempt_id: { type: 'string', required: true, description: '领取任务时发的令牌（war_claim 返回的 attemptId）。' },
       report: { type: 'string', required: true, description: '汇报正文（摘要式）。' },
-      evidence: { type: 'string', required: true, description: '验收证据的 JSON 文本（必须是字符串，内容为 JSON）：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"npm test","exit_code":0,"passed":8,"failed":0},"diffstat":"3 files changed","files":["a.js"]}——checks 逐项核对验收标准且全部 passed；tests 是真实跑过的命令（exit_code 必须为 0）。' },
+      tests_evidence: { type: 'string', description: 'tests 命令的取证日志相对路径（如 .stardeck/evidence/tests.log）：真实运行的重定向输出，尾部含退出码。缺省时提交仍受理，账本标注「无取证轨迹」——舰长翻阅时一眼可见。' },
+      evidence: { type: 'string', required: true, description: '验收证据的 JSON 文本（必须是字符串，内容为 JSON）：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"npm test","exit_code":0,"passed":8,"failed":0},"diffstat":"3 files changed","files":["a.js"]}——checks 逐项核对验收标准且全部 passed；tests 是真实跑过的命令（exit_code 必须为 0），并配套 tests_evidence 轨迹日志。' },
       deliverables: { type: 'string', description: '任务产出清单的 JSON 文本（字符串）：[{"kind":"files|tests|diffstat|note","summary":"一句话"}]——显示在任务卡上，舰长不进会话记录也能看到交付了什么。' },
     },
     output: {
@@ -649,14 +713,28 @@ export function warTools(deps: WarToolsDeps) {
       }
       const verdict = parseEvidence(args.evidence)
       if (!verdict.ok) throw new Error(verdict.reason)
+      // V19.12 取证轨迹（BYOK 世界机械核验的天花板）：tests 声明必须配套真实
+      // 运行日志——存在性、mtime ≥ 本次领取时刻、尾部含退出码行三查。缺轨迹
+      // 不硬拒（BYOK 下重放不可信，强制会误伤合法提交），但账本标注「无取证
+      // 轨迹」——舰长翻阅时一眼可见；轨迹相悖（声称 exit 0 而日志尾部非 0）
+      // 直接打回。纯函数 testsTrailVerdict 承载判据，单测锁死。
+      const trail = testsTrailVerdict({
+        trailPath: typeof args.tests_evidence === 'string' ? args.tests_evidence : undefined,
+        evidence: verdict.evidence,
+        workspacePath: task.workspacePath,
+        // 折叠态 attempt 只带 {id,n}——领取时刻在 attemptLog（按令牌回查）。
+        claimedAt: task.attemptLog.find(a => a.id === task.attempt?.id)?.startedAt,
+      })
+      if (!trail.ok) throw new Error(trail.reason)
       const deliverables = parseDeliverables(args.deliverables, verdict.evidence, new Date().toISOString())
       appendEvent(deps.stateDir, {
         type: 'task_submitted', ts: new Date().toISOString(), campaignId: args.task_id, report: args.report, from: commander.id,
         evidence: verdict.evidence, ...(deliverables.length > 0 ? { deliverables } : {}),
+        ...(trail.note !== '' ? { testsTrail: trail.note } : {}),
       })
       const e = verdict.evidence
       const parts = [`验收 ${e.checks.length} 项全过`]
-      if (e.tests !== undefined) parts.push(`${e.tests.command} 退出码 ${e.tests.exitCode}（${e.tests.passed} 过 / ${e.tests.failed} 败）`)
+      if (e.tests !== undefined) parts.push(`${e.tests.command} 退出码 ${e.tests.exitCode}（${e.tests.passed} 过 / ${e.tests.failed} 败）${trail.note ?? ''}`)
       // V5-R2（flag staff-auto-close）：KillCredit 机械全绿 → 自动收官；
       // 任何一项不绿 → 维持 reported 呈批（待舰长翻阅），绝不硬闯。
       if (featureEnabled(deps.flags, 'staff-auto-close')) {

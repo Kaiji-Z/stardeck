@@ -9,8 +9,8 @@
 
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 import { appendDirectiveEvent, chainHueSlot, deriveContinuation, loadDirectives, newDirectiveId, foldChains, pendingDirectives, readDirectiveEvents } from './directives.ts'
 import type { ContinuationMode, ContinuationTaskFace } from './directives.ts'
 import { appendEvent, listCampaignIds, loadCampaign, readEvents } from './events.ts'
@@ -53,9 +53,28 @@ function readBody(req: unknown): Promise<string> {
   })
 }
 
+/** realpath 的宽容版：目标不存在时向上找到最近存在祖先做 realpath，再把
+ *  余下尾段拼回（守卫要对「尚不存在的产物名」放行到下游 404，不能误拒）。 */
+function realpathLoose(p: string): string {
+  let tail: string[] = []
+  let cur = resolve(p)
+  for (;;) {
+    try {
+      return join(realpathSync(cur), ...tail)
+    } catch {
+      const parent = dirname(cur)
+      if (parent === cur) return resolve(p)
+      tail.unshift(basename(cur))
+      cur = parent
+    }
+  }
+}
+
 /** V19 战报可读性·纯守卫：产物文件访问的 war_root 双重限界（tests 管辖）。
  *  解析后的绝对路径必须同时落在 war_root 与所报工作区之下——`../` 穿越、
- *  绝对路径顶替、跨任务工作区串门全部拒绝。返回 null=放行。 */
+ *  绝对路径顶替、跨任务工作区串门全部拒绝；realpath 二次核对拦下符号链接
+ *  指向界外目标的绕行（resolve 不跟链接，V19.12 攻防实测抓到）。返回
+ *  null=放行。 */
 export function workspaceFileGuardError(warRoot: string, ws: string, name: string): string | null {
   if (ws.trim() === '' || name.trim() === '') return '缺少工作区或文件名参数'
   // name 必须是相对路径：绝对路径（盘符/根斜杠）显式拒绝——join 不重置绝对段，
@@ -67,6 +86,13 @@ export function workspaceFileGuardError(warRoot: string, ws: string, name: strin
   const inside = (base: string, target: string): boolean => target === base || target.startsWith(base + sep)
   if (!inside(root, wsAbs)) return '该工作区不在 war_root 管辖内，拒绝访问'
   if (!inside(wsAbs, file)) return '文件路径越出工作区（拒绝路径穿越）'
+  // realpath 跟随符号链接后的落点仍须在界内（ws 与文件都核——界内链接指向
+  // 界外是 V19.12 实证的绕行面）。
+  const realFile = realpathLoose(file)
+  const realWs = realpathLoose(wsAbs)
+  const realRoot = realpathLoose(root)
+  if (!inside(realRoot, realWs)) return '该工作区不在 war_root 管辖内，拒绝访问'
+  if (!inside(realWs, realFile)) return '文件路径越出工作区（拒绝路径穿越）'
   return null
 }
 
@@ -239,7 +265,7 @@ export function boardProjection(stateDir: string, activityOf?: (sessionId: strin
           lastReport: u.lastReport ?? null,
         })),
         deliverables: task.deliverables.map(d => ({ kind: d.kind, summary: d.summary, detail: d.detail ?? null, ts: d.ts })),
-        reports: task.reports.map(r => ({ ts: r.ts, from: r.from, text: r.text, evidence: r.evidence ?? null })),
+        reports: task.reports.map(r => ({ ts: r.ts, from: r.from, text: r.text, evidence: r.evidence ?? null, testsTrail: r.testsTrail ?? null })),
         comments: task.comments.map(c => ({ ts: c.ts, from: c.from, text: c.text })),
         closedVerdict: task.closedVerdict ?? null,
       }

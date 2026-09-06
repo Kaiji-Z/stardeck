@@ -27,7 +27,7 @@ export interface BoardEvidence {
   files?: string[]
 }
 
-export interface BoardReport { ts: string; from: string; text: string; evidence: BoardEvidence | null }
+export interface BoardReport { ts: string; from: string; text: string; evidence: BoardEvidence | null; testsTrail: string | null }
 export interface BoardComment { ts: string; from: string; text: string }
 export interface BoardDeliverable { kind: string; summary: string; detail: string | null; ts: string }
 export type BoardQuality = 'common' | 'fine' | 'rare' | 'epic' | 'legendary'

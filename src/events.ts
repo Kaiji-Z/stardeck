@@ -107,7 +107,7 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         break
       case 'task_submitted':
         state.status = 'reported'
-        state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}) })
+        state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}), ...(event.testsTrail !== undefined ? { testsTrail: event.testsTrail } : {}) })
         if (event.deliverables !== undefined && event.deliverables.length > 0) {
           state.deliverables = [...state.deliverables, ...event.deliverables]
         }

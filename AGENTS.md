@@ -7,7 +7,7 @@
 1. **边界宪法（继承自 warroom，不可违反）**：
    - **会话外的一切归 stardeck**：账本/工作区/征召/巡检/看板/验收定夺；
    - **会话内的执行归 agent 本体**：执行工具由执行者自带，stardeck 不越界；
-   - **出口协议不可裁剪**：`war_claim` 令牌制（attemptId 即 capability）、`war_submit` 证据核验（KillCredit 机械判据：checks 全过 + tests 退出码 0 + 无越界文件）、`war_fail`、`war_close_task`。快照测试点名断言这些段，动即 FAIL。
+   - **出口协议不可裁剪**：`war_claim` 令牌制（attemptId 即 capability）、`war_submit` 证据核验（KillCredit 机械判据：checks 全过 + tests 退出码 0 + 无越界文件 + **取证轨迹**——tests_evidence 指向 .stardeck/evidence/ 下的真实运行日志，存在/mtime 晚于领取/尾部退出码与自报一致三查；相悖打回，缺轨迹受理但账本注记「无取证轨迹」板上可见。BYOK 下舰桥无力重放，内容真实性归舰长翻阅——V19.12 对抗审查定案）、`war_fail`、`war_close_task`。快照测试点名断言这些段，动即 FAIL。
 2. **不变量红线（随内核继承）**：attemptId 令牌制、KillCredit 证据链、JSON-text 通道（evidence/deliverables 是**字符串**，内容为 JSON）、SSE revision-only、**板是读投影**（浏览器端不提供改任务的写操作）、**用户输入只在指挥中心**（左区 composer）。
 3. 每轮收尾必须 `pnpm verify` PASS 并提交（tests 266 + build + needle 三段式，含**零宿主引用负针脚**——import 层出现任何 `@deepseek-ai`/`cordis` 即 FAIL，这是独立形态的完整性铁证）。
 4. 交付特性前跑 `pnpm live`（实弹门：真 opencode 外勤全链，10 项断言）；改提示词必须过快照门（见「提示词纪律」）。

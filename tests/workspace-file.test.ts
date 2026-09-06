@@ -5,7 +5,7 @@
  * reveal 只测拒绝路径（放行会真开资源管理器——目检轮在浏览器里验）。
  */
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -48,12 +48,44 @@ async function call(handler: (req: unknown, res: unknown) => Promise<void>, req:
 test('workspaceFileGuardError：war_root 双重限界纯函数', () => {
   const root = 'C:/war'
   const ws = 'C:/war/tasks/t1'
-  assert.equal(workspaceFileGuardError(root, ws, 'report.md'), null, '正例放行')
+  assert.equal(workspaceFileGuardError(root, ws, 'report.md'), null, '正例放行（含不存在路径——下游 404 面不受扰）')
   assert.match(workspaceFileGuardError(root, '', 'x.md') ?? '', /缺少/, '空参数拒绝')
   assert.match(workspaceFileGuardError(root, 'C:/other', 'x.md') ?? '', /war_root/, 'root 外工作区拒绝')
   assert.match(workspaceFileGuardError(root, ws, '../escape.md') ?? '', /穿越/, '../ 穿越拒绝')
   assert.match(workspaceFileGuardError(root, ws, 'C:/war/tasks/t2/y.md') ?? '', /穿越/, '绝对路径顶替拒绝')
   assert.match(workspaceFileGuardError(root, ws, 'sub/../../t2/y.md') ?? '', /穿越/, '绕行相对路径拒绝')
+})
+
+test('workspaceFileGuardError：符号链接绕行拒绝（V19.12 攻防回归）', () => {
+  // Windows 符号链接需开发者模式/特权——无权则跳过（CI 之外的实弹机已验证过攻击面）。
+  const root = mkdtempSync(join(tmpdir(), 'wslink-'))
+  try {
+    const ws = join(root, 'tasks', 't1')
+    mkdirSync(ws, { recursive: true })
+    writeFileSync(join(ws, 'ok.md'), '# 界内', 'utf8')
+    const secretDir = join(root, 'topsecret')
+    mkdirSync(secretDir)
+    writeFileSync(join(secretDir, 'TOPSECRET.md'), '机密', 'utf8')
+    try {
+      symlinkSync(join(secretDir, 'TOPSECRET.md'), join(ws, 'leak.md'), 'file')
+      symlinkSync(secretDir, join(ws, 'leakdir'), 'dir')
+    } catch (e) {
+      const code = (e as { code?: string }).code
+      if (code === 'EPERM' || code === 'EACCES' || code === 'ENOENT') {
+        return // 本机无 symlink 特权：环境不支撑，诚实跳过
+      }
+      throw e
+    }
+    // 界内链接指向界外文件：realpath 后落点出界 → 拒。
+    assert.match(workspaceFileGuardError(root, ws, 'leak.md') ?? '', /穿越/, '文件符号链接出界拒绝')
+    // 界内目录链接下再深的文件同理。
+    assert.match(workspaceFileGuardError(root, ws, 'leakdir/TOPSECRET.md') ?? '', /穿越/, '目录符号链接出界拒绝')
+    // 界内正常文件不受扰（realpath 后仍在界内）。
+    assert.equal(workspaceFileGuardError(root, ws, 'ok.md'), null, '界内文件放行')
+    assert.equal(workspaceFileGuardError(root, ws, '尚未生成的产物.md'), null, '不存在的界内名放行（404 面归端点）')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('GET /warroom/api/workspace/file：正例 200 + 各越界面 403/404', async () => {

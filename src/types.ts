@@ -104,7 +104,7 @@ export interface CampaignState {
   lastError?: string
   /** Collected loot (出本掉落) accumulated across submissions. */
   readonly deliverables: ReadonlyArray<Deliverable>
-  readonly reports: ReadonlyArray<{ ts: string; from: string; text: string; evidence?: SubmissionEvidence }>
+  readonly reports: ReadonlyArray<{ ts: string; from: string; text: string; evidence?: SubmissionEvidence; testsTrail?: string }>
   readonly comments: ReadonlyArray<{ ts: string; from: string; text: string }>
   /** V4-R2 direct messages (troop-mailbox flag): logged first, delivered marked. */
   readonly messages: ReadonlyArray<{ messageId: string; ts: string; from: string; to: string; text: string; delivered?: boolean }>
@@ -189,7 +189,7 @@ export type WarEvent =
   | { type: 'task_created'; ts: string; campaignId: string; title: string; brief: string; acceptance: string; priority: 'normal' | 'high'; publishedBy?: string; quality?: QualityTier; deps?: string[] }
   | { type: 'task_published'; ts: string; campaignId: string; workspacePath: string; publishedBy?: string; workspaceKind?: 'bound' | 'bound-worktree' | 'instance' | 'auto-worktree' | 'auto-dir' }
   | { type: 'task_claimed'; ts: string; campaignId: string; claimedBy: string; attemptId?: string; attempt?: number }
-  | { type: 'task_submitted'; ts: string; campaignId: string; report: string; from: string; evidence?: SubmissionEvidence; deliverables?: Deliverable[] }
+  | { type: 'task_submitted'; ts: string; campaignId: string; report: string; from: string; evidence?: SubmissionEvidence; deliverables?: Deliverable[]; testsTrail?: string }
   | { type: 'task_commented'; ts: string; campaignId: string; comment: string; from: string }
   | { type: 'task_closed'; ts: string; campaignId: string; verdict: string }
   | { type: 'task_attempt_failed'; ts: string; campaignId: string; reason: string; from?: string }
