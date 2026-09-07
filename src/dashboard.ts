@@ -351,6 +351,12 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
       continuation: d.continuation === undefined ? null : { mode: d.continuation.mode },
       // V17 归档（未入档为 null）：宿主会话已 archiveSession 的账面痕迹。
       archived: d.archived === undefined ? null : { at: d.archived.at, sessions: d.archived.sessions },
+      // D23 澄清协议（2026-09-08，只读投影）：挂起/答复态+问答史、任务书五项——
+      // 舰长在命令卡能看到大副问了什么、定了什么案（写通道仍只有 composer/答复）。
+      clarification: d.clarification === undefined
+        ? null
+        : { questions: d.clarification.questions, round: d.clarification.round, status: d.clarification.status, answer: d.clarification.answer ?? null },
+      brief: d.brief === undefined ? null : { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables },
     }
   })
 }

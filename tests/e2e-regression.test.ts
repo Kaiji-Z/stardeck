@@ -98,6 +98,32 @@ test('P0-2 反验收①：终态守卫——approved 后的取消事件不得改
   }
 })
 
+test('D23 澄清协议：板投影携带 clarification/brief（无则为 null）', () => {
+  const dir = tmpStateDir()
+  try {
+    appendDirectiveEvent(dir, { type: 'directive_created', ts: 't0', directiveId: 'cmd-proj', text: '给工具箱加格言工具' })
+    appendDirectiveEvent(dir, { type: 'directive_clarification_requested', ts: 't1', directiveId: 'cmd-proj', questions: ['验收是什么？'] })
+    appendDirectiveEvent(dir, { type: 'directive_clarification_answered', ts: 't2', directiveId: 'cmd-proj', text: '跑通即可', channel: 'board' })
+    appendDirectiveEvent(dir, {
+      type: 'directive_brief_ready', ts: 't3', directiveId: 'cmd-proj',
+      goal: '格言工具可用', background: '纯前端', acceptance: '跑通', nonGoals: '不动其他', deliverables: '模块',
+    })
+    const proj = directiveProjection(dir).find(c => c.commandId === 'cmd-proj')!
+    assert.equal(proj.clarification!.status, 'answered')
+    assert.equal(proj.clarification!.round, 1)
+    assert.deepEqual(proj.clarification!.questions, ['验收是什么？'])
+    assert.equal(proj.clarification!.answer, '跑通即可')
+    assert.equal(proj.brief!.nonGoals, '不动其他')
+    // 无澄清/任务书的命令投影为 null（板面归一语义，同 plan/cancelledReason）。
+    appendDirectiveEvent(dir, { type: 'directive_created', ts: 't4', directiveId: 'cmd-plain', text: '另一条命令' })
+    const plain = directiveProjection(dir).find(c => c.commandId === 'cmd-plain')!
+    assert.equal(plain.clarification, null)
+    assert.equal(plain.brief, null)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('P0-2 反验收②：无领取（无令牌）的提交不得产生胜利会话卡', () => {
   const dir = tmpStateDir()
   try {
