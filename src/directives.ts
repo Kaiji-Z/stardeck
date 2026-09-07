@@ -173,6 +173,12 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
       current.archived = { at: event.ts, sessions: event.sessions }
       continue
     }
+    // D23 任务书同理：它是「怎么谈拢的」审计产物，退场收割必然落在发布
+    // （approved）之后——不叠在终态之上就永远进不了账（V20.2 实弹抓的正是这个）。
+    if (event.type === 'directive_brief_ready') {
+      current.brief = { goal: event.goal, background: event.background, acceptance: event.acceptance, nonGoals: event.nonGoals, deliverables: event.deliverables, ts: event.ts }
+      continue
+    }
     if (TERMINAL.has(current.status)) continue
     // 术语归一（secretary→staff）的账本兼容：V5 前的旧日志字段是
     // secretarySessionId——fold 双读归一，append-only 历史不必迁移。
@@ -223,9 +229,6 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
         if (current.clarification !== undefined && current.clarification.status === 'pending') {
           current.clarification = { ...current.clarification, status: 'answered', answer: event.text, answeredAt: event.ts }
         }
-        break
-      case 'directive_brief_ready':
-        current.brief = { goal: event.goal, background: event.background, acceptance: event.acceptance, nonGoals: event.nonGoals, deliverables: event.deliverables, ts: event.ts }
         break
       // V5-R3 计划态：opened 覆盖待批稿；判定只在 pending 时生效（幂等——
       // 路由层已挡重放，fold 层再兜一道）。驳回后大副重呈新稿即回 pending

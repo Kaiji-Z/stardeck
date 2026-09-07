@@ -210,6 +210,27 @@ test('fold：澄清协议生命周期——requested 挂起翻 talking / answere
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('fold：任务书叠在终态之上——发布（approved）后退场收割的 brief_ready 仍入账（V20.2 实弹回归）', () => {
+  const dir = tmpStateDir()
+  try {
+    seed(dir, [
+      base('cmd-post'),
+      { type: 'directive_received', ts: 't1', directiveId: 'cmd-post', staffSessionId: 'staff-x' },
+      { type: 'directive_approved', ts: 't2', directiveId: 'cmd-post', taskId: '20260908-x' },
+    ])
+    // 成案轮时序：war_publish（approved）在跑中先落，任务书随退场收割后落——
+    // 终态守卫若不吃这条，任务书永远进不了账（live 第二轮抓的正是它）。
+    appendDirectiveEvent(dir, {
+      type: 'directive_brief_ready', ts: 't3', directiveId: 'cmd-post',
+      goal: '窄屏按钮修复', background: '纯前端', acceptance: '375px 无溢出',
+      nonGoals: '不动后端', deliverables: '修复与验收说明',
+    })
+    const d = loadDirectives(dir)[0]!
+    assert.equal(d.status, 'approved') // 终态不复活
+    assert.equal(d.brief!.goal, '窄屏按钮修复') // 任务书照常入账
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('inputMaturityOf：四判型（vague / 缺验收 / 缺非目标 / 成熟）', () => {
   assert.equal(inputMaturityOf('帮帮我').verdict, 'vague')
   assert.equal(inputMaturityOf('搞一下那个东西').verdict, 'vague')
