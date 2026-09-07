@@ -23,7 +23,7 @@ import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, type StaffWorkItem } from './staff.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
@@ -370,9 +370,17 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       //（澄清挂起/任务书入账）。失败诚实降级——下轮工单重试语义接管。
       try {
         const knownIds = new Set(staffItems.map(i => i.commandId))
-        for (const ev of harvestStaffDirectiveEvents(stateDir, staffSession.agentId, knownIds)) {
+        const byIdNow = new Map(loadDirectives(stateDir).map(d => [d.id, d]))
+        const clarifyRoundOf = (id: string): number => byIdNow.get(id)?.clarification?.round ?? 0
+        const harvested = harvestStaffDirectiveEvents(stateDir, staffSession.agentId, knownIds, clarifyRoundOf)
+        for (const ev of harvested.events) {
           appendDirectiveEvent(stateDir, ev)
           console.log(`[stardeck] 大副产出入账 ${ev.type} → ${ev.directiveId}`)
+        }
+        for (const rej of harvested.rejectedClarifications) {
+          // 机械闸（D23 完整形态）：过限澄清不入账——命令停在 answered 态，
+          // 成案单带「必须定案或弃案」纪律持续出，行为收敛。
+          console.warn(`[stardeck] 澄清轮超限（第 ${rej.round} 轮 > 上限 ${CLARIFY_ROUNDS_CAP}）：${rej.commandId} 的澄清块拒收——成案单将强制定案或弃案`)
         }
       } catch (err) {
         console.warn(`[stardeck] 大副产出收割失败（下轮工单重试）：${err instanceof Error ? err.message : String(err)}`)

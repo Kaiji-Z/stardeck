@@ -143,6 +143,86 @@ test('CommandCard talking + 独立形态：进入对话钮在场，点击走 onD
   r.unmount()
 })
 
+/** 展开 ghost 卡（澄清面板/任务书卡的容器），等一个渲染 tick。 */
+async function expandGhost(): Promise<void> {
+  const ghostCard = document.querySelector('.war-cd-stage[data-stage="task"] .war-tour-ghost') as HTMLElement | null
+  ghostCard?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 80))
+}
+
+test('D23 澄清面板 pending：问题列表与答复框同卡（读完即答，不绕道会话弹窗）', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-q1', status: 'talking', staffSessionId: 'staff-x',
+    clarification: { questions: ['「工具箱」指哪个项目？', '验收标准是什么？'], round: 1, status: 'pending', answer: null },
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  await expandGhost()
+  const text = r.text()
+  assert.ok(text.includes('第 1 轮提问') || text.includes('round 1'), '轮数标题在场（等舰长一眼可辨）')
+  assert.ok(text.includes('「工具箱」指哪个项目？'), '问题一渲染')
+  assert.ok(text.includes('验收标准是什么？'), '问题二渲染')
+  assert.ok(document.querySelector('.war-clarify-q li') !== null, '问题列表结构化（ol>li）')
+  assert.ok(document.querySelector('.war-cd-answer') !== null, '答复框贴在同卡')
+  r.unmount()
+})
+
+test('D23 澄清面板 answered：问答史留卡 + 定案提示（ghost 卡无澄清时不受影响）', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-q2', status: 'talking', staffSessionId: 'staff-x',
+    clarification: { questions: ['验收标准是什么？'], round: 1, status: 'answered', answer: '跑通即可' },
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  await expandGhost()
+  const text = r.text()
+  assert.ok(text.includes('澄清问答史') || text.includes('Clarification thread'), '问答史标题在场')
+  assert.ok(text.includes('跑通即可'), '舰长答复渲染')
+  assert.ok(text.includes('答复已入账') || text.includes('Reply logged'), '定案提示在场')
+  r.unmount()
+})
+
+test('D23 任务书五项卡：成案后五项结构化可见；无 brief 命令不渲染空卡', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-b1', status: 'talking', staffSessionId: 'staff-x',
+    clarification: { questions: ['验收？'], round: 1, status: 'answered', answer: '跑通即可' },
+    brief: { goal: '修复窄屏溢出', background: '纯前端', acceptance: '375px 无横向滚动', nonGoals: '不改后端', deliverables: '修复与验收说明' },
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  await expandGhost()
+  const text = r.text()
+  assert.ok(text.includes('任务书（五项定案）') || text.includes('Task brief'), '任务书卡标题在场')
+  for (const item of ['修复窄屏溢出', '375px 无横向滚动', '不改后端', '修复与验收说明']) {
+    assert.ok(text.includes(item), `五项内容可见：${item}`)
+  }
+  assert.ok(document.querySelector('.war-brief-card') !== null, '任务书卡结构在场')
+  // 无 brief：同一渲染路径不吐空卡。
+  const plain = mkCmd({ commandId: 'cmd-b2', status: 'talking', staffSessionId: 'staff-x' })
+  const el2 = createElement(views.FocusPage, {
+    cmd: plain, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [plain],
+  })
+  const r2 = await render(el2)
+  await expandGhost()
+  assert.ok(document.querySelector('.war-brief-card') === null, '无 brief 无空卡')
+  r2.unmount()
+  r.unmount()
+})
+
 test('FocusPage reported 链 + 独立形态：任务会话/执行会话/通过收官三钮在场，收官点击打到 war_close_task', async () => {
   const task = mkTask({
     taskId: '20260902-rep1', title: '格言 CLI', status: 'reported',

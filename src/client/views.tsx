@@ -1471,8 +1471,26 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
       )
     }
     if (ghostVariant === 'talking') {
+      const clarify = cmd.clarification ?? null
       return createElement('div', { key, className: 'war-subdetail' },
         createElement('div', { className: 'war-subdetail-title' }, fp.talkingGhostTitle),
+        // D23 澄清协议（2026-09-08）：大副的结构化提问直接在板上渲染——问题
+        // 列表贴着答复框，舰长读完即答，不再绕道会话历史弹窗；answered 后
+        // 问答史留卡（答复了什么、定案进行到哪，一眼可见）。
+        clarify !== null
+          ? createElement('div', { className: 'war-clarify' },
+            createElement('div', { className: 'war-subdetail-title' }, clarify.status === 'pending' ? fp.clarifyRound(clarify.round) : fp.clarifyHistory),
+            createElement('ol', { className: 'war-clarify-q' }, ...clarify.questions.map((q, i) => createElement('li', { key: i }, q))),
+            clarify.status === 'answered'
+              ? [
+                createElement('div', { key: 'ca', className: 'war-sub-row' },
+                  createElement('span', { className: 'war-sub-label' }, fp.clarifyCaptain),
+                  createElement('div', { className: 'war-sub-value' }, clarify.answer ?? '')),
+                createElement('p', { key: 'cn', className: 'war-clarify-note', role: 'status' }, fp.clarifyAnswered),
+              ]
+              : null,
+          )
+          : null,
         createElement('div', { className: 'war-sub-value' }, fp.talkingGhostNote),
         standalone || staffTarget !== null
           ? subActions([createElement('button', {
@@ -1516,10 +1534,26 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         : null,
     )
   }
+  // D23（2026-09-08）：任务书五项卡——成案谈判产物的结构化展示（非目标单独
+  // 成行，它是防跑偏的关键项），与 ghost 面板并列；未成案（无 brief）不渲染。
+  const briefPanel = (k?: string): ReactNode => {
+    const b = cmd.brief
+    if (b === null || b === undefined) return null
+    return createElement('div', { key: k, className: 'war-subdetail war-brief-card' },
+      createElement('div', { className: 'war-subdetail-title' }, fp.briefTitle),
+      subRow(fp.briefGoal, b.goal),
+      subRow(fp.briefBackground, b.background),
+      subRow(fp.briefAcceptance, b.acceptance),
+      subRow(fp.briefNonGoals, b.nonGoals),
+      subRow(fp.briefDeliverables, b.deliverables),
+    )
+  }
   // 链上任务卡的展开（V9.10 补全）：命令级最终计划（若有）+ 该环任务书 + 验收
   // 标准；reported/failed 环给「去验收/去下重试令」直达大副会话（与主界面任务卡同动作）。
   // V19 铺面：计划/任务书走 md-lite 渲染；任务已物化工作区——计划点名的产物
   // 文件可点（「计划说建什么→点开看到真建了什么」），与任务回报段同一预览通道。
+  // D23（2026-09-08）：任务书五项卡——成案谈判产物结构化展示（非目标单独成行，
+  // 它是防跑偏的关键项），与 ghost 面板并列；未成案（无 brief）不渲染。
   const taskPanel = (t: BoardTask, key?: string): ReactNode => {
     const taskFileLink = t.workspacePath !== null && t.workspacePath !== ''
       ? (n: string): void => { setPreview({ ws: t.workspacePath!, name: n }) }
@@ -1718,7 +1752,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       ? ((cmd.plan as { status: 'pending' | 'approved' | 'rejected' }).status === 'pending' ? fp.taskGhostPlanning : fp.taskGhostApproved)
                       : ghostVariant === 'talking' ? fp.talkingGhostCard : fp.draftingGhostCard))
                 })(),
-                open !== null && open.kind === 'plan' && open.taskId === '' ? ghostPanel('panel-ghost') : null]
+                open !== null && open.kind === 'plan' && open.taskId === '' ? [ghostPanel('panel-ghost'), briefPanel('panel-brief')] : null]
               : null,
             taskHint !== null ? createElement('div', { key: 'hint', className: 'war-tour-hint' }, taskHint) : null,
           ),

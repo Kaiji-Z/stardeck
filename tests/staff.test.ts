@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { appendDirectiveEvent, loadDirectives } from '../src/directives.ts'
-import { staffWorklist, staffOrderFor, staffExecutorFor, inputMaturityOf, clarificationBlocksOf, briefBlocksOf } from '../src/staff.ts'
+import { staffWorklist, staffOrderFor, staffExecutorFor, inputMaturityOf, clarificationBlocksOf, briefBlocksOf, staffHarvestEventsFromText, CLARIFY_ROUNDS_CAP } from '../src/staff.ts'
 import { piStaffExtensionSource } from '../src/executor.ts'
 import { staffPersonaText } from '../src/prompts.ts'
 
@@ -287,6 +287,35 @@ test('clarificationBlocksOf / briefBlocksOf：块解析与完整性强排', () =
   assert.equal(parsed[0]!.deliverables, '一个文件')
   // 零问题的澄清块（没按格式来）——弃块不入账。
   assert.equal(clarificationBlocksOf('【澄清】（cmd-20260908-eeee）\n我需要更多信息。').length, 0)
+})
+
+test('harvest 机械闸：第 3 轮澄清请求拒收（rejected 报告），未超限轮照收、混合文本成案优先——行为收敛', () => {
+  assert.equal(CLARIFY_ROUNDS_CAP, 2)
+  const known = new Set(['cmd-x'])
+  // 已两轮（round=2）→ 第 3 轮请求撞闸：拒收入账、rejected 如实报告。
+  const capped = staffHarvestEventsFromText('【澄清】（cmd-x）\n1. 还想再问一句——组件库用哪个？', known, () => 2)
+  assert.equal(capped.events.length, 0, '过限澄清不入账')
+  assert.equal(capped.rejectedClarifications.length, 1)
+  assert.equal(capped.rejectedClarifications[0]!.round, 3)
+  assert.deepEqual(capped.rejectedClarifications[0]!.questions, ['还想再问一句——组件库用哪个？'])
+  // 未超限（round=0）→ 照常入账。
+  const fresh = staffHarvestEventsFromText('【澄清】（cmd-x）\n1. 验收标准是什么？', known, () => 0)
+  assert.equal(fresh.events.length, 1)
+  assert.equal(fresh.events[0]!.type, 'directive_clarification_requested')
+  assert.equal(fresh.rejectedClarifications.length, 0)
+  // 恰在闸上（round=1 → 第 2 轮）→ 放行（2 轮封顶，第 2 轮是合法末轮）。
+  const edge = staffHarvestEventsFromText('【澄清】（cmd-x）\n1. 放哪？', known, () => 1)
+  assert.equal(edge.events.length, 1)
+  assert.equal(edge.rejectedClarifications.length, 0)
+  // 混合文本（任务书+澄清同卡）：成案优先——任务书入账，澄清静默弃（都成案了
+  // 就不该再问，无需告警）。
+  const mixed = staffHarvestEventsFromText(
+    ['【任务书】（cmd-x）', '目标：g', '背景与约束：b', '验收标准：a', '非目标：n', '交付物：d', '【澄清】（cmd-x）', '1. 还想问'].join('\n'),
+    known, () => 2,
+  )
+  assert.equal(mixed.events.length, 1)
+  assert.equal(mixed.events[0]!.type, 'directive_brief_ready')
+  assert.equal(mixed.rejectedClarifications.length, 0)
 })
 
 test('staffOrderFor：大副边界红线——人设正典 + MCP 接入面 + 不教外勤出口', () => {

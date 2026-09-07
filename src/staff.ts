@@ -143,6 +143,64 @@ function parseStaffBlocks(text: string): RawBlock[] {
 export interface ClarifyBlock { commandId: string; questions: string[] }
 export interface BriefBlock { commandId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
 
+/** 澄清轮数机械闸（D23 完整形态）：允许 2 轮问答——与征召令纪律「第 2 轮起
+ * 必须定案」同数。第 3 轮起的澄清请求由收割层拒收（不入账+告警），命令停在
+ * answered 态、成案单持续出——命令不死锁、也不被系统单方面弃案。 */
+export const CLARIFY_ROUNDS_CAP = 2
+
+/** 收割产物：events=可入账事件;rejectedClarifications=被机械闸拒收的过限澄清
+ * （调用方告警——板面与日志都该知道大副想问而被闸下）。 */
+export interface StaffHarvest { events: DirectiveEvent[]; rejectedClarifications: Array<{ commandId: string; round: number; questions: string[] }> }
+
+/**
+ * 大副最终答复 → 命令账本事件（纯核心，收割 glue 的解析+闸门层）：任务书优先
+ * （同号既有任务书又澄清视为成案，澄清块弃）；澄清轮数过机械闸（clarifyRoundOf
+ * 报告的既有轮数 +1 > CLARIFY_ROUNDS_CAP）的请求拒收。knownIds=本轮工单在册
+ * 命令号：块点名未知命令号一律忽略（防幻觉写账）。
+ */
+export function staffHarvestEventsFromText(text: string, knownIds: ReadonlySet<string>, clarifyRoundOf: (commandId: string) => number, now = new Date()): StaffHarvest {
+  const ts = now.toISOString()
+  const events: DirectiveEvent[] = []
+  const rejectedClarifications: StaffHarvest['rejectedClarifications'] = []
+  const settled = new Set<string>()
+  for (const b of briefBlocksOf(text)) {
+    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
+    settled.add(b.commandId)
+    events.push({ type: 'directive_brief_ready', ts, directiveId: b.commandId, goal: b.goal, background: b.background, acceptance: b.acceptance, nonGoals: b.nonGoals, deliverables: b.deliverables })
+  }
+  for (const b of clarificationBlocksOf(text)) {
+    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
+    const nextRound = clarifyRoundOf(b.commandId) + 1
+    if (nextRound > CLARIFY_ROUNDS_CAP) {
+      rejectedClarifications.push({ commandId: b.commandId, round: nextRound, questions: b.questions })
+      continue // 机械闸：过限请求不入账（调用方告警）
+    }
+    events.push({ type: 'directive_clarification_requested', ts, directiveId: b.commandId, questions: b.questions })
+  }
+  return { events, rejectedClarifications }
+}
+
+/**
+ * 大副退场收割（daemon staffTick 在大副进程退出时调用）：经 attach-map 定位
+ * 本轮原生会话 → 读最终答复 → {@link staffHarvestEventsFromText}。attach 映射
+ * 缺席/历史读取失败/无块 → 空数组（下轮工单重试语义接管——诚实降级，不硬凑）。
+ * knownIds=本轮工单在册命令号；clarifyRoundOf=命令当前澄清轮数（机械闸依据）。
+ */
+export function harvestStaffDirectiveEvents(stateDir: string, agentId: string, knownIds: ReadonlySet<string>, clarifyRoundOf: (commandId: string) => number, now = new Date()): StaffHarvest {
+  const entry = readAttachMap(stateDir)[agentId]
+  if (entry === undefined) return { events: [], rejectedClarifications: [] }
+  let history: ReturnType<typeof readSessionHistory>
+  try {
+    history = readSessionHistory(entry.executor, entry.sessionId, entry.workspacePath)
+  } catch {
+    return { events: [], rejectedClarifications: [] }
+  }
+  const last = [...history.messages].reverse().find(m => m.role === 'assistant')
+  if (last === undefined) return { events: [], rejectedClarifications: [] }
+  const text = last.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
+  return staffHarvestEventsFromText(text, knownIds, clarifyRoundOf, now)
+}
+
 /** 澄清块解析（纯）：数字/连字符列表行=问题。零问题=大副没按格式来——弃块
  * （工单重试语义接管，不硬凑半块入账）。 */
 export function clarificationBlocksOf(text: string): ClarifyBlock[] {
@@ -195,40 +253,6 @@ export function briefBlocksOf(text: string): BriefBlock[] {
     out.push({ commandId: b.commandId, goal, background, acceptance, nonGoals, deliverables })
   }
   return out
-}
-
-/**
- * 大副退场收割（daemon staffTick 在大副进程退出时调用）：经 attach-map 定位
- * 本轮原生会话 → 读最终答复 → 解析结构化块 → 命令账本事件（任务书优先——
- * 同号既有任务书又澄清视为成案，澄清块弃）。attach 映射缺席/历史读取失败/
- * 无块 → 空数组（下轮工单重试语义接管——诚实降级，不硬凑）。knownIds=本轮
- * 工单在册命令号：块点名未知命令号一律忽略（防幻觉写账）。
- */
-export function harvestStaffDirectiveEvents(stateDir: string, agentId: string, knownIds: ReadonlySet<string>, now = new Date()): DirectiveEvent[] {
-  const entry = readAttachMap(stateDir)[agentId]
-  if (entry === undefined) return []
-  let history: ReturnType<typeof readSessionHistory>
-  try {
-    history = readSessionHistory(entry.executor, entry.sessionId, entry.workspacePath)
-  } catch {
-    return []
-  }
-  const last = [...history.messages].reverse().find(m => m.role === 'assistant')
-  if (last === undefined) return []
-  const text = last.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
-  const ts = now.toISOString()
-  const events: DirectiveEvent[] = []
-  const settled = new Set<string>()
-  for (const b of briefBlocksOf(text)) {
-    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
-    settled.add(b.commandId)
-    events.push({ type: 'directive_brief_ready', ts, directiveId: b.commandId, goal: b.goal, background: b.background, acceptance: b.acceptance, nonGoals: b.nonGoals, deliverables: b.deliverables })
-  }
-  for (const b of clarificationBlocksOf(text)) {
-    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
-    events.push({ type: 'directive_clarification_requested', ts, directiveId: b.commandId, questions: b.questions })
-  }
-  return events
 }
 
 /**

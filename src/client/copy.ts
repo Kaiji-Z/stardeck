@@ -402,6 +402,17 @@ export interface WarCopy {
     answerDone: string
     answerFail: string
     answerTitle: string
+    /** D23 澄清协议面板（2026-09-08）：问题列表/问答史/任务书五项卡。 */
+    clarifyRound: (n: number) => string
+    clarifyHistory: string
+    clarifyCaptain: string
+    clarifyAnswered: string
+    briefTitle: string
+    briefGoal: string
+    briefBackground: string
+    briefAcceptance: string
+    briefNonGoals: string
+    briefDeliverables: string
     acceptBtn: string
     acceptBusy: string
     acceptDone: string
@@ -936,6 +947,16 @@ export const warCopy: WarCopy = {
     answerDone: '答复已送达——参谋会话续跑推进中，进展看命令卡与任务链。',
     answerFail: '答复失败：',
     answerTitle: '经 pi RPC 续跑把答复送进参谋会话（受理即回执；只支持 pi 席）',
+    clarifyRound: n => `大副第 ${n} 轮提问（等你答复）`,
+    clarifyHistory: '澄清问答史',
+    clarifyCaptain: '舰长答复',
+    clarifyAnswered: '答复已入账——大副正带答复开新一轮定案',
+    briefTitle: '任务书（五项定案）',
+    briefGoal: '目标',
+    briefBackground: '背景与约束',
+    briefAcceptance: '验收标准',
+    briefNonGoals: '非目标',
+    briefDeliverables: '交付物',
     acceptBtn: '✓ 通过收官',
     acceptBusy: '收官中…',
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
@@ -1476,6 +1497,16 @@ export const plainCopy: WarCopy = {
     answerDone: '答复已送达——规划 Agent会话续跑推进中，进展看命令卡与任务链。',
     answerFail: '答复失败：',
     answerTitle: '经 pi RPC 续跑把答复送进规划 Agent会话（受理即回执；只支持 pi 席）',
+    clarifyRound: n => `规划 Agent第 ${n} 轮提问（等你答复）`,
+    clarifyHistory: '澄清问答史',
+    clarifyCaptain: '舰长答复',
+    clarifyAnswered: '答复已入账——规划 Agent正带答复开新一轮定案',
+    briefTitle: '任务书（五项定案）',
+    briefGoal: '目标',
+    briefBackground: '背景与约束',
+    briefAcceptance: '验收标准',
+    briefNonGoals: '非目标',
+    briefDeliverables: '交付物',
     acceptBtn: '✓ 通过收官',
     acceptBusy: '收官中…',
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
