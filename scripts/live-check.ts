@@ -308,10 +308,6 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     const staffClosed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskA, verdict: '通过收官——大副链实弹回响属实' }, agentId: 'live-staff' }) as { ok: boolean; result?: { status?: string } }
     check('舰长验收收官（大副相位）', staffClosed.ok === true && staffClosed.result?.status === 'closed', `${taskA}=${loadCampaign(stateDir2, taskA).status}`)
 
-    writeFileSync(join(evidenceDir, 'staff-phase-directives.jsonl'), readFileSyncSafely(join(stateDir2, 'directives.jsonl')), 'utf8')
-    for (const f of readdirSync(join(stateDir2, 'logs'))) {
-      if ((f.startsWith('staff-') || f.startsWith('executor-')) && f.endsWith('.log')) copyFileSync(join(stateDir2, 'logs', f), join(evidenceDir, `staff-phase-${f}`))
-    }
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。
   } catch (err) {
     staffStateKept = true
@@ -320,6 +316,15 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
   } finally {
     daemon2?.kill()
     await new Promise(r => setTimeout(r, 500))
+    // 证据拷贝在 daemon 收摊**之后**（V20.4 实弹教训：daemon 仍握句柄时读侧
+    // 静默吞错，directives.jsonl 落盘 0 字节——澄清问→答→成案全链证据丢失）。
+    // 收摊后读必然稳；空文件显式告警，不假装证据在场。
+    writeFileSync(join(evidenceDir, 'staff-phase-directives.jsonl'), readFileSyncSafely(join(stateDir2, 'directives.jsonl')), 'utf8')
+    try {
+      for (const f of readdirSync(join(stateDir2, 'logs'))) {
+        if ((f.startsWith('staff-') || f.startsWith('executor-')) && f.endsWith('.log')) copyFileSync(join(stateDir2, 'logs', f), join(evidenceDir, `staff-phase-${f}`))
+      }
+    } catch { /* logs 目录缺席（早夭相位）不是门的失败 */ }
     if (!staffStateKept) {
       // Windows 下 taskB 的外勤可能是 daemon2 的孤儿子进程、仍握日志句柄——
       // 清理 best-effort：断言已全过，清不掉就留给系统临时目录，不是门的失败。
@@ -333,7 +338,14 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
 }
 
 function readFileSyncSafely(p: string): string {
-  try { return readFileSync(p, 'utf8') } catch { return '' }
+  try {
+    const s = readFileSync(p, 'utf8')
+    if (s === '') console.warn(`[evidence] 证据文件读到空内容（疑似句柄竞态，重跑实弹补证）：${p}`)
+    return s
+  } catch (err) {
+    console.warn(`[evidence] 证据文件读取失败：${p}（${err instanceof Error ? err.message : String(err)}）`)
+    return ''
+  }
 }
 
 // ---------- 可选相位：执行者变体实弹（STARDECK_LIVE_EXECUTOR=codex|pi|zcode|claude） ----------
