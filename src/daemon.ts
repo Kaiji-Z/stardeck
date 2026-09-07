@@ -23,7 +23,7 @@ import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor } from './staff.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, type StaffWorkItem } from './staff.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
@@ -144,6 +144,14 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     const directive = loadDirectives(stateDir).find(d => d.id === commandId)
     if (directive === undefined) return { ok: false, error: `命令 ${commandId} 不存在。` }
     if (directive.status !== 'talking') return { ok: false, error: `命令 ${commandId} 当前不是追问中（${directive.status}）——无可答复的大副提问。` }
+    // 澄清协议答复（2026-09-08）：挂起澄清的命令走账本回环——入账即受理，
+    // 大副下一轮带问答史重开成案（外聘无头进程不续跑；账本即状态，全席通用，
+    // 也避免与成案轮双发）。
+    if (directive.clarification?.status === 'pending') {
+      appendDirectiveEvent(stateDir, { type: 'directive_clarification_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel: 'board' })
+      console.log(`[stardeck] 舰长澄清答复入账 ${commandId}（第 ${directive.clarification.round} 轮）——大副将开新一轮成案`)
+      return { ok: true, note: '答复已入账——大副将带着答复开新一轮定案，进展看命令卡与任务链。' }
+    }
     if (directive.staffSessionId === undefined || directive.staffSessionId === null) return { ok: false, error: '该命令没有大副会话捕获（早于会话捕获功能的旧命令）——请直接下新命令。' }
     const entry = readAttachMap(stateDir)[directive.staffSessionId]
     if (entry === undefined) return { ok: false, error: `大副会话映射缺失（${directive.staffSessionId}）——无法续跑投递。` }
@@ -329,6 +337,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // 大副不在役 → 框定 spawn 一轮（接令/呈改计划/发布，见 staff.ts）。等舰长
   // 定夺（计划 pending）不出单——「等」就是诚实。
   let staffSession: ExecutorSession | undefined
+  let staffItems: StaffWorkItem[] = []
   let staffSpawning = false
   let staffRetryAfter = 0
   let staffFleet = 'opencode'
@@ -356,6 +365,17 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           writeAttachMapEntry(stateDir, staffSession.agentId, { executor: 'pi', sessionId: sid, workspacePath: join(stateDir, 'staff'), capturedAt: new Date().toISOString() })
           console.log(`[stardeck] 大副会话入账 ${staffSession.agentId} → pi ${sid}`)
         }
+      }
+      // 澄清协议收割（2026-09-08）：本轮大副最终答复的结构化块 → 命令账本
+      //（澄清挂起/任务书入账）。失败诚实降级——下轮工单重试语义接管。
+      try {
+        const knownIds = new Set(staffItems.map(i => i.commandId))
+        for (const ev of harvestStaffDirectiveEvents(stateDir, staffSession.agentId, knownIds)) {
+          appendDirectiveEvent(stateDir, ev)
+          console.log(`[stardeck] 大副产出入账 ${ev.type} → ${ev.directiveId}`)
+        }
+      } catch (err) {
+        console.warn(`[stardeck] 大副产出收割失败（下轮工单重试）：${err instanceof Error ? err.message : String(err)}`)
       }
       // 定向退避：退场/熔断后工单仍未清（这轮没干成活）→ 罚 2 分钟再重开，
       // 防 received-未分诊单引发 15s 重试风暴；干成了活（工单清空）不罚。
@@ -393,6 +413,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         stateDir,
         codexShimBase: config.codexShimBase,
       })
+      staffItems = items
       console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件，日志 ${staffSession.logPath}）`)
     } finally {
       staffSpawning = false

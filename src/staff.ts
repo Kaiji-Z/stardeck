@@ -16,12 +16,13 @@
  * @module stardeck/staff
  */
 
-import type { Directive, DirectiveGrade } from './directives.ts'
+import type { Directive, DirectiveEvent, DirectiveGrade } from './directives.ts'
 import { relayPromptFor, staffPersonaText } from './prompts.ts'
 import type { FeatureFlags } from './flags.ts'
-import { spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, spawnHeadlessCodexStaff, type ExecutorSession } from './executor.ts'
+import { readAttachMap, spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, spawnHeadlessCodexStaff, type ExecutorSession } from './executor.ts'
+import { readSessionHistory } from './history.ts'
 
-export type StaffWorkKind = 'intake' | 'plan' | 'publish'
+export type StaffWorkKind = 'intake' | 'resolve' | 'plan' | 'publish'
 
 export interface StaffWorkItem {
   commandId: string
@@ -38,13 +39,19 @@ export interface StaffWorkItem {
   planText?: string
   /** 战线名（可选展示）。 */
   name?: string
+  /** 澄清成案单携带：此前你方提问 / 舰长答复 / 轮次（resolved 单）。 */
+  questions?: string[]
+  answer?: string
+  round?: number
 }
 
 /**
- * 大副工单（纯）。不出单的三类：终态（approved/cancelled）；未到点的定时令
+ * 大副工单（纯）。不出单的四类：终态（approved/cancelled）；未到点的定时令
  * （schedule 未 dispatched——引信语义，daemon tick 到点补）；计划待批
- * （plan pending——等舰长在命令卡上定夺，不是大副的活）。
- * received/talking 但未分诊=接令中断重试（外聘形态无会话可续，重开一轮）。
+ * （plan pending——等舰长在命令卡上定夺，不是大副的活）；澄清挂起
+ * （clarification pending——等舰长答复。工单空 ⇒ staffTick 退场罚时不触发：
+ * 「等」就是诚实）。received/talking 但未分诊=接令中断重试（外聘形态无会话
+ * 可续，重开一轮）；澄清 answered 且未呈计划=答复成案单（带问答史重开）。
  */
 export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkItem[] {
   const out: StaffWorkItem[] = []
@@ -52,6 +59,22 @@ export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkIt
     if (d.status === 'approved' || d.status === 'cancelled') continue
     if (d.schedule !== undefined && d.schedule.dispatchedAt === undefined) continue
     const name = d.name !== undefined ? { name: d.name } : {}
+    // 澄清挂起：等舰长答复——不出单（退场罚时的机械豁免就在这一行）。
+    if (d.clarification?.status === 'pending') continue
+    // 答复已入账且尚无在手计划稿：成案单（带问答史；已呈计划/已批的交常规
+    // 路由——rejected 也走成案单，答复+驳回意见一并是重拟依据）。
+    if (d.clarification?.status === 'answered' && (d.plan === undefined || d.plan.status === 'rejected')) {
+      out.push({
+        commandId: d.id, kind: 'resolve', text: d.text,
+        questions: d.clarification.questions,
+        ...(d.clarification.answer !== undefined ? { answer: d.clarification.answer } : {}),
+        round: d.clarification.round,
+        ...(d.plan !== undefined ? { planStatus: d.plan.status, planText: d.plan.text } : {}),
+        ...(d.plan !== undefined && d.plan.reason !== undefined ? { planRejectedReason: d.plan.reason } : {}),
+        ...name,
+      })
+      continue
+    }
     if (d.grade === undefined) {
       out.push({ commandId: d.id, kind: 'intake', text: d.text, ...name })
       continue
@@ -75,6 +98,139 @@ export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkIt
   return out
 }
 
+// ---------- 澄清协议（2026-09-08）：输入成熟度预评 + 结构化块解析 ----------
+
+/** 输入成熟度四判型：vague=连要做什么都不明；missing-acceptance=缺验收；
+ * missing-nongoals=缺边界；mature=五项自检无缺口。 */
+export type InputVerdict = 'mature' | 'missing-acceptance' | 'missing-nongoals' | 'vague'
+
+/**
+ * 舰长命令对任务书五项的机械预评（纯，启发式）。角色是**预过滤而非裁决**：
+ * verdict 只调制征召令的处置指引（缺什么点什么），最终问不问由大副按起草法
+ * 自行判断——无歧义细节可自行补全的照常成案，不强问（问多了仪式吃掉小任务）。
+ */
+export function inputMaturityOf(text: string): { verdict: InputVerdict; gaps: string[] } {
+  const t = text.trim()
+  const hasAction = /做|加|修|写|建|删|改|重构|实现|发布|创建|更新|迁移|清理|支持|安装|配置|排查|交付|开发|翻译|部署|生成/.test(t)
+  const hasAcceptance = /验收|标准|判据|退出码|测试|校验|直到|要求|必须|包含|通过|跑通|可运行|报错|检查|通过后/.test(t)
+  const hasBoundary = /不要|别|不得|禁止|非目标|勿|避免|仅限|不许|只(许|能|改|做|动|碰)/.test(t)
+  if (!hasAction && t.length < 24) return { verdict: 'vague', gaps: ['目标（要做什么）'] }
+  if (!hasAcceptance) return { verdict: 'missing-acceptance', gaps: ['验收标准（怎么算完成）'] }
+  if (!hasBoundary) return { verdict: 'missing-nongoals', gaps: ['非目标（明确不做什么）'] }
+  return { verdict: 'mature', gaps: [] }
+}
+
+/** 大副最终答复里的结构化块：头行【澄清】（cmd-…）/【任务书】（cmd-…），
+ * 正文归该块直至下一块头。解析器与收割全部纯函数——快照/单测管辖。 */
+interface RawBlock { kind: '澄清' | '任务书'; commandId: string; lines: string[] }
+
+function parseStaffBlocks(text: string): RawBlock[] {
+  const out: RawBlock[] = []
+  let cur: RawBlock | undefined
+  for (const raw of text.split(/\r?\n/)) {
+    const m = /^【(澄清|任务书)】[（(]((?:cmd-)?[A-Za-z0-9._-]+)[)）]/.exec(raw.trim())
+    if (m !== null) {
+      if (cur !== undefined) out.push(cur)
+      cur = { kind: m[1] as RawBlock['kind'], commandId: m[2]!, lines: [] }
+      continue
+    }
+    if (cur !== undefined) cur.lines.push(raw)
+  }
+  if (cur !== undefined) out.push(cur)
+  return out
+}
+
+export interface ClarifyBlock { commandId: string; questions: string[] }
+export interface BriefBlock { commandId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
+
+/** 澄清块解析（纯）：数字/连字符列表行=问题。零问题=大副没按格式来——弃块
+ * （工单重试语义接管，不硬凑半块入账）。 */
+export function clarificationBlocksOf(text: string): ClarifyBlock[] {
+  const out: ClarifyBlock[] = []
+  for (const b of parseStaffBlocks(text)) {
+    if (b.kind !== '澄清') continue
+    const questions = b.lines
+      .map(l => l.trim())
+      .filter(l => /^(?:\d+[.、)）]|[-*•])/.test(l))
+      .map(l => l.replace(/^(?:(?:\d+[.、)）]|[-*•])\s*)+/, '').trim())
+      .filter(l => l !== '')
+    if (questions.length > 0) out.push({ commandId: b.commandId, questions })
+  }
+  return out
+}
+
+const BRIEF_LABELS: ReadonlyArray<readonly [key: keyof Omit<BriefBlock, 'commandId'>, re: RegExp]> = [
+  ['goal', /^目标[:：]/],
+  ['background', /^(?:背景与约束|背景)[:：]/],
+  ['acceptance', /^(?:验收标准|验收)[:：]/],
+  ['nonGoals', /^非目标[:：]/],
+  ['deliverables', /^(?:交付物|交付)[:：]/],
+]
+
+/** 任务书块解析（纯）：五项标签行（值可多行，直至下一标签）。**五项缺一即
+ * 弃**——协议完整性强排，半本任务书比没有更危险（误导后续成案轮）。 */
+export function briefBlocksOf(text: string): BriefBlock[] {
+  const out: BriefBlock[] = []
+  for (const b of parseStaffBlocks(text)) {
+    if (b.kind !== '任务书') continue
+    const fields: Partial<Record<keyof Omit<BriefBlock, 'commandId'>, string[]>> = {}
+    let cur: keyof Omit<BriefBlock, 'commandId'> | undefined
+    for (const line of b.lines) {
+      const trimmed = line.trim()
+      const hit = BRIEF_LABELS.find(([, re]) => re.test(trimmed))
+      if (hit !== undefined) {
+        cur = hit[0]
+        fields[cur] = [trimmed.replace(hit[1], '').trim()]
+      } else if (cur !== undefined && trimmed !== '') {
+        fields[cur]!.push(trimmed)
+      }
+    }
+    const get = (k: keyof Omit<BriefBlock, 'commandId'>): string => (fields[k] ?? []).join('\n').trim()
+    const goal = get('goal')
+    const background = get('background')
+    const acceptance = get('acceptance')
+    const nonGoals = get('nonGoals')
+    const deliverables = get('deliverables')
+    if (goal === '' || background === '' || acceptance === '' || nonGoals === '' || deliverables === '') continue
+    out.push({ commandId: b.commandId, goal, background, acceptance, nonGoals, deliverables })
+  }
+  return out
+}
+
+/**
+ * 大副退场收割（daemon staffTick 在大副进程退出时调用）：经 attach-map 定位
+ * 本轮原生会话 → 读最终答复 → 解析结构化块 → 命令账本事件（任务书优先——
+ * 同号既有任务书又澄清视为成案，澄清块弃）。attach 映射缺席/历史读取失败/
+ * 无块 → 空数组（下轮工单重试语义接管——诚实降级，不硬凑）。knownIds=本轮
+ * 工单在册命令号：块点名未知命令号一律忽略（防幻觉写账）。
+ */
+export function harvestStaffDirectiveEvents(stateDir: string, agentId: string, knownIds: ReadonlySet<string>, now = new Date()): DirectiveEvent[] {
+  const entry = readAttachMap(stateDir)[agentId]
+  if (entry === undefined) return []
+  let history: ReturnType<typeof readSessionHistory>
+  try {
+    history = readSessionHistory(entry.executor, entry.sessionId, entry.workspacePath)
+  } catch {
+    return []
+  }
+  const last = [...history.messages].reverse().find(m => m.role === 'assistant')
+  if (last === undefined) return []
+  const text = last.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
+  const ts = now.toISOString()
+  const events: DirectiveEvent[] = []
+  const settled = new Set<string>()
+  for (const b of briefBlocksOf(text)) {
+    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
+    settled.add(b.commandId)
+    events.push({ type: 'directive_brief_ready', ts, directiveId: b.commandId, goal: b.goal, background: b.background, acceptance: b.acceptance, nonGoals: b.nonGoals, deliverables: b.deliverables })
+  }
+  for (const b of clarificationBlocksOf(text)) {
+    if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
+    events.push({ type: 'directive_clarification_requested', ts, directiveId: b.commandId, questions: b.questions })
+  }
+  return events
+}
+
 /**
  * 外聘大副征召令（纯；措辞改动必须过 tests/staff.test.ts 快照门——
  * `WARROOM_UPDATE_SNAPSHOTS=1 node --import tsx --test tests/staff.test.ts`）。
@@ -96,10 +252,42 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
   ]
   let n = 0
   for (const item of items) {
-    if (item.kind === 'intake') {
-      n += 1
-      sections.push(`\n${divider(n, '接令：分诊 → 按档位成案')}\n${relayPromptFor({ id: item.commandId, text: item.text, createdAt: '', status: 'draft' }, flags)}`)
-    }
+    if (item.kind !== 'intake') continue
+    n += 1
+    const maturity = inputMaturityOf(item.text)
+    const maturityLine = maturity.verdict === 'mature'
+      ? '系统预评：成熟（五项自检无缺口）——照常分诊成案，除非发现真缺口，不要多问。'
+      : `系统预评：${maturity.verdict}——缺口：${maturity.gaps.join('、')}。`
+    sections.push(`\n${divider(n, '接令：分诊 → 按档位成案')}\n${relayPromptFor({ id: item.commandId, text: item.text, createdAt: '', status: 'draft' }, flags)}`)
+    sections.push([
+      `【接令第一动作：输入成熟度评估】${maturityLine}`,
+      '按任务书五项自检舰长命令（目标 / 背景与约束 / 验收标准 / 非目标 / 交付物）：',
+      '- 缺口属起草法可自行补全的无歧义细节 → 直接补全，照常分诊成案，不要多问。',
+      '- 验收标准不可判定、或关键信息缺失无法成案 → 本轮不分诊不呈批，最终答复末尾输出澄清块（格式逐字如下，系统据此入账挂起）：',
+      `【澄清】（${item.commandId}）`,
+      '1. <问题——只问影响成案的关键缺口，至多 3 问>',
+      '本进程随澄清块退出即办结——舰长答复后系统另开一轮让你定案，不要空等。',
+    ].join('\n'))
+  }
+  for (const item of items) {
+    if (item.kind !== 'resolve') continue
+    n += 1
+    sections.push([
+      `\n${divider(n, '答复成案')}`,
+      `命令号 ${item.commandId}（澄清第 ${item.round ?? 1} 轮已获舰长答复）`,
+      `命令原文：「${item.text}」`,
+      ...(item.questions !== undefined && item.questions.length > 0 ? [`此前你方澄清：\n${item.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`] : []),
+      `舰长答复：「${item.answer ?? ''}」`,
+      ...(item.planRejectedReason !== undefined ? [`（另：上一稿计划被舰长驳回——「${item.planRejectedReason}」，修订要点一并吸收）`] : []),
+      '【处理】结合答复定案——最终答复末尾先输出任务书块（五项齐、格式逐字如下，系统据此入账）：',
+      `【任务书】（${item.commandId}）`,
+      '目标：<一句话>',
+      '背景与约束：<背景与不许碰的边界>',
+      '验收标准：<可判定的完成定义>',
+      '非目标：<明确不做的>',
+      '交付物：<产物清单>',
+      '再按复杂度走流程（L0 war_publish 直发 / L1 先 war_plan 呈批，务必携带 commandId；发布时 brief 字段写全背景与约束/非目标/交付物，验收字段写验收标准）。确实仍不可成案才允许再出澄清块——第 2 轮起必须定案或 war_abandon_command，不得再问。',
+    ].join('\n'))
   }
   for (const item of items) {
     if (item.kind !== 'plan') continue
@@ -133,7 +321,7 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
   }
   sections.push([
     '',
-    '【办结纪律】逐件推进到终态之一：已发布（war_publish 成功）/ 已呈计划待批 / 确实无法成案（war_abandon_command 附一句人话原因——慎用）。全办结即收工退出，不空转等待。发布被 lint 拦就按报错文案修稿重发；工具报错即纠错指引。禁止伪造账本、禁止对已终态命令动手、禁止替外勤执行者交证。',
+    '【办结纪律】逐件推进到终态之一：已发布（war_publish 成功）/ 已呈计划待批 / 已澄清待答复（最终答复含澄清块，等舰长答复后系统另开成案轮）/ 确实无法成案（war_abandon_command 附一句人话原因——慎用）。全办结即收工退出，不空转等待。发布被 lint 拦就按报错文案修稿重发；工具报错即纠错指引。禁止伪造账本、禁止对已终态命令动手、禁止替外勤执行者交证。',
   ].join('\n'))
   return sections.join('\n')
 }

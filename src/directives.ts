@@ -68,6 +68,14 @@ export interface Directive {
   readonly continuation?: { readonly mode: ContinuationMode; readonly parentId: string }
   /** V15 战线命名：舰长下达时可选（不填=命令原文当战线名）。 */
   readonly name?: string
+  /** 澄清协议态（2026-09-08，最新一轮）：pending=等舰长答复（工单不出单——
+   * 「等」就是诚实，也不触发退场罚时）；answered=答复已入账（成案单随行）。
+   * round 由 fold 推导（重放稳定）；成案动作（triaged/plan_opened/decomposed）
+   * 清账——对话化为行动后澄清态失去意义。 */
+  clarification?: { questions: string[]; round: number; status: 'pending' | 'answered'; requestedAt: string; answeredAt?: string; answer?: string }
+  /** 任务书一等账本事件（五项，后写覆盖）：大副成案的谈判产物——先于计划
+   * 存在、独立于发布审计在案（计划稿/发布只留结果，任务书留下「怎么谈拢的」）。 */
+  brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; ts: string }
   /** V17 归档（舰长手动，仅链全终局可入）：宿主会话已 archiveSession 的账面痕迹。
    *  不改 status——archived 叠在终局之上的第二维度；会话清单随事件冻结。 */
   archived?: { at: string; sessions: string[] }
@@ -101,6 +109,14 @@ export type DirectiveEvent =
   // P0-1 板内答复审计（2026-09-02）：舰长经 pi RPC 续跑把答复送进大副会话——
   // 只入账不改 fold 状态（talking 态由大副后续 war_plan/war_publish 推进）。
   | { type: 'directive_answered'; ts: string; directiveId: string; text: string; channel: string }
+  // 澄清协议（2026-09-08）：大副收令评估输入成熟度，缺关键项→结构化提问
+  // 入账挂起（daemon 从大副最终答复收割）；舰长经答复通道入账→下一轮大副
+  // 带问答史成案出任务书。round 不随事件走——fold 推导（重放稳定）。
+  | { type: 'directive_clarification_requested'; ts: string; directiveId: string; questions: string[] }
+  | { type: 'directive_clarification_answered'; ts: string; directiveId: string; text: string; channel: string }
+  // 任务书一等事件：五项齐（目标/背景与约束/验收标准/非目标/交付物），
+  // 后写覆盖；与 directive_answered 同纪律——审计在案，成案由大副工具动作推进。
+  | { type: 'directive_brief_ready'; ts: string; directiveId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
   // V17 归档：链全终局后舰长手动入档——宿主会话批量 archiveSession 后的账面
   // 落痕（sessions=实际归档成功的清单；部分失败如实缺席，不假装全成）。
   | { type: 'directive_archived'; ts: string; directiveId: string; sessions: string[] }
@@ -183,21 +199,45 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
         current.grade = event.grade
         current.gradeReason = event.reason
         if (event.confidence !== undefined) current.gradeConfidence = event.confidence
+        if (current.clarification?.status === 'answered') delete current.clarification
         break
       case 'directive_regraded':
         current.grade = event.grade
         current.gradeReason = event.reason
         current.regrades = (current.regrades ?? 0) + 1
         break
+      // 澄清协议：requested 挂起（round 由 fold 推导——重放稳定；draft/received
+      // 一并翻 talking——挂起即「在大副对话里成形」）；answered 只翻 pending 态
+      // （对无挂起命令的答复是重放/撕账——忽略不动）；成案动作清账（对话化为
+      // 行动后澄清态失去意义，常规 plan/publish 路由接管）。
+      case 'directive_clarification_requested':
+        current.clarification = {
+          questions: event.questions,
+          round: (current.clarification?.round ?? 0) + 1,
+          status: 'pending',
+          requestedAt: event.ts,
+        }
+        if (current.status === 'draft' || current.status === 'received') current.status = 'talking'
+        break
+      case 'directive_clarification_answered':
+        if (current.clarification !== undefined && current.clarification.status === 'pending') {
+          current.clarification = { ...current.clarification, status: 'answered', answer: event.text, answeredAt: event.ts }
+        }
+        break
+      case 'directive_brief_ready':
+        current.brief = { goal: event.goal, background: event.background, acceptance: event.acceptance, nonGoals: event.nonGoals, deliverables: event.deliverables, ts: event.ts }
+        break
       // V5-R3 计划态：opened 覆盖待批稿；判定只在 pending 时生效（幂等——
       // 路由层已挡重放，fold 层再兜一道）。驳回后大副重呈新稿即回 pending
       // （多轮收敛的机械表达）。终态守卫沿用。
       case 'directive_plan_opened':
         current.plan = { text: event.plan, status: 'pending' }
+        if (current.clarification?.status === 'answered') delete current.clarification
         break
       // V6 拆解：重复呈报覆盖（与 plan_opened 同语义）；终态守卫沿用。
       case 'directive_decomposed':
         current.decomposition = { plan: event.plan, tasks: event.tasks }
+        if (current.clarification?.status === 'answered') delete current.clarification
         break
       case 'directive_plan_approved':
         if (current.plan !== undefined && current.plan.status === 'pending') {
