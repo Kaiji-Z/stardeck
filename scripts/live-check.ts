@@ -219,7 +219,12 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     // →到点自动派发后再走同一大副管道）。
     const cmdA = (await post2('/warroom/api/commands', { text: '!!直接做：在任务工作区根创建 staff-live.txt（内容包含字符串 stardeck-staff-live），写 check.js 校验该文件存在且含该串并真实运行记录退出码，然后按出口协议交证。' })).commandId as string
     const cmdB = (await post2('/warroom/api/commands', { text: '!!直接做：在任务工作区根创建 minute-mark.txt（内容为当前时刻一行），并写 check.js 校验存在后真实运行，按出口协议交证。', cron: '* * * * *' })).commandId as string
-    console.log(stamp(`大副相位命令：${cmdA}（即时）/ ${cmdB}（定时 * * * * *）`))
+    // V20.1 澄清协议实弹（cmdC）：悬空指代（「上次讨论的」在全新 stateDir 里
+    // 不存在）——舰长独有上下文，大副无法自补，必须澄清；舰长板内答复后开成
+    // 案轮出任务书。（首轮实弹教训：缺验收但可自补的命令会被大副按起草法合法
+    // 直发——考题必须落在「不可自补」象限。）
+    const cmdC = (await post2('/warroom/api/commands', { text: '把上次讨论的那个工具箱入口问题处理掉' })).commandId as string
+    console.log(stamp(`大副相位命令：${cmdA}（即时）/ ${cmdB}（定时 * * * * *）/ ${cmdC}（悬空指代——澄清协议考题）`))
 
     const until = async (ms: number, label: string, probe: () => string | undefined): Promise<string> => {
       const end = Date.now() + ms
@@ -247,6 +252,34 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       return d?.status === 'approved' && d.taskId !== undefined ? d.taskId! : undefined
     })
     check('定时令走同一大副管道成案', true, `${cmdB} → ${taskB}`)
+
+    // V20.1 澄清协议全链：模糊命令 → 澄清挂起（不硬派活）→ 板内答复 →
+    // 成案轮任务书五项入账 → 任务发布（征召令内嵌五项）。
+    const pendingC = await until(8 * 60_000, `${cmdC} 大副澄清挂起`, () => {
+      const d = dirState().find(x => x.id === cmdC)
+      return d?.clarification?.status === 'pending' ? `round${d.clarification.round}(${d.clarification.questions.length}问)` : undefined
+    })
+    const dirC = dirState().find(x => x.id === cmdC)
+    check('澄清协议：模糊命令被追问而非硬派活（澄清挂起入账）', dirC?.taskId === undefined, `${pendingC}；问题：${dirC?.clarification?.questions.join(' / ') ?? '?'}`)
+    const answerC = await post2('/warroom/api/commands/answer', { commandId: cmdC, text: '「入口问题」指：工具箱首页按钮在窄屏（375px 宽）下溢出容器。验收标准：375px 视口下按钮完整可见、可点击，无横向滚动；非目标：不改后端接口、不做响应式全面重构；交付物：修复改动与验收说明。' }) as { ok?: boolean; note?: string; error?: string }
+    check('舰长板内答复入账（澄清回环受理）', answerC.ok === true, answerC.note ?? answerC.error ?? '')
+    await until(8 * 60_000, `${cmdC} 成案轮任务书入账`, () => {
+      const d = dirState().find(x => x.id === cmdC)
+      const b = d?.brief
+      return b !== undefined && [b.goal, b.background, b.acceptance, b.nonGoals, b.deliverables].every(s => s !== '') ? b.goal : undefined
+    })
+    const briefC = dirState().find(x => x.id === cmdC)!.brief!
+    check('任务书一等事件：五项齐入账（goal/background/acceptance/nonGoals/deliverables）', true, `目标=${briefC.goal}｜非目标=${briefC.nonGoals}`)
+    // 成案轮 L0 直发或 L1 呈批皆可——L1 则舰长当场批准（staff-plan 旗默认开）。
+    const taskC = await until(10 * 60_000, `${cmdC} 成案发布`, () => {
+      const d = dirState().find(x => x.id === cmdC)
+      if (d?.plan?.status === 'pending') {
+        void post2('/warroom/api/commands/plan', { commandId: cmdC, decision: 'approve', note: '任务书成立，按计划执行' }).catch(() => { /* 下一轮再试 */ })
+      }
+      return d?.status === 'approved' && d.taskId !== undefined ? d.taskId! : undefined
+    })
+    const taskCState = loadCampaign(stateDir2, taskC)
+    check('征召令内嵌任务书五项（发布 brief 携带非目标/交付物）', typeof taskCState.brief === 'string' && taskCState.brief.includes('非目标') && taskCState.brief.includes('交付物'), (taskCState.brief ?? '').slice(0, 80))
 
     let staffTask: ReturnType<typeof loadCampaign> | undefined
     const endStaff = Date.now() + 8 * 60_000

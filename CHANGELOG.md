@@ -29,6 +29,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **大副澄清协议：任务书一等公民 + 输入成熟度闸（V20.1，DESIGN D23，舰长令）**——大副收令先做任务书五项自检（目标/背景与约束/验收标准/非目标/交付物），缺关键项回澄清块而非硬派活：`inputMaturityOf` 四判型启发式预评（vague/缺验收/缺非目标/成熟——只调制征召令指引，不裁决）；大副最终答复的结构化块（`【澄清】（cmd-…）`/`【任务书】（cmd-…）`）由 daemon staffTick 退场收割（attach-map + readSessionHistory 读本轮原生会话，knownIds 防幻觉写账，五项缺一即弃）；账本三层新事件 `directive_clarification_requested`（fold 挂起+round 推导）/`directive_clarification_answered`（只翻 pending）/`directive_brief_ready`（`Directive.brief` 后写覆盖）。回环走**账本即状态**：舰长经既有 `/commands/answer` 答复 → worklist 出答复成案单（`kind:'resolve'`，原文+问答史+轮次随行）→ 全新大副进程定案——不依赖会话续跑，六席大副全量获得澄清能力；等澄清不出单=退场罚时机械豁免（「等舰长」不是「干不成」）；成案动作清账、第 2 轮起明文必须定案或弃案。`POST /commands/answer` 对挂起澄清的命令改走账本受理分支（不投递续跑，避免与成案轮双发；无澄清的旧 talking 命令 P0-1 语义原样）。live 大副相位 +4 断言（模糊命令被追问/答复入账/任务书五项/征召令内嵌五项）；staff.test 21 测（工单判定×3+fold 生命周期+四判型+块解析强排）；staff 征召令快照重生成（新增 staff-order-resolve.txt）。第一刀不做会议室 UI（问题可见性走既有答复面+会话历史弹窗）。
+
 ## [0.2.2] - 2026-09-07
 
 ### Added
