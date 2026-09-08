@@ -25,10 +25,10 @@
 | `tool.ts` | **defineTool shim**（对齐 dsh-tools 契约：参数描述→JSON Schema + 执行前校验 + `invalid arguments:` 教学错误；子集=string/text/number/boolean/array） |
 | `config.ts` | 独立配置：`~/.stardeck/config.json` + `STARDECK_*` env（PORT/STATE_DIR/WAR_ROOT/MODEL/EXECUTOR_BIN）+ CLI 覆盖 |
 | `tools.ts` | war_* 工具 24 件（与插件仓同名同义；唯一分叉点=defineTool import） |
-| `staff.ts` | **大副外聘**（HANDOFF①落地）：staffWorklist 工单判定（纯：终态/未到点/计划待批不出单）+ staffOrderFor 征召令（staffPersonaText 正典 + 接入面 face=mcp/http/pi-extension + relayPromptFor 内嵌；快照门在 tests/staff.test.ts）+ spawnStaffAgent（zcode/pi/claude/dsh/codex/opencode 六席 dispatch）；staffExecutorFor=**双席正典闸**（V19.13：可选舰队必须大副+外勤双接通） |
+| `staff.ts` | **大副外聘**（HANDOFF①落地）：staffWorklist 工单判定（纯：终态/未到点/计划待批/**澄清挂起**不出单）+ staffOrderFor 征召令（staffPersonaText 正典 + 接入面 face=mcp/http/pi-extension + relayPromptFor 内嵌 + **输入成熟度评估/澄清块/任务书块指引**；快照门在 tests/staff.test.ts）+ spawnStaffAgent（zcode/pi/claude/dsh/codex/opencode 六席 dispatch）+ **澄清协议面**（D23：inputMaturityOf 四判型预评 + clarificationBlocksOf/briefBlocksOf 块解析（五项缺一即弃）+ staffHarvestEventsFromText 纯核心/harvestStaffDirectiveEvents glue 退场收割 + **CLARIFY_ROUNDS_CAP=2 轮数机械闸**（过限拒收+rejected 上报））；staffExecutorFor=**双席正典闸**（V19.13：可选舰队必须大副+外勤双接通） |
 | `fleet.ts` | **舰队兵种面**（UI 入口绑定，2026-09-01）：probeFleet 十二席探测（绝对入口 existsSync/裸名 --version 探针）+ fleetSeatIds 校验 + **bindableSeatIds 双席判别式（adapter && staffReady——gemini/qwen 降不可选）**；daemon 持 activeExecutor 运行态（`GET/POST /warroom/api/fleet`，切换只影响后续征召，大副随舰队过 staffExecutorFor 闸）；绑定门 UI 在 fleet-gate.tsx |
 | `dashboard.ts` | /warroom/api/* 全路由（板投影/board SSE/commands/trace/archive…单 prefix、handler 内自分发） |
-| `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1） |
+| `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1；directives 侧 V20.1 增澄清协议三事件——requested 挂起/answered 翻 pending/brief_ready 任务书一等事件，fold 向后兼容老账本） |
 | `rules.ts`/`workspace.ts`/`schedule.ts`/`state.ts`/`fold-cache.ts` | 征召计划/工作区物化与释放/cron/全局态/装载缓存（1:1） |
 | `prompts.ts`/`persona.ts`/`skill.ts`/`chain-note.ts` | 提示词资产单一源（快照门管辖；1:1） |
 | `goals.ts`/`relay.ts`/`wake.ts`/`quota.ts` | 宿主面结构接口（faces 注入；独立形态诚实降级路径的类型载体） |
@@ -43,9 +43,9 @@ tests/ 与内核一一对应（46 文件 281 测；新增 staff.test.ts 工单/�
 
 ## 架构铁律（改代码前默诵）
 
-- **一次任务的完整环流**：下达（POST /commands）→ **外聘大副**（daemon staffTick 15s 哨位自动框定的无头 opencode）分诊 `war_triage` → L0 直发 `war_publish` / L1-L2 `war_plan` 呈批→舰长命令卡批准→下一轮大副发布（作物化工作区+征召）→ daemon 框定 spawn 执行者（cwd=工作区 + `.stardeck/brief.md` + 项目级 opencode.json 注 MCP 桥——**bound 工作区逐键合并**，坏 JSON 拒绝覆盖）→ 执行者 `war_claim` 拿令牌 → 干活 → `war_submit` 交证 → KillCredit 核验 → **强制人工验收**（默认 reported 呈批，`staff-auto-close` 旗默认 OFF——定案 2026-09-01）→ `war_close_task` 收官 → 归档/释放/接力征召。**定时令到点由 staffTick 自动补 `directive_dispatched`**（宿主 30s tick 的独立形态替位）；大副干不成活退场（工单未清）自动罚 2 分钟防重试风暴，超龄（默认 30min）熔断。
+- **一次任务的完整环流**：下达（POST /commands）→ **外聘大副**（daemon staffTick 15s 哨位自动框定的无头 opencode）**输入成熟度评估**（`inputMaturityOf` 四判型预评+任务书五项自检；缺关键项/涉舰长独有上下文→最终答复输出 `【澄清】（cmd-…）` 块，daemon 退场收割入账挂起 `directive_clarification_requested`——**等澄清不出单不罚时**；舰长经 `/commands/answer` 答复→成案单带问答史重开，`【任务书】（cmd-…）` 五项一等入账 `directive_brief_ready`，DESIGN D23）→ 分诊 `war_triage` → L0 直发 `war_publish` / L1-L2 `war_plan` 呈批→舰长命令卡批准→下一轮大副发布（作物化工作区+征召）→ daemon 框定 spawn 执行者（cwd=工作区 + `.stardeck/brief.md` + 项目级 opencode.json 注 MCP 桥——**bound 工作区逐键合并**，坏 JSON 拒绝覆盖）→ 执行者 `war_claim` 拿令牌 → 干活 → `war_submit` 交证 → KillCredit 核验 → **强制人工验收**（默认 reported 呈批，`staff-auto-close` 旗默认 OFF——定案 2026-09-01）→ `war_close_task` 收官 → 归档/释放/接力征召。**定时令到点由 staffTick 自动补 `directive_dispatched`**（宿主 30s tick 的独立形态替位）；大副干不成活退场（工单未清）自动罚 2 分钟防重试风暴，超龄（默认 30min）熔断。
 - **执行者进程即生命**：ExecutorRegistry 内存态，daemon 重启=全部视为失联；巡检（15s）回收失联（记败+重派或终局）+ 补征召（conscriptPlan 工作区互斥 + maxExecutors 满编判）。三适配器：opencode/pi 已验证；codex 契约实装、实机受阻于 codex-cli 自身 Windows 缺陷与 wire_api 变更（证据链见 README「执行者适配器」，0.44 无法 spawn node 常驻 stdio MCP 服——多轮探测确认）。
-- **大副不是执行者**：无 attemptId、无 war_claim/war_submit（征召令点名禁教出口协议——tests/staff.test.ts 红线断言）；产出就是账本上的分诊/计划/发布。staffWorklist 的「等」是诚实语义：计划 pending=等舰长，不出单。
+- **大副不是执行者**：无 attemptId、无 war_claim/war_submit（征召令点名禁教出口协议——tests/staff.test.ts 红线断言）；产出就是账本上的分诊/计划/发布。staffWorklist 的「等」是诚实语义：计划 pending=等舰长、**澄清挂起=等舰长答复**（DESIGN D23——工单不出单，退场罚时机械豁免），不出单。
 - **defineTool 契约**：parameters 产物已是 JSON Schema 形状（`{type,properties,required}`）——MCP inputSchema **直通**，不要在平铺参数层重造（R0 首弹卡死在此）；执行前校验的错误文案（`invalid arguments: …`）是 agent 自纠通道，格式不许改。
 - **静态服务双布局**：client.js/index.html 的候选路径要同时覆盖 dev（`here=src/`）与构建（`here=dist/`）两种模块布局。
 - **板投影命令卡字段是 `commandId`**（不是 `id`）；任务卡是 `taskId`。
