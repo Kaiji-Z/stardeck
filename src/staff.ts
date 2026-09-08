@@ -248,12 +248,12 @@ export function clarificationBlocksOf(text: string): ClarifyBlock[] {
  *  且在标签与冒号之间插括号注释(「非目标（起草法补全）：…」)——标签前容忍
  *  列表符、标签后容忍同行修饰,值=冒号后内容(修饰注释保留在值里,「原令未
  *  指明」这类大副标注是任务书的诚实部分)。 */
-const BRIEF_LABELS: ReadonlyArray<readonly [key: keyof Omit<BriefBlock, 'commandId'>, re: RegExp, word: string]> = [
-  ['goal', /^(?:[-*•]\s*)?目标[^:\n]*[:：]/, '目标'],
-  ['background', /^(?:[-*•]\s*)?背景(?:与约束)?[^:\n]*[:：]/, '背景与约束'],
-  ['acceptance', /^(?:[-*•]\s*)?验收(?:标准)?[^:\n]*[:：]/, '验收标准'],
-  ['nonGoals', /^(?:[-*•]\s*)?非目标[^:\n]*[:：]/, '非目标'],
-  ['deliverables', /^(?:[-*•]\s*)?(?:交付物|交付)[^:\n]*[:：]/, '交付物'],
+const BRIEF_LABELS: ReadonlyArray<readonly [key: keyof Omit<BriefBlock, 'commandId'>, re: RegExp]> = [
+  ['goal', /^(?:[-*•]\s*)?目标[^:\n]*[:：]/],
+  ['background', /^(?:[-*•]\s*)?背景(?:与约束)?[^:\n]*[:：]/],
+  ['acceptance', /^(?:[-*•]\s*)?验收(?:标准)?[^:\n]*[:：]/],
+  ['nonGoals', /^(?:[-*•]\s*)?非目标[^:\n]*[:：]/],
+  ['deliverables', /^(?:[-*•]\s*)?(?:交付物|交付)[^:\n]*[:：]/],
 ]
 
 /** 任务书块解析（纯）：五项标签行（值可多行，直至下一标签）。**五项缺一即
@@ -269,10 +269,10 @@ export function briefBlocksOf(text: string): BriefBlock[] {
       const hit = BRIEF_LABELS.find(([, re]) => re.test(trimmed))
       if (hit !== undefined) {
         cur = hit[0]
-        // 值=剥列表符与标签词,保留括号注释(「原令未指明」是诚实标注)与冒号后内容。
+        // 值=剥列表符、标签词(含变体)与冒号;括号注释保留(「原令未指明」是诚实标注)。
         const stripped = trimmed
           .replace(/^(?:[-*•]\s*)?/, '')
-          .replace(hit[2], '')
+          .replace(/^(?:目标|背景与约束|背景|验收标准|验收|非目标|交付物|交付)/, '')
           .replace(/^[:：]\s*/, '')
           .trim()
         fields[cur] = [stripped]
