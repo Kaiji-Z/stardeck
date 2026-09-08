@@ -140,8 +140,30 @@ function parseStaffBlocks(text: string): RawBlock[] {
   return out
 }
 
-export interface ClarifyBlock { commandId: string; questions: string[] }
+export interface ClarifyAsk {
+  /** 原始行(剥编号,含选项标记)——账本 questions 存这个,板上完整可读。 */
+  raw: string
+  /** 问干(选项标记剥除后)。 */
+  text: string
+  /** 选项(「你帮我定」原样保留——舰长委托大副自答的信号);开放问=[]。 */
+  options: string[]
+}
+export interface ClarifyBlock { commandId: string; asks: ClarifyAsk[] }
 export interface BriefBlock { commandId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
+
+/** 选项标记解析(选择题式,2026-09-08):行内 ` A xxx / B yyy / C zzz` 段拆出
+ * 选项数组;找不到标记=开放问(text=整行,options=[])。正典格式见
+ * .goal/SPEC-clarify-choices.md §1——解析从宽(标记识别失败=开放问,不硬拆)。 */
+function splitAskLine(line: string): ClarifyAsk {
+  const m = /\s?A[.、::]?\s+(\S.*)$/.exec(line)
+  if (m === null) return { raw: line, text: line, options: [] }
+  const text = line.slice(0, m.index).trim()
+  const options = m[1]!
+    .split(/\s+\/\s+/)
+    .map(s => s.replace(/^[BC][.、::]?\s*/, '').trim())
+    .filter(s => s !== '')
+  return { raw: line, text: text === '' ? line : text, options }
+}
 
 /** 澄清轮数机械闸（D23 完整形态）：允许 2 轮问答——与征召令纪律「第 2 轮起
  * 必须定案」同数。第 3 轮起的澄清请求由收割层拒收（不入账+告警），命令停在
@@ -172,10 +194,14 @@ export function staffHarvestEventsFromText(text: string, knownIds: ReadonlySet<s
     if (!knownIds.has(b.commandId) || settled.has(b.commandId)) continue
     const nextRound = clarifyRoundOf(b.commandId) + 1
     if (nextRound > CLARIFY_ROUNDS_CAP) {
-      rejectedClarifications.push({ commandId: b.commandId, round: nextRound, questions: b.questions })
+      rejectedClarifications.push({ commandId: b.commandId, round: nextRound, questions: b.asks.map(a => a.raw) })
       continue // 机械闸：过限请求不入账（调用方告警）
     }
-    events.push({ type: 'directive_clarification_requested', ts, directiveId: b.commandId, questions: b.questions })
+    events.push({
+      type: 'directive_clarification_requested', ts, directiveId: b.commandId,
+      questions: b.asks.map(a => a.raw),
+      options: b.asks.map(a => a.options),
+    })
   }
   return { events, rejectedClarifications }
 }
@@ -201,18 +227,19 @@ export function harvestStaffDirectiveEvents(stateDir: string, agentId: string, k
   return staffHarvestEventsFromText(text, knownIds, clarifyRoundOf, now)
 }
 
-/** 澄清块解析（纯）：数字/连字符列表行=问题。零问题=大副没按格式来——弃块
- * （工单重试语义接管，不硬凑半块入账）。 */
+/** 澄清块解析（纯）：数字/连字符列表行=问题；行内 ` A x / B y / C z` 段=选项
+ * （选择题式）。零问题=大副没按格式来——弃块（工单重试语义接管，不硬凑半块
+ * 入账）。 */
 export function clarificationBlocksOf(text: string): ClarifyBlock[] {
   const out: ClarifyBlock[] = []
   for (const b of parseStaffBlocks(text)) {
     if (b.kind !== '澄清') continue
-    const questions = b.lines
+    const asks = b.lines
       .map(l => l.trim())
       .filter(l => /^(?:\d+[.、)）]|[-*•])/.test(l))
-      .map(l => l.replace(/^(?:(?:\d+[.、)）]|[-*•])\s*)+/, '').trim())
-      .filter(l => l !== '')
-    if (questions.length > 0) out.push({ commandId: b.commandId, questions })
+      .map(l => splitAskLine(l.replace(/^(?:(?:\d+[.、)）]|[-*•])\s*)+/, '').trim()))
+      .filter(a => a.raw !== '')
+    if (asks.length > 0) out.push({ commandId: b.commandId, asks })
   }
   return out
 }
@@ -290,8 +317,11 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
       '- 涉及舰长独有上下文的缺口（此前对话、口头约定、未指明的对象——如「上次说的那个问题」）→ 不可自补，必须澄清。',
       '- 验收标准不可判定、或关键信息缺失无法成案 → 本轮不分诊不呈批，最终答复末尾输出澄清块（格式逐字如下，系统据此入账挂起）：',
       `【澄清】（${item.commandId}）`,
-      '1. <问题——只问影响成案的关键缺口，至多 3 问>',
-      '本进程随澄清块退出即办结——舰长答复后系统另开一轮让你定案，不要空等。',
+      '1. <问题——只问影响成案的关键缺口，至多 3 问>；能给出候选答案就附选项：A <选项一> / B <选项二> / C 你帮我定',
+      '选项让舰长点选即答（收答更快）；确属开放的才裸问。本进程随澄清块退出即办结——舰长答复后系统另开一轮让你定案，不要空等。',
+      // D23 翻译显性化（V21.4）：成熟命令也把「审核+翻译」的产物亮在板上——
+      // 成案前输出任务书块，舰长看到自己的强目标被翻译成了什么。
+      '- 命令成熟（含走快道的）也要在最终答复末尾输出任务书块（五项、格式与下方成案单同款）——它入账为审核与翻译的凭证，板上可见。',
     ].join('\n'))
   }
   for (const item of items) {
@@ -303,6 +333,7 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
       `命令原文：「${item.text}」`,
       ...(item.questions !== undefined && item.questions.length > 0 ? [`此前你方澄清：\n${item.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`] : []),
       `舰长答复：「${item.answer ?? ''}」`,
+      '（舰长答复可能形如「1A;2B;3 <自由文本>」——编号+字母即其对第 N 问的选项选择；含自由文本的按文本理解。）',
       ...(item.planRejectedReason !== undefined ? [`（另：上一稿计划被舰长驳回——「${item.planRejectedReason}」，修订要点一并吸收）`] : []),
       '【处理】结合答复定案——最终答复末尾先输出任务书块（五项齐、格式逐字如下，系统据此入账）：',
       `【任务书】（${item.commandId}）`,

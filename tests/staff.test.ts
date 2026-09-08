@@ -246,7 +246,7 @@ test('clarificationBlocksOf / briefBlocksOf：块解析与完整性强排', () =
   const sample = [
     '勘察完毕，有两处缺口需要舰长定夺：',
     '【澄清】（cmd-20260908-aaaa）',
-    '1. 格言内容从哪来：内置语料还是接口拉取？',
+    '1. 格言内容从哪来？A 内置语料 / B 接口拉取 / C 你帮我定',
     '2. - 展示位置：弹窗还是常驻面板？',
     '',
     '另一条命令可以直接成案：',
@@ -260,7 +260,15 @@ test('clarificationBlocksOf / briefBlocksOf：块解析与完整性强排', () =
   const qs = clarificationBlocksOf(sample)
   assert.equal(qs.length, 1)
   assert.equal(qs[0]!.commandId, 'cmd-20260908-aaaa')
-  assert.deepEqual(qs[0]!.questions, ['格言内容从哪来：内置语料还是接口拉取？', '展示位置：弹窗还是常驻面板？'])
+  assert.equal(qs[0]!.asks.length, 2)
+  // 第 1 问选择题式：问干+选项拆解（「你帮我定」保留原样——委托大副自答的信号）。
+  assert.equal(qs[0]!.asks[0]!.text, '格言内容从哪来？')
+  assert.deepEqual(qs[0]!.asks[0]!.options, ['内置语料', '接口拉取', '你帮我定'])
+  // 第 2 问混合（编号+连字符+裸问）：无选项标记=开放问。
+  assert.equal(qs[0]!.asks[1]!.text, '展示位置：弹窗还是常驻面板？')
+  assert.deepEqual(qs[0]!.asks[1]!.options, [])
+  // 账本 questions=原始行（含选项标记，板上完整可读）。
+  assert.ok(qs[0]!.asks[0]!.raw.includes('A 内置语料'))
   const briefs = briefBlocksOf(sample)
   assert.equal(briefs.length, 1)
   assert.equal(briefs[0]!.commandId, 'cmd-20260908-bbbb')

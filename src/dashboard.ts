@@ -353,9 +353,16 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
       archived: d.archived === undefined ? null : { at: d.archived.at, sessions: d.archived.sessions },
       // D23 澄清协议（2026-09-08，只读投影）：挂起/答复态+问答史、任务书五项——
       // 舰长在命令卡能看到大副问了什么、定了什么案（写通道仍只有 composer/答复）。
+      // V21.4 选择题式：options 逐问选项（开放问 []，旧日志缺省 undefined→null）。
       clarification: d.clarification === undefined
         ? null
-        : { questions: d.clarification.questions, round: d.clarification.round, status: d.clarification.status, answer: d.clarification.answer ?? null },
+        : {
+          questions: d.clarification.questions,
+          ...(d.clarification.options !== undefined ? { options: d.clarification.options } : {}),
+          round: d.clarification.round,
+          status: d.clarification.status,
+          answer: d.clarification.answer ?? null,
+        },
       brief: d.brief === undefined ? null : { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables },
     }
   })

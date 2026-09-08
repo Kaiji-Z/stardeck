@@ -407,6 +407,8 @@ export interface WarCopy {
     clarifyHistory: string
     clarifyCaptain: string
     clarifyAnswered: string
+    /** V21.4 选择题式：点选选项后的拼装提示。 */
+    clarifyPickNote: string
     briefTitle: string
     briefGoal: string
     briefBackground: string
@@ -951,6 +953,7 @@ export const warCopy: WarCopy = {
     clarifyHistory: '澄清问答史',
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——大副正带答复开新一轮定案',
+    clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',
@@ -1501,6 +1504,7 @@ export const plainCopy: WarCopy = {
     clarifyHistory: '澄清问答史',
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——规划 Agent正带答复开新一轮定案',
+    clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',

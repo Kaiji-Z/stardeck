@@ -71,8 +71,9 @@ export interface Directive {
   /** 澄清协议态（2026-09-08，最新一轮）：pending=等舰长答复（工单不出单——
    * 「等」就是诚实，也不触发退场罚时）；answered=答复已入账（成案单随行）。
    * round 由 fold 推导（重放稳定）；成案动作（triaged/plan_opened/decomposed）
-   * 清账——对话化为行动后澄清态失去意义。 */
-  clarification?: { questions: string[]; round: number; status: 'pending' | 'answered'; requestedAt: string; answeredAt?: string; answer?: string }
+   * 清账——对话化为行动后澄清态失去意义。options=逐问选择题选项（开放问
+   * []，旧日志缺省——渲染层按开放问处理）。 */
+  clarification?: { questions: string[]; options?: string[][]; round: number; status: 'pending' | 'answered'; requestedAt: string; answeredAt?: string; answer?: string }
   /** 任务书一等账本事件（五项，后写覆盖）：大副成案的谈判产物——先于计划
    * 存在、独立于发布审计在案（计划稿/发布只留结果，任务书留下「怎么谈拢的」）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; ts: string }
@@ -112,7 +113,9 @@ export type DirectiveEvent =
   // 澄清协议（2026-09-08）：大副收令评估输入成熟度，缺关键项→结构化提问
   // 入账挂起（daemon 从大副最终答复收割）；舰长经答复通道入账→下一轮大副
   // 带问答史成案出任务书。round 不随事件走——fold 推导（重放稳定）。
-  | { type: 'directive_clarification_requested'; ts: string; directiveId: string; questions: string[] }
+  // V21.4 选择题式：questions=原始行（含选项标记），options=逐问拆出的选项
+  // （开放问为 []，旧日志缺省）——展示层据此渲染选项组。
+  | { type: 'directive_clarification_requested'; ts: string; directiveId: string; questions: string[]; options?: string[][] }
   | { type: 'directive_clarification_answered'; ts: string; directiveId: string; text: string; channel: string }
   // 任务书一等事件：五项齐（目标/背景与约束/验收标准/非目标/交付物），
   // 后写覆盖；与 directive_answered 同纪律——审计在案，成案由大副工具动作推进。
@@ -219,6 +222,7 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
       case 'directive_clarification_requested':
         current.clarification = {
           questions: event.questions,
+          ...(event.options !== undefined ? { options: event.options } : {}),
           round: (current.clarification?.round ?? 0) + 1,
           status: 'pending',
           requestedAt: event.ts,

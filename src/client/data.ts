@@ -71,8 +71,9 @@ export interface BoardCommand {
   archived?: { at: string; sessions: string[] } | null
   /** V10 续接意图（初代为 null）。 */
   continuation: { mode: 'deepen' | 'retry' | 'pivot' } | null
-  /** D23 澄清协议（2026-09-08，无挂澄清为 null）：pending=等舰长答复；round 由 fold 推导。 */
-  clarification?: { questions: string[]; round: number; status: 'pending' | 'answered'; answer: string | null } | null
+  /** D23 澄清协议（2026-09-08，无挂澄清为 null）：pending=等舰长答复；round 由 fold 推导。
+   *  V21.4 选择题式：options 逐问选项（开放问 []，旧日志缺省 undefined）——渲染层据此给选项组。 */
+  clarification?: { questions: string[]; options?: string[][]; round: number; status: 'pending' | 'answered'; answer: string | null } | null
   /** D23 任务书一等事件（五项；未成案为 null）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null
 }

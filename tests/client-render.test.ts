@@ -202,13 +202,17 @@ test('D23 任务书五项卡：成案后五项结构化可见；无 brief 命令
     onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
   })
   const r = await render(el)
-  await expandGhost()
-  const text = r.text()
-  assert.ok(text.includes('任务书（五项定案）') || text.includes('Task brief'), '任务书卡标题在场')
-  for (const item of ['修复窄屏溢出', '375px 无横向滚动', '不改后端', '修复与验收说明']) {
-    assert.ok(text.includes(item), `五项内容可见：${item}`)
+  try {
+    await expandGhost()
+    const text = r.text()
+    assert.ok(text.includes('任务书（五项定案）') || text.includes('Task brief'), '任务书卡标题在场')
+    for (const item of ['修复窄屏溢出', '375px 无横向滚动', '不改后端', '修复与验收说明']) {
+      assert.ok(text.includes(item), `五项内容可见：${item}`)
+    }
+    assert.ok(document.querySelector('.war-brief-card') !== null, '任务书卡结构在场')
+  } finally {
+    r.unmount() // 先卸载再渲染对照——同页残留 host 会污染后续 querySelector。
   }
-  assert.ok(document.querySelector('.war-brief-card') !== null, '任务书卡结构在场')
   // 无 brief：同一渲染路径不吐空卡。
   const plain = mkCmd({ commandId: 'cmd-b2', status: 'talking', staffSessionId: 'staff-x' })
   const el2 = createElement(views.FocusPage, {
@@ -217,10 +221,12 @@ test('D23 任务书五项卡：成案后五项结构化可见；无 brief 命令
     onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [plain],
   })
   const r2 = await render(el2)
-  await expandGhost()
-  assert.ok(document.querySelector('.war-brief-card') === null, '无 brief 无空卡')
-  r2.unmount()
-  r.unmount()
+  try {
+    await expandGhost()
+    assert.ok(document.querySelector('.war-brief-card') === null, '无 brief 无空卡')
+  } finally {
+    r2.unmount()
+  }
 })
 
 test('FocusPage reported 链 + 独立形态：任务会话/执行会话/通过收官三钮在场，收官点击打到 war_close_task', async () => {

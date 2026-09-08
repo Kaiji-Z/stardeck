@@ -665,6 +665,19 @@ body[data-ds-dark-theme] .war-root .war-alarm-time,body[data-ds-dark-theme] .war
 h2.war-col-title{margin:0;font-size:calc(13px*var(--war-fs))}
 
 /* == WAR_CSS 追加锚点：新 CSS 插在本行之后 == */
+/* --- D23 澄清协议会议室（V21.1/V21.4）：问题列表 + 选择题选项组 -------------
+ * 会议室的「目标指向明确」长在样式上：问干醒目、选项是小号可点标签（点选
+ * 即拼装进答复框），选中态高亮回写——读题、点选、送达三步不离开同卡。 */
+.war-clarify{margin:6px 0 2px;padding:8px 10px;border:1px solid var(--war-border);border-radius:var(--war-r-sm);background:var(--war-well-bg)}
+.war-clarify .war-subdetail-title{margin-bottom:4px}
+.war-clarify-q{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.war-clarify-q li{line-height:calc(18px*var(--war-fs))}
+.war-clarify-stem{color:var(--war-text-1)}
+.war-clarify-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.war-clarify-opt{font-size:calc(11px*var(--war-fs));padding:2px 10px;cursor:pointer;border-radius:999px;border:1px solid var(--war-border);background:transparent;color:var(--war-text-1);font-family:var(--war-font)}
+.war-clarify-opt:hover{border-color:var(--war-run-strong);color:var(--war-run-strong)}
+.war-clarify-opt-on{border-color:var(--war-run-strong);color:var(--war-run-strong);background:var(--war-well-bg);font-weight:600}
+.war-clarify-note{margin:4px 0 0;font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 /* --- V10 战线链色与身份 -------------------------------------------------------
  * 链是隐形语义的可见显影：8 个低饱和槽位、双主题各自成章（浅=压黑保白底对比，
  * 深=原值微亮）；strength/mixto 两枚主题变量让组件规则免写裸色值。槽位本体是

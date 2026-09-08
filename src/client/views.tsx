@@ -1472,6 +1472,15 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
     }
     if (ghostVariant === 'talking') {
       const clarify = cmd.clarification ?? null
+      // D23 选择题式（V21.4）：点选选项 → 拼「N<字母>;」进答复框（人机共编，
+      // 自由输入兜底）——送达通道不变（/commands/answer 文本）。
+      const pickClarifyOption = (askIndex: number, letter: string): void => {
+        setAnswerText(t => {
+          const cleaned = t.replace(new RegExp(`(?:^|\\s)${askIndex + 1}[A-Z];?`, 'g'), '').trim()
+          const addition = `${askIndex + 1}${letter};`
+          return cleaned === '' ? addition : `${cleaned} ${addition}`
+        })
+      }
       return createElement('div', { key, className: 'war-subdetail' },
         createElement('div', { className: 'war-subdetail-title' }, fp.talkingGhostTitle),
         // D23 澄清协议（2026-09-08）：大副的结构化提问直接在板上渲染——问题
@@ -1480,7 +1489,22 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         clarify !== null
           ? createElement('div', { className: 'war-clarify' },
             createElement('div', { className: 'war-subdetail-title' }, clarify.status === 'pending' ? fp.clarifyRound(clarify.round) : fp.clarifyHistory),
-            createElement('ol', { className: 'war-clarify-q' }, ...clarify.questions.map((q, i) => createElement('li', { key: i }, q))),
+            createElement('ol', { className: 'war-clarify-q' }, ...clarify.questions.map((q, i) => {
+              const stem = q.split(/(?=A[.、::]?\s)/)[0] ?? q
+              const options = clarify.options?.[i] ?? []
+              return createElement('li', { key: i },
+                createElement('span', { className: 'war-clarify-stem' }, stem),
+                clarify.status === 'pending' && options.length > 0
+                  ? createElement('span', { className: 'war-clarify-opts' }, ...options.map((opt, j) => createElement('button', {
+                    key: j,
+                    className: `war-btn war-clarify-opt${answerText.includes(`${i + 1}${String.fromCharCode(65 + j)}`) ? ' war-clarify-opt-on' : ''}`,
+                    type: 'button',
+                    title: fp.clarifyPickNote,
+                    onClick: () => { pickClarifyOption(i, String.fromCharCode(65 + j)) },
+                  }, opt)))
+                  : null,
+              )
+            })),
             clarify.status === 'answered'
               ? [
                 createElement('div', { key: 'ca', className: 'war-sub-row' },
@@ -1510,6 +1534,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                   onChange: e => { setAnswerText(String(e.target.value ?? '')) },
                   onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
                 }),
+                clarify !== null && clarify.status === 'pending' && (clarify.options?.some(o => o.length > 0) ?? false)
+                  ? createElement('p', { className: 'war-clarify-note' }, fp.clarifyPickNote)
+                  : null,
                 subActions([
                   createElement('button', {
                     className: 'war-btn primary', type: 'button', disabled: answerBusy || answerText.trim() === '',
@@ -1720,6 +1747,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                 : null,
             )
             : null,
+          // D23 翻译显性化（V21.4）：任务书五项卡挂在命令段——任何状态（含
+          // approved 快道）只要账本有 brief，舰长都能看到「强目标被翻译成了什么」。
+          briefPanel('panel-command-brief'),
         ),
         // ② 任务 · 变成了什么：链上全部任务卡按序拉进来，点任一张卡下展开
         // 「最终计划+该环任务书+验收标准」（reported/failed 环带处理动作）；空链
@@ -1752,7 +1782,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       ? ((cmd.plan as { status: 'pending' | 'approved' | 'rejected' }).status === 'pending' ? fp.taskGhostPlanning : fp.taskGhostApproved)
                       : ghostVariant === 'talking' ? fp.talkingGhostCard : fp.draftingGhostCard))
                 })(),
-                open !== null && open.kind === 'plan' && open.taskId === '' ? [ghostPanel('panel-ghost'), briefPanel('panel-brief')] : null]
+                open !== null && open.kind === 'plan' && open.taskId === '' ? ghostPanel('panel-ghost') : null]
               : null,
             taskHint !== null ? createElement('div', { key: 'hint', className: 'war-tour-hint' }, taskHint) : null,
           ),
