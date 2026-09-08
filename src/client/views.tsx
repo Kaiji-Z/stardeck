@@ -1041,8 +1041,8 @@ interface SessionHistoryFace {
 
 /** 只读会话历史弹窗（方案2·二段）：任务会话/执行会话主钮的板内默认动作——
  *  零 token 读各舰队本机存档（sqlite/jsonl），不 resume 不烧模型。 */
-function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHistoryFace | null; busy: boolean; error: string; onClose: () => void }): ReactNode {
-  const { kind, hist, busy, error, onClose } = props
+function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHistoryFace | null; busy: boolean; error: string; onClose: () => void; filterCommandId?: string | null }): ReactNode {
+  const { kind, hist, busy, error, onClose, filterCommandId } = props
   const fp = activeCopy().focusPage
   const title = kind === 'staff' ? fp.historyTitleTask : fp.historyTitleExec
   const layer = useModalLayer(onClose, title)
@@ -1052,14 +1052,58 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
   const roleLabel = (role: string): string => role === 'user' ? fp.historyRoleUser : role === 'tool' ? fp.historyRoleTool : kind === 'staff' ? fp.historyRoleStaff : fp.historyRoleExec
-  const messageNode = (m: SessionHistoryFace['messages'][number], i: number): ReactNode =>
-    createElement('div', { key: i, className: `war-session-msg war-session-${m.role}` },
-      createElement('div', { className: 'war-session-meta' }, `${roleLabel(m.role)}${m.ts !== null ? ` · ${fmtTs(m.ts)}` : ''}`),
-      ...m.parts.map((p, j) => p.kind === 'tool'
+  // V24.1 投影层过滤：大副会话按「轮」共享（一轮工单含多命令，办结纪律让最终
+  // 答复带齐各命令任务书块），从命令卡进入时按命令号分段——本命令高亮、他命
+  // 令可藏、无主叙述弱化。账本与正典零改动，纯渲染侧。
+  const effectiveFilter = filterCommandId ?? null
+  const [filterOn, setFilterOn] = useState(true)
+  const segmentText = (text: string): Array<{ text: string; cmdId: string | null }> => {
+    const out: Array<{ text: string; cmdId: string | null }> = []
+    const re = /【(?:任务书|澄清)】（cmd-[^）]+）/g
+    let last = 0
+    let cur: string | null = null
+    for (const m of text.matchAll(re)) {
+      const idx = m.index ?? 0
+      if (idx > last) out.push({ text: text.slice(last, idx), cmdId: cur })
+      const cmdId = /（(cmd-[^）]+)）$/.exec(m[0])?.[1] ?? null
+      out.push({ text: m[0], cmdId })
+      cur = cmdId
+      last = idx + m[0].length
+    }
+    if (last < text.length) out.push({ text: text.slice(last), cmdId: cur })
+    return out.length > 0 ? out : [{ text, cmdId: null }]
+  }
+  const segClass = (cmdId: string | null): string =>
+    cmdId !== null && cmdId === effectiveFilter ? 'war-hist-self'
+      : cmdId !== null ? 'war-hist-other'
+        : filterOn && effectiveFilter !== null ? 'war-hist-neutral' : ''
+  const renderPart = (p: SessionHistoryFace['messages'][number]['parts'][number], j: string | number): ReactNode => {
+    if (effectiveFilter === null) {
+      return p.kind === 'tool'
         ? createElement('div', { key: j, className: 'war-session-tool' }, `⚙ ${p.tool ?? ''}${p.text !== '' ? ` ${p.text}` : ''}`)
-        : createElement('div', { key: j, className: p.kind === 'reasoning' ? 'war-session-part war-session-reasoning' : 'war-session-part' }, p.text),
-      ),
+        : createElement('div', { key: j, className: p.kind === 'reasoning' ? 'war-session-part war-session-reasoning' : 'war-session-part' }, p.text)
+    }
+    if (p.kind === 'tool') {
+      const hasSelf = p.text.includes(effectiveFilter)
+      const hasOther = !hasSelf && /cmd-\d{8}-[0-9a-z]+/.test(p.text)
+      if (filterOn && !hasSelf && hasOther) return null
+      return createElement('div', { key: j, className: `war-session-tool${filterOn && !hasSelf ? ' war-hist-neutral' : ''}` }, `⚙ ${p.tool ?? ''}${p.text !== '' ? ` ${p.text}` : ''}`)
+    }
+    const segs = segmentText(p.text)
+    const visible = filterOn ? segs.filter(s => s.cmdId === null || s.cmdId === effectiveFilter) : segs
+    if (visible.length === 0) return null
+    return createElement('div', { key: j, className: p.kind === 'reasoning' ? 'war-session-part war-session-reasoning' : 'war-session-part' },
+      ...visible.map((s, i) => createElement('span', { key: i, className: segClass(s.cmdId) }, s.text)),
     )
+  }
+  const messageNode = (m: SessionHistoryFace['messages'][number], i: number): ReactNode => {
+    const parts = m.parts.map((p, j) => renderPart(p, j)).filter(v => v !== null)
+    if (effectiveFilter !== null && filterOn && parts.length === 0) return null
+    return createElement('div', { key: i, className: `war-session-msg war-session-${m.role}` },
+      createElement('div', { className: 'war-session-meta' }, `${roleLabel(m.role)}${m.ts !== null ? ` · ${fmtTs(m.ts)}` : ''}`),
+      ...parts,
+    )
+  }
   // V19 腿3 过程退后：末条 assistant 正文钉正面作「最终汇报」，过程流折叠在
   // 下（桌面版「总结即答案」的板内对位物）；无 assistant 正文=退回全量过程流。
   const pinned = hist !== null ? pinFinalMessage(hist.messages) : { final: null, rest: [] as SessionHistoryFace['messages'] }
@@ -1070,6 +1114,14 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
         hist !== null
           ? createElement('span', { className: 'war-session-badge' }, `${hist.executor} · ${hist.sessionId}`)
           : null,
+        effectiveFilter !== null && hist !== null
+          ? createElement('button', {
+              type: 'button',
+              className: `war-btn war-hist-filter${filterOn ? ' on' : ''}`,
+              title: filterOn ? fp.historyFilterAll : fp.historyFilterOnly,
+              onClick: () => { setFilterOn(v => !v) },
+            }, filterOn ? fp.historyFilterOnly : fp.historyFilterAll)
+          : null,
         createElement('button', { type: 'button', className: 'war-hq-picker-x', 'aria-label': activeCopy().settings.close, autoFocus: true, onClick: onClose }, '✕'),
       ),
       createElement('div', { className: 'war-session-body' },
@@ -1079,8 +1131,7 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
         : hist !== null && pinned.final !== null
           ? createElement('div', { className: 'war-session-finalwrap', 'data-war-final': '1' },
               createElement('div', { className: 'war-session-meta' }, fp.historyFinal),
-              ...pinned.final.parts.filter(p => p.kind === 'text' && p.text.trim() !== '').map((p, j) =>
-                createElement('div', { key: `f-${j}`, className: 'war-session-part' }, p.text)),
+              ...pinned.final.parts.filter(p => p.kind === 'text' && p.text.trim() !== '').map((p, j) => renderPart(p, `f-${j}`)),
               createElement('details', { className: 'war-session-process' },
                 createElement('summary', null, fp.historyProcess(pinned.rest.length)),
                 ...pinned.rest.map(messageNode),
@@ -2085,9 +2136,11 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
           : null,
       ),
       // 会话历史弹窗（只读——板是读投影，看历史不越界；写操作仍只在指挥中心）。
+      // V24.1：大副会话按轮共享多命令——从命令卡进入时按本命令号过滤（投影层）。
       histKind !== null
         ? createElement(SessionHistoryModal, {
             kind: histKind, hist, busy: histBusy, error: histError,
+            filterCommandId: histKind === 'staff' ? cmd.commandId : null,
             onClose: () => { setHistKind(null); setHist(null); setHistError('') },
           })
         : null,

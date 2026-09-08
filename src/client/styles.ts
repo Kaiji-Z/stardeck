@@ -306,6 +306,12 @@ body[data-ds-dark-theme] .war-root{
 /* V24.1 舰长定：聚焦态压暗卡无悬停高亮——压暗=退场，光标路过不抬升不描边。 */
 .war-card.war-rel-dim.clickable:hover{border-color:var(--war-border);transform:none;box-shadow:none}
 .war-chip.war-seat-chip{color:var(--war-text-3);border-style:dashed} /* V24.1 席别徽标：最弱信息层（虚线框次级 chip） */
+/* V24.1 大副会话投影过滤：本命令块高亮、他命令块可藏、无主叙述弱化 */
+.war-hist-self{display:block;background:color-mix(in srgb, var(--war-run-border) 10%, transparent);box-shadow:inset 2px 0 0 var(--war-run-border);border-radius:2px;padding-left:6px}
+.war-hist-neutral{opacity:.5}
+.war-hist-other{opacity:.75}
+.war-hist-filter{flex:0 0 auto}
+.war-hist-filter.on{border-color:var(--war-run-border);color:var(--war-run)}
 .war-card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .war-chip{font-size:calc(12px*var(--war-fs));line-height:calc(18px*var(--war-fs));padding:0 8px;border-radius:9px;border:1px solid var(--war-border);color:var(--war-text-2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis} /* V24.1：大字号下不硬裁（容器内省略号让位） */
 .war-title{font-size:calc(13px*var(--war-fs));font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}

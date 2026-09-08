@@ -509,6 +509,8 @@ export const enWarCopy: WarCopy = {
     waitingReport: 'Evidence verified — awaiting the Sovereign\'s review to close',
     cardTitle: sessionId => `Field Commander session ${sessionId} — click for operation details`,
     seatTitle: seat => `Executed by the ${seat} fleet (recorded at conscription)`,
+    historyFilterOnly: 'This command only',
+    historyFilterAll: 'Show all — this round includes other commands',
   },
   detail: {
     reportPrefix: ts => `[Report · ${ts}]`,
@@ -1065,6 +1067,8 @@ export const enPlainCopy: WarCopy = {
     waitingReport: 'Evidence verified — awaiting your review',
     cardTitle: sessionId => `Execution agent session ${sessionId} — click for details`,
     seatTitle: seat => `Executed by ${seat} (recorded at dispatch)`,
+    historyFilterOnly: 'This item only',
+    historyFilterAll: 'Show all — other commands share this round',
   },
   detail: {
     reportPrefix: ts => `[Report · ${ts}]`,

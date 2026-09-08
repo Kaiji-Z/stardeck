@@ -706,3 +706,52 @@ test('V24.1 席别徽标：task_conscripted 上账的席别在聚焦页执行会
   assert.equal(document.querySelector('.war-seat-chip'), null, '无上账=无徽标')
   r2.unmount()
 })
+
+test('V24.1 大副会话投影过滤：本命令任务书高亮、他命令块隐藏、切换显示全部', async () => {
+  const finalText = [
+    '全部办结：',
+    '【任务书】（cmd-aaa）\n目标：建 hello.txt',
+    '【任务书】（cmd-bbb）\n目标：设计 CHANGELOG 维护方案',
+    '【任务书】（cmd-ccc）\n目标：盘点目录',
+  ].join('\n')
+  historyFixture = {
+    ok: true, executor: 'opencode', sessionId: 'sess-filter',
+    messages: [
+      { role: 'user', ts: 1, parts: [{ kind: 'text', text: 'Mission: 本轮工单 3 件' }] },
+      { role: 'assistant', ts: 2, parts: [{ kind: 'text', text: finalText }] },
+    ],
+  }
+  try {
+    const task = mkTask({
+      taskId: '20260909-hist1', title: 'x', status: 'approved',
+      attemptLog: [{ id: 'oc-1', sessionId: 'sess_filter', startedAt: new Date().toISOString(), outcome: 'live' }],
+    })
+    const cmd = mkCmd({ commandId: 'cmd-bbb', text: 'CHANGELOG 方案', status: 'talking', staffSessionId: 'staff-hist1' })
+    const el = createElement(views.FocusPage, {
+      cmd, chain: [task as never], statuses: new Map(), hqSessionId: null, services,
+      focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+      onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+    })
+    const r = await render(el)
+    const btn = r.click(/任务会话|Task session/)
+    assert.ok(btn !== null, '任务会话钮在场')
+    await new Promise(resolve => setTimeout(resolve, 160))
+    // 过滤默认开：本命令块高亮在场，他命令块不在
+    const self = document.querySelector('.war-hist-self')
+    assert.ok(self !== null, '本命令块高亮在场')
+    assert.ok(self?.textContent?.includes('cmd-bbb') === true, '高亮的是本命令的块')
+    assert.equal(document.querySelector('.war-session-body')?.textContent?.includes('建 hello.txt'), false, '他命令块已隐藏')
+    assert.equal(document.querySelector('.war-session-body')?.textContent?.includes('盘点目录'), false, '第三命令块已隐藏')
+    // 切换显示全部：三块齐现，本命令块仍高亮、他命令块弱化在场
+    const toggle = document.querySelector('button.war-hist-filter') as HTMLButtonElement | null
+    assert.ok(toggle !== null, '过滤切换钮在场')
+    toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(resolve => setTimeout(resolve, 120))
+    assert.ok(document.querySelector('.war-session-body')?.textContent?.includes('建 hello.txt') === true, '切换后他命令块回归')
+    assert.ok(document.querySelector('.war-hist-self') !== null, '切换后本命令块仍高亮')
+    assert.ok(document.querySelector('.war-hist-other') !== null, '他命令块弱化标记在场')
+    r.unmount()
+  } finally {
+    historyFixture = { ok: false, error: '测试桩：无此会话' }
+  }
+})
