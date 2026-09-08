@@ -153,7 +153,7 @@ export interface BriefBlock { commandId: string; goal: string; background: strin
 
 /** 选项标记解析(选择题式,2026-09-08):行内 ` A xxx / B yyy / C zzz` 段拆出
  * 选项数组;找不到标记=开放问(text=整行,options=[])。正典格式见
- * .goal/SPEC-clarify-choices.md §1——解析从宽(标记识别失败=开放问,不硬拆)。 */
+ * DESIGN.md D23「第三刀」段——解析从宽(标记识别失败=开放问,不硬拆)。 */
 function splitAskLine(line: string): ClarifyAsk {
   const m = /\s?A[.、::]?\s+(\S.*)$/.exec(line)
   if (m === null) return { raw: line, text: line, options: [] }
