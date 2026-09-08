@@ -297,6 +297,26 @@ test('clarificationBlocksOf / briefBlocksOf：块解析与完整性强排', () =
   assert.equal(clarificationBlocksOf('【澄清】（cmd-20260908-eeee）\n我需要更多信息。').length, 0)
 })
 
+test('briefBlocksOf：markdown 列表变体（实弹③ VvIzdx 抓获）——列表符与标签间括号注释宽容', () => {
+  const md = [
+    '3 件工单全部终态：',
+    '',
+    '【任务书】（cmd-20260908-ffff）',
+    '- 目标：在任务工作区根创建 staff-live.txt（内容含串），写 check.js 校验。',
+    '- 背景与约束：舰长令（!!直接做），验证链路；Node 单文件、不引依赖。',
+    '- 验收标准：工作区根存在 staff-live.txt 且含 stardeck-staff-live；node check.js 退出码 0。',
+    '- 非目标（起草法补全，原令未指明）：不做其他文件改动、不引框架依赖。',
+    '- 交付物：staff-live.txt、check.js、验收说明。',
+  ].join('\n')
+  const parsed = briefBlocksOf(md)
+  assert.equal(parsed.length, 1)
+  assert.equal(parsed[0]!.goal, '在任务工作区根创建 staff-live.txt（内容含串），写 check.js 校验。')
+  assert.equal(parsed[0]!.acceptance, '工作区根存在 staff-live.txt 且含 stardeck-staff-live；node check.js 退出码 0。')
+  // 括号注释（「原令未指明」是大副的诚实标注）保留在值里。
+  assert.ok(parsed[0]!.nonGoals.includes('起草法补全，原令未指明'))
+  assert.ok(parsed[0]!.nonGoals.includes('不做其他文件改动'))
+})
+
 test('harvest 机械闸：第 3 轮澄清请求拒收（rejected 报告），未超限轮照收、混合文本成案优先——行为收敛', () => {
   assert.equal(CLARIFY_ROUNDS_CAP, 2)
   const known = new Set(['cmd-x'])
