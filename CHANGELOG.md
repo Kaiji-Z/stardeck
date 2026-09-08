@@ -27,7 +27,7 @@
 - 深编制（war_deploy_unit）与中途投递（war_orders/war_comment 转达）未接线；定时命令可设置不自动派发（派发链需大副中继）；staff-goal 不适用。
 - 仓库未推 GitHub、未发 npm（待项目主发令）。
 
-## [Unreleased]
+## [0.2.3] - 2026-09-09
 
 ### Fixed
 
