@@ -3,27 +3,32 @@
  *
  * 隔离环境：专用端口 3974 + 专用账本 ~/.stardeck-playground（与真实
  * ~/.stardeck 互不干扰；--fresh 重置）。首次启动播种全生命周期演示数据：
- *   - draft×3（!!直接做 / ??先看方案 / 普通）→ 大副 15s 哨位自动接单（活演示）
+ *   - draft×3（!!直接做 / ??先看方案 / 普通）→ 大副 15s 哨位自动接单（活演示；
+ *     ?? 走两档制 L1：大副出任务书 → 会议室「待签」五项可编辑卡 → 签发后发布）
  *   - 定时令（每 2 分钟）→ staffTick 到点自动派发
  *   - 执行中任务（claimed 未交）→ 执行中列卡 + 星域绕行星体
  *   - 任务回报（真产出真跑 KillCredit 全绿）→ 等你翻阅收官
  *   - 已收官任务 → 归档页签
  *   - 注册星球×2（真实目录）→ 星域 idle 星 + 起草器可选
- * 默认绑定 zcode 舰队（试「进入会话」跳终端最佳路径）；入口门可随时换。
+ * 默认绑定 opencode 舰队（本机实弹最厚；「进入会话」跳终端执行中即可跳）；
+ * 入口门可随时换席。
  *
  * 用法：node scripts/playground.mjs [--fresh]
  * 板址：http://127.0.0.1:3974/
  */
 import { spawn } from 'node:child_process'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PORT = 3974
 const base = `http://127.0.0.1:${PORT}`
-const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+// junction isMain 陷阱（V22 实弹）：本机 C:\Users 是指向 D:\Users 的 junction，
+// node 会把 import.meta.url 解析到 D: 真路径——argv[1] 留在 C: 形态会让 cli.ts
+// 的主入口守卫判非主模块、静默退出（无横幅无报错）。spawn 一律真路径。
+const repoRoot = realpathSync(fileURLToPath(new URL('..', import.meta.url)))
 const stateDir = join(homedir(), '.stardeck-playground')
 const warRoot = join(stateDir, 'tasks')
 const marker = join(stateDir, 'playground-seeded.marker')
@@ -35,8 +40,11 @@ if (fresh && existsSync(stateDir)) {
 }
 mkdirSync(stateDir, { recursive: true })
 
-// ---------- 起 daemon（zcode 舰队默认 + 大副在岗） ----------
-console.log(`[playground] 起 daemon → ${base}（账本 ${stateDir} · 舰队 zcode · 大副在岗）`)
+// ---------- 起 daemon（opencode 舰队默认 + 大副在岗） ----------
+// 默认席选 opencode：本机实弹最厚（模型配好在 ~/.config/opencode/opencode.json）。
+// zcode 席 headless 当前被桌面版自身回归卡死（裸引擎同错复现：Model provider
+// builtin:zai-coding-plan is missing baseURL——与 stardeck 无关），门前可换席。
+console.log(`[playground] 起 daemon → ${base}（账本 ${stateDir} · 舰队 opencode · 大副在岗）`)
 const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
   cwd: repoRoot,
   env: {
@@ -45,7 +53,7 @@ const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src',
     STARDECK_STATE_DIR: stateDir,
     STARDECK_WAR_ROOT: warRoot,
     STARDECK_STAFF: '1',
-    STARDECK_EXECUTOR: 'zcode',
+    STARDECK_EXECUTOR: 'opencode',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -88,7 +96,8 @@ if (existsSync(marker)) {
     await api('/warroom/api/planets', { method: 'POST', body: JSON.stringify({ path: dir, title: name }) })
   }
 
-  // ② 三道 draft（交给活大副：!!直接做→L0 直发；??先看方案→计划呈批；普通→分诊）
+  // ② 三道 draft（交给活大副：!!直接做→L0 直发；??先看方案→L1 签任务书
+  //    （会议室待签·五项可编辑）；普通→分诊/澄清）
   await api('/warroom/api/commands', { method: 'POST', body: JSON.stringify({ text: '!!直接做：在工作区根创建 hello.txt（内容包含 playground-live），写 check.js 校验后真实运行，按出口协议交证。' }) })
   await api('/warroom/api/commands', { method: 'POST', body: JSON.stringify({ text: '??先看方案：给这个工作区设计一个极简的 CHANGELOG 维护方案，先呈方案等我批。' }) })
   await api('/warroom/api/commands', { method: 'POST', body: JSON.stringify({ text: '盘点当前目录结构，给出一份一页纸的项目体检报告。' }) })
@@ -163,20 +172,23 @@ console.log(`
 ╠══════════════════════════════════════════════════════════╣
 ║  板址：${base}/
 ║  账本：${stateDir}（独立于真实数据）
-║  舰队：zcode（门里可换 opencode/pi）；大副在岗
+║  舰队：opencode（门里可换 pi/zcode 等）；大副在岗
 ║  退出：Ctrl+C
 ╚══════════════════════════════════════════════════════════╝
 
 试玩清单（照单全收约 15 分钟）：
- 1. 舰队绑定门：四席卡、zcode 默认选中、codex 受限标记——「开始调度」
+ 1. 舰队绑定门：席卡按本机探测着色（可绑席亮、降级席灰）、zcode 默认选中
+    ——「开始调度」
  2. 看板上预置卡：任务列「待翻阅」/ 执行中列「挂起演示」/ 调度坞四道命令
  3. 决策带：点「待翻阅」卡 → 任务回报段看 KillCredit 全绿证据 → 收官
  4. 大副活演示：等 15-60 秒，三道 draft 被大副自动接单（!!→L0 直发真跑
-    zcode 外勤；??→计划呈批等你批；普通→先分诊）——板会实时动起来
- 5. 计划呈批：??那道命令出计划后，聚焦页「等你定夺」→ 批准 → 大副发布
- 6. 进入会话（重点）：绑 zcode → 等 !!直接做 那道任务跑完（状态变待翻阅）
-    → 聚焦页底部「⌁ 进入会话」→ 新终端 zcode --resume 直达执行现场
-    （注意：zcode 席要任务收尾后才有映射；播种的旧任务没有映射=诚实 409）
+    opencode 外勤；??→L1 签任务书等你签；普通→先分诊）——板会实时动起来
+ 5. 签任务书（两档制重点）：??那道命令出任务书后，聚焦页「会议室」段出
+    「待签」可编辑五项卡 → 逐项改 → 签发 → 大副逐字照抄发布（谈/签两笔
+    都在会议室时间轴上）；驳回重拟也试试
+ 6. 进入会话（重点）：绑 opencode → 任务跑起来后（执行中即可）聚焦页底部
+    「⌁ 进入会话」→ 新终端 opencode --resume 直达执行现场
+    （opencode 征召即捕会话号；播种的旧任务没有映射=诚实 409）
  7. 定时令：每 2 分钟一道 heartbeat 自动派发（调度坞会看到新卡）
  8. HQ 注册星球：m 切星域 → 点中心 HQ 发射台 → 「浏览…」弹资源管理器
     （对话框里可任意位置「新建文件夹」）→ 注册 → 起草器星球行可选
