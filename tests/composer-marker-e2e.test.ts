@@ -126,7 +126,7 @@ test('取证①：L0 档 → POST 文本以「!!直接做 」开头，原文落�
   }
 })
 
-test('取证②：L2 档 → POST 文本以「??先看方案 」开头，分诊强制 L2，无计划发布被硬门拦', async () => {
+test('取证②：签发档 → POST 文本以「??先看方案 」开头，分诊强制 L1，无签发发布被硬门拦', async () => {
   const dir = tmpDir()
   const srv = fakeServer(dir)
   try {
@@ -137,18 +137,18 @@ test('取证②：L2 档 → POST 文本以「??先看方案 」开头，分诊�
     const created = rawEvent(dir, resp.commandId, 'directive_created') as Extract<DirectiveEvent, { type: 'directive_created' }>
     assert.equal(created.text, '??先看方案 重构配置层')
     appendDirectiveEvent(dir, { type: 'directive_received', ts: 't1', directiveId: resp.commandId, staffSessionId: 'sec-1' })
-    // 大副建议 L0（想直发），标记强制 L2：澄清收敛后计划。
+    // 大副建议 L0（想直发），标记强制 L1：签发档——任务书呈舰长签发后才放行。
     const tri = await execTool(makeDeps(dir, FLAG_ON), 'war_triage', { command_id: resp.commandId, grade: 'L0', reason: '看着像小事' }) as { grade: string; suggested: string; override?: string }
-    assert.equal(tri.grade, 'L2')
+    assert.equal(tri.grade, 'L1')
     assert.equal(tri.override, '??')
-    assert.equal(loadDirectives(dir).find(d => d.id === resp.commandId)!.grade, 'L2')
-    // L2 无计划发布 → 硬门拒绝（先计划后做，?? 的语义闭环）。
+    assert.equal(loadDirectives(dir).find(d => d.id === resp.commandId)!.grade, 'L1')
+    // L1 无签发发布 → 硬门拒绝（先签后做，?? 的语义闭环）。
     await assert.rejects(
       execTool(makeDeps(dir, FLAG_ON), 'war_publish', { title: '重构配置', brief: '重构配置层的任务书正文', acceptance: '现有测试全绿；lint 无新告警', commandId: resp.commandId }),
       /先计划后做/,
     )
     const proj = directiveProjection(dir).find(c => c.commandId === resp.commandId)
-    assert.equal(proj?.grade, 'L2')
+    assert.equal(proj?.grade, 'L1')
   } finally {
     srv.dispose()
     rmSync(dir, { recursive: true, force: true })
@@ -228,8 +228,8 @@ test('取证⑥（任务 218b 验收②态）：同一草稿切档 ??→!!——
     const created2 = rawEvent(dir, second.commandId, 'directive_created') as Extract<DirectiveEvent, { type: 'directive_created' }>
     assert.equal(created2.text, '!!直接做 给面板加导出按钮')
     assert.ok(!created2.text.includes('??先看方案'), `created2.text=${created2.text}`)
-    // 双方 overrideMarkerOf 判档互不串扰：?? 版强制 L2、!! 版强制 L0（directives.ts:24-28）。
-    assert.deepEqual(overrideMarkerOf(created1.text), { grade: 'L2', marker: '??' })
+    // 双方 overrideMarkerOf 判档互不串扰：?? 版强制 L1（D24 签发档）、!! 版强制 L0（directives.ts overrideMarkerOf）。
+    assert.deepEqual(overrideMarkerOf(created1.text), { grade: 'L1', marker: '??' })
     assert.deepEqual(overrideMarkerOf(created2.text), { grade: 'L0', marker: '!!' })
   } finally {
     srv.dispose()

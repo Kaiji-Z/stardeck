@@ -374,6 +374,11 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
           requestedAt: r.requestedAt,
         })),
       brief: d.brief === undefined ? null : { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables },
+      // D24 两档制（只读投影）：签发定稿文本 + 待签态——会议室据此渲染可编辑
+      // 五项卡与签发/驳回；awaitingSign=呈批件来自任务书的新流程（老 plan 流
+      // 程 brief 缺席 → 走旧决策带，互不干扰）。
+      briefSigned: d.briefSigned === undefined ? null : { goal: d.briefSigned.goal, background: d.briefSigned.background, acceptance: d.briefSigned.acceptance, nonGoals: d.briefSigned.nonGoals, deliverables: d.briefSigned.deliverables },
+      awaitingSign: d.plan?.status === 'pending' && d.brief !== undefined,
     }
   })
 }
@@ -736,10 +741,27 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           send(404, { ok: false, error: `路由不存在：${r.method ?? 'GET'} ${pathname}` })
           return
         }
-        const body = JSON.parse(await readBody(r)) as { commandId?: unknown; decision?: unknown; note?: unknown }
+        const body = JSON.parse(await readBody(r)) as { commandId?: unknown; decision?: unknown; note?: unknown; brief?: unknown }
         const commandId = typeof body.commandId === 'string' ? body.commandId.trim() : ''
         const decision = typeof body.decision === 'string' ? body.decision.trim() : ''
         const note = typeof body.note === 'string' && body.note.trim() !== '' ? body.note.trim() : undefined
+        // D24 签发修改权：approve 可携舰长逐项修改后的任务书五项——签发文本
+        // 是发布的唯一依据；未携带=照原稿签发。字段缺/非字符串即 400（不静默）。
+        const briefEdited = body.brief !== undefined ? body.brief as Record<string, unknown> : undefined
+        const signedBrief = briefEdited === undefined ? undefined : (() => {
+          const fields = ['goal', 'background', 'acceptance', 'nonGoals', 'deliverables'] as const
+          const out: Record<string, string> = {}
+          for (const f of fields) {
+            const v = briefEdited[f]
+            if (typeof v !== 'string' || v.trim() === '') return undefined
+            out[f] = v.trim()
+          }
+          return out as { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
+        })()
+        if (briefEdited !== undefined && signedBrief === undefined) {
+          send(400, { ok: false, error: '签发修改文本不完整：五项（goal/background/acceptance/nonGoals/deliverables）都要求非空字符串。' })
+          return
+        }
         if (commandId === '') {
           send(400, { ok: false, error: '缺少命令号。' })
           return
@@ -759,6 +781,15 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         }
         if (decision === 'approve') {
           appendDirectiveEvent(deps.stateDir, { type: 'directive_plan_approved', ts: new Date().toISOString(), directiveId: commandId, ...(note !== undefined ? { note } : {}) })
+          // D24 签发：批准即签发，定稿文本入账——舰长修改权绝对化：携修改文本
+          // 时无论原稿（brief）在不在都落 brief_signed（发布工单逐字照抄）；
+          // 未携修改且原稿在（新流程）→ 照原稿签发；旧 plan 流程无修改 → 不落
+          // 签发事件（维持旧发布语义）。原稿 brief 永不覆盖（谈/签两笔审计链）。
+          if (signedBrief !== undefined) {
+            appendDirectiveEvent(deps.stateDir, { type: 'directive_brief_signed', ts: new Date().toISOString(), directiveId: commandId, ...signedBrief, ...(note !== undefined ? { note } : {}) })
+          } else if (directive.brief !== undefined) {
+            appendDirectiveEvent(deps.stateDir, { type: 'directive_brief_signed', ts: new Date().toISOString(), directiveId: commandId, goal: directive.brief.goal, background: directive.brief.background, acceptance: directive.brief.acceptance, nonGoals: directive.brief.nonGoals, deliverables: directive.brief.deliverables, ...(note !== undefined ? { note } : {}) })
+          }
         } else {
           appendDirectiveEvent(deps.stateDir, { type: 'directive_plan_rejected', ts: new Date().toISOString(), directiveId: commandId, reason: note ?? '舰长驳回，请修订重呈' })
         }

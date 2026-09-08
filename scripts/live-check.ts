@@ -292,6 +292,7 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     const taskCState = loadCampaign(stateDir2, taskC)
     check('征召令内嵌任务书五项（发布 brief 携带非目标/交付物）', typeof taskCState.brief === 'string' && taskCState.brief.includes('非目标') && taskCState.brief.includes('交付物'), (taskCState.brief ?? '').slice(0, 80))
 
+
     let staffTask: ReturnType<typeof loadCampaign> | undefined
     const endStaff = Date.now() + 8 * 60_000
     for (;;) {
@@ -318,6 +319,57 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     }
     const staffClosed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskA, verdict: '通过收官——大副链实弹回响属实' }, agentId: 'live-staff' }) as { ok: boolean; result?: { status?: string } }
     check('舰长验收收官（大副相位）', staffClosed.ok === true && staffClosed.result?.status === 'closed', `${taskA}=${loadCampaign(stateDir2, taskA).status}`)
+
+    // ── D24 两档制 L1 相位：?? 签发档全链（taskA 收官后单独成轮，防首轮过重）──
+    // 「??先看方案」强制 L1——大副产出任务书后不发布（war_publish 硬门机械背书），
+    // 呈舰长签发。签发兼容两条来路：新流程（brief 块→系统代开呈批件）与旧习惯
+    // （大副直呼 war_plan——工具描述遗留）；舰长签发文本两种来路下都是发布唯一依据。
+    const cmdL1 = (await post2('/warroom/api/commands', { text: '??先看方案：在任务工作区根创建 sign-live.txt（内容包含字符串 d24-sign-live），写 check.js 校验该文件存在且含该串并真实运行记录退出码，然后按出口协议交证。' })).commandId as string
+    console.log(stamp(`D24 考题：${cmdL1}（?? 签发档）`))
+    // ① 呈批件挂起且不发布（?? 强制 L1 + war_publish 硬门双背书）：
+    const signReady = await until(8 * 60_000, `${cmdL1} L1 呈批挂起待签`, () => {
+      const d = dirState().find(x => x.id === cmdL1)
+      return d?.plan?.status === 'pending' && d.grade === 'L1' && d.status !== 'approved' && d.taskId === undefined ? 'plan pending' : undefined
+    })
+    const dirL1 = dirState().find(x => x.id === cmdL1)!
+    check('D24 L1：呈批挂起且不发布（等舰长签发）', dirL1.grade === 'L1' && dirL1.taskId === undefined && dirL1.plan?.status === 'pending', `${signReady}｜grade=${dirL1.grade}｜brief=${dirL1.brief !== undefined ? '在' : '缺（旧 plan 来路）'}`)
+    // ② 舰长签发并修改非目标（定稿权实弹——签发文本自备，不依赖原稿）：
+    const signMark = `签发标记：非目标由舰长逐项定稿（LIVE-L1-MARK ${Date.now()}）`
+    const signResp = await post2('/warroom/api/commands/plan', {
+      commandId: cmdL1, decision: 'approve', note: '按签发文本执行',
+      brief: {
+        goal: '签发定稿：创建 sign-live.txt 并以 check.js 校验（内容含 d24-sign-live）',
+        background: '任务工作区根；仅此一文件一脚本',
+        acceptance: 'sign-live.txt 存在且含 d24-sign-live；check.js 真实运行退出码 0',
+        nonGoals: signMark,
+        deliverables: 'sign-live.txt、check.js 与验收说明',
+      },
+    }) as { ok?: boolean; error?: string }
+    check('D24 L1：舰长签发携修改文本（/commands/plan 受理）', signResp.ok === true, signResp.error ?? 'signed')
+    const signedGoal = await until(4 * 60_000, `${cmdL1} brief_signed 入账`, () => {
+      const s = dirState().find(x => x.id === cmdL1)?.briefSigned
+      return s !== undefined && s.nonGoals.includes('LIVE-L1-MARK') ? s.nonGoals : undefined
+    })
+    check('D24 L1：签发文本入账（brief_signed 携舰长定稿）', signedGoal.includes('LIVE-L1-MARK'), signedGoal)
+    // ③ 大副携签发文本发布 → 任务 brief 逐字含标记：
+    const taskL1 = await until(8 * 60_000, `${cmdL1} 签发后发布`, () => {
+      const d = dirState().find(x => x.id === cmdL1)
+      return d?.status === 'approved' && d.taskId !== undefined ? d.taskId! : undefined
+    })
+    const taskL1State = loadCampaign(stateDir2, taskL1)
+    check('D24 L1：发布任务 brief 逐字含签发标记', typeof taskL1State.brief === 'string' && taskL1State.brief.includes('LIVE-L1-MARK'), (taskL1State.brief ?? '').slice(0, 80))
+    // ④ 执行收官全链（签发档任务与 L0 同管道交证验收）：
+    let l1Task: ReturnType<typeof loadCampaign> | undefined
+    const endL1 = Date.now() + 8 * 60_000
+    for (;;) {
+      await new Promise(r => setTimeout(r, 5_000))
+      l1Task = loadCampaign(stateDir2, taskL1)
+      console.log(stamp(`D24 L1 外勤进行中… ${taskL1} status=${l1Task.status}`))
+      if (l1Task.status === 'reported' || l1Task.status === 'failed' || l1Task.status === 'closed') break
+      if (Date.now() > endL1) throw new Error('D24 L1 外勤 8 分钟未交卷')
+    }
+    const l1Closed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskL1, verdict: '签发档任务收官——签发文本如实落地' }, agentId: 'live-staff' }) as { ok: boolean; result?: { status?: string } }
+    check('D24 L1：外勤交卷并收官全链', (l1Task.status === 'reported' || l1Task.status === 'closed') && l1Closed.ok === true && l1Closed.result?.status === 'closed', `${taskL1}=${loadCampaign(stateDir2, taskL1).status}`)
 
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。
   } catch (err) {

@@ -23,7 +23,7 @@ import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, renderBriefForSign, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
@@ -381,6 +381,15 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           // 机械闸（D23 完整形态）：过限澄清不入账——命令停在 answered 态，
           // 成案单带「必须定案或弃案」纪律持续出，行为收敛。
           console.warn(`[stardeck] 澄清轮超限（第 ${rej.round} 轮 > 上限 ${CLARIFY_ROUNDS_CAP}）：${rej.commandId} 的澄清块拒收——成案单将强制定案或弃案`)
+        }
+        // D24 两档制：L1 签发流——任务书入账后由系统代开呈批件（plan pending=
+        // 待舰长签发，工单不出=罚时豁免；签发走 /commands/plan，war_publish 硬门
+        // 靠 plan approved 放行）。驳回重拟的新任务书同样在此重开呈批件。
+        for (const d of loadDirectives(stateDir)) {
+          if ((d.grade === 'L1' || d.grade === 'L2') && d.brief !== undefined && (d.plan === undefined || d.plan.status === 'rejected') && d.status !== 'approved' && d.status !== 'cancelled') {
+            appendDirectiveEvent(stateDir, { type: 'directive_plan_opened', ts: new Date().toISOString(), directiveId: d.id, plan: renderBriefForSign(d.brief) })
+            console.log(`[stardeck] L1 任务书呈批 ${d.id}——等舰长签发`)
+          }
         }
       } catch (err) {
         console.warn(`[stardeck] 大副产出收割失败（下轮工单重试）：${err instanceof Error ? err.message : String(err)}`)

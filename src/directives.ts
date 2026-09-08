@@ -21,14 +21,17 @@ export type DirectiveStatus = 'draft' | 'received' | 'talking' | 'approved' | 'c
  * deepen=接已终态的成功仗深化、retry=接败仗再战、pivot=插入进行中的执行会话。 */
 export type ContinuationMode = 'deepen' | 'retry' | 'pivot'
 
-/** V5 autonomy grade — L0 直发 / L1 计划后做 / L2 澄清收敛后计划（SPEC §1）。 */
+/** V5 autonomy grade — L0 直发 / L1 计划后做 / L2 澄清收敛后计划（SPEC §1）。
+ *  D24 两档制（2026-09-08）：新流程只分 L0（直发）/L1（签任务书）；L2 退役——
+ *  类型保留 'L2' 仅为老账本 fold 兼容，分诊正典与改档 UI 不再产出。 */
 export type DirectiveGrade = 'L0' | 'L1' | 'L2'
 
 /** Sovereign override markers baked into the command text (SPEC §0 档位覆写)：
- * `!!直接做` forces L0, `??先看方案` forces L2 — they outrank the staff's
- * suggestion, host-side enforced (never trust the model to honor them). */
+ * `!!直接做` forces L0, `??先看方案` forces L1（D24 两档制：先看方案=签任务书
+ * 档——舰长要亲自定稿再放行，原 L2 语义由 L1 签发流吸收）——they outrank the
+ * staff's suggestion, host-side enforced (never trust the model to honor them). */
 export function overrideMarkerOf(text: string): { grade: DirectiveGrade; marker: '!!' | '??' } | undefined {
-  if (text.includes('??先看方案')) return { grade: 'L2', marker: '??' }
+  if (text.includes('??先看方案')) return { grade: 'L1', marker: '??' }
   if (text.includes('!!直接做')) return { grade: 'L0', marker: '!!' }
   return undefined
 }
@@ -81,6 +84,9 @@ export interface Directive {
   /** 任务书一等账本事件（五项，后写覆盖）：大副成案的谈判产物——先于计划
    * 存在、独立于发布审计在案（计划稿/发布只留结果，任务书留下「怎么谈拢的」）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; ts: string }
+  /** D24 签发任务书（2026-09-08）：舰长对 L1 呈批件的定稿文本（可逐项修改）
+   * ——发布的唯一依据；brief 原稿保留不覆盖（谈/签两笔审计链）。 */
+  briefSigned?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; ts: string; note?: string }
   /** V17 归档（舰长手动，仅链全终局可入）：宿主会话已 archiveSession 的账面痕迹。
    *  不改 status——archived 叠在终局之上的第二维度；会话清单随事件冻结。 */
   archived?: { at: string; sessions: string[] }
@@ -124,6 +130,10 @@ export type DirectiveEvent =
   // 任务书一等事件：五项齐（目标/背景与约束/验收标准/非目标/交付物），
   // 后写覆盖；与 directive_answered 同纪律——审计在案，成案由大副工具动作推进。
   | { type: 'directive_brief_ready'; ts: string; directiveId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
+  // D24 两档制（2026-09-08）：L1 签发——舰长对呈批任务书（可逐项修改后）的
+  // 签发入账。brief_ready 原稿保留不覆盖（谈的是什么/签的是什么两笔都在），
+  // 签发文本是发布的唯一依据（发布工单随行）。note=签发附言（可缺省）。
+  | { type: 'directive_brief_signed'; ts: string; directiveId: string; goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; note?: string }
   // V17 归档：链全终局后舰长手动入档——宿主会话批量 archiveSession 后的账面
   // 落痕（sessions=实际归档成功的清单；部分失败如实缺席，不假装全成）。
   | { type: 'directive_archived'; ts: string; directiveId: string; sessions: string[] }
@@ -184,6 +194,13 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
     // （approved）之后——不叠在终态之上就永远进不了账（V20.2 实弹抓的正是这个）。
     if (event.type === 'directive_brief_ready') {
       current.brief = { goal: event.goal, background: event.background, acceptance: event.acceptance, nonGoals: event.nonGoals, deliverables: event.deliverables, ts: event.ts }
+      continue
+    }
+    // D24 签发任务书：舰长定稿文本单独入账，brief 原稿保留（谈/签两笔审计链）。
+    // 签发只发生在发布前（talking 期），但同一终态前放行纪律与 brief_ready 对齐——
+    // 收割/签发的时序竞态不丢账。
+    if (event.type === 'directive_brief_signed') {
+      current.briefSigned = { goal: event.goal, background: event.background, acceptance: event.acceptance, nonGoals: event.nonGoals, deliverables: event.deliverables, ts: event.ts, ...(event.note !== undefined ? { note: event.note } : {}) }
       continue
     }
     if (TERMINAL.has(current.status)) continue

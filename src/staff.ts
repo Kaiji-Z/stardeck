@@ -43,6 +43,10 @@ export interface StaffWorkItem {
   questions?: string[]
   answer?: string
   round?: number
+  /** D24 签发任务书（publish 单携带）：舰长定稿五项——发布的唯一依据，逐字照抄。 */
+  briefSigned?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
+  /** D24 重拟单携带：被驳回的原稿五项（修订基线，不推翻重来）。 */
+  briefDraft?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }
 }
 
 /**
@@ -71,6 +75,7 @@ export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkIt
         round: d.clarification.round,
         ...(d.plan !== undefined ? { planStatus: d.plan.status, planText: d.plan.text } : {}),
         ...(d.plan !== undefined && d.plan.reason !== undefined ? { planRejectedReason: d.plan.reason } : {}),
+        ...(d.brief !== undefined ? { briefDraft: { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables } } : {}),
         ...name,
       })
       continue
@@ -83,22 +88,42 @@ export function staffWorklist(directives: ReadonlyArray<Directive>): StaffWorkIt
       out.push({ commandId: d.id, kind: 'publish', text: d.text, grade: d.grade, ...name })
       continue
     }
-    // L1/L2：先计划后做（staff-plan 硬门在 war_publish 工具侧）。
+    // L1/L2：先计划后做（staff-plan 硬门在 war_publish 工具侧）。D24 两档制：
+    // L1 的呈批件=任务书本身（daemon 从 brief 代开 plan pending），签发后走
+    // 本分支发布——发布工单携带签发文本（舰长可改），逐字照抄。
     if (d.plan === undefined || d.plan.status === 'rejected') {
       out.push({
         commandId: d.id, kind: 'plan', text: d.text, grade: d.grade,
         ...(d.plan !== undefined ? { planStatus: d.plan.status, planText: d.plan.text } : {}),
         ...(d.plan !== undefined && d.plan.reason !== undefined ? { planRejectedReason: d.plan.reason } : {}),
+        ...(d.brief !== undefined ? { briefDraft: { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables } } : {}),
         ...name,
       })
     } else if (d.plan.status === 'approved') {
-      out.push({ commandId: d.id, kind: 'publish', text: d.text, grade: d.grade, planStatus: 'approved', planText: d.plan.text, ...name })
+      out.push({
+        commandId: d.id, kind: 'publish', text: d.text, grade: d.grade, planStatus: 'approved', planText: d.plan.text,
+        ...(d.briefSigned !== undefined ? { briefSigned: { goal: d.briefSigned.goal, background: d.briefSigned.background, acceptance: d.briefSigned.acceptance, nonGoals: d.briefSigned.nonGoals, deliverables: d.briefSigned.deliverables } } : {}),
+        ...name,
+      })
     }
   }
   return out
 }
 
 // ---------- 澄清协议（2026-09-08）：输入成熟度预评 + 结构化块解析 ----------
+
+/** D24 两档制：L1 呈批件渲染（纯）——任务书五项 → 可读呈批文本。daemon 在
+ * L1 任务书入账后以此代开 plan pending（呈批件=任务书本身，签发走既有
+ * /commands/plan；war_publish 硬门靠 plan approved 放行，协议零改动）。 */
+export function renderBriefForSign(brief: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }): string {
+  return [
+    `目标：${brief.goal}`,
+    `背景与约束：${brief.background}`,
+    `验收标准：${brief.acceptance}`,
+    `非目标：${brief.nonGoals}`,
+    `交付物：${brief.deliverables}`,
+  ].join('\n')
+}
 
 /** 输入成熟度四判型：vague=连要做什么都不明；missing-acceptance=缺验收；
  * missing-nongoals=缺边界；mature=五项自检无缺口。 */
@@ -332,6 +357,8 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
       // D23 翻译显性化（V21.4）：成熟命令也把「审核+翻译」的产物亮在板上——
       // 成案前输出任务书块，舰长看到自己的强目标被翻译成了什么。
       '- 命令成熟（含走快道的）同样必须在最终答复末尾输出任务书块（五项、格式同办结纪律；按舰长强目标翻译，缺口按起草法补全并注明）——缺块的办结不算办结。',
+      // D24 两档制：L1 签发档纪律——呈批件就是任务书本身，产出后停轮等签。
+      '- 分诊档位只报 L0/L1（L2 已退役）。风险信号（不可逆删除、删改共享或系统文件、大范围重构、舰长用「??先看方案」标记）→ 报 L1：输出任务书块后本轮即办结——不要 war_plan、不要 war_publish，系统会把任务书呈舰长签发（舰长可逐项修改），签发后另开一轮叫你发布。',
     ].join('\n'))
   }
   for (const item of items) {
@@ -352,12 +379,25 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
       '验收标准：<可判定的完成定义>',
       '非目标：<明确不做的>',
       '交付物：<产物清单>',
-      '再按复杂度走流程（L0 war_publish 直发 / L1 先 war_plan 呈批，务必携带 commandId；发布时 brief 字段写全背景与约束/非目标/交付物，验收字段写验收标准）。确实仍不可成案才允许再出澄清块——第 2 轮起必须定案或 war_abandon_command，不得再问。',
+      '再按复杂度走流程：L0 war_publish 直发（务必携带 commandId；发布时 brief 字段按行写「背景与约束：…／非目标：…／交付物：…」三行——保留字面标签别改写成叙述，验收字段写验收标准）；L1 输出任务书块后本轮停——不要 war_plan、不要 war_publish，等舰长签发后系统另开发布轮。确实仍不可成案才允许再出澄清块——第 2 轮起必须定案或 war_abandon_command，不得再问。',
     ].join('\n'))
   }
   for (const item of items) {
     if (item.kind !== 'plan') continue
     n += 1
+    if (item.briefDraft !== undefined) {
+      // D24 两档制：L1 任务书被驳回——按舰长意见重拟（原稿随单），仍是「输出
+      // 任务书块后停」的签发流；呈批、签发、发布都由系统接管。
+      sections.push([
+        `\n${divider(n, '重拟任务书')}`,
+        `命令号 ${item.commandId}（档位 ${item.grade ?? 'L1'}，上一稿任务书被舰长驳回）`,
+        `命令原文：「${item.text}」`,
+        `舰长驳回意见：「${item.planRejectedReason ?? '请修订重呈'}」——按此修订重拟。`,
+        `被驳回的原稿五项（修订基线，别推翻重来）：\n目标：${item.briefDraft.goal}\n背景与约束：${item.briefDraft.background}\n验收标准：${item.briefDraft.acceptance}\n非目标：${item.briefDraft.nonGoals}\n交付物：${item.briefDraft.deliverables}`,
+        '【处理】按意见修订后，最终答复末尾输出新任务书块（五项、格式逐字见办结纪律，系统据此入账并重新呈舰长签发）。不要 war_plan、不要 war_publish——本单到「新任务书块输出」即办结。',
+      ].join('\n'))
+      continue
+    }
     sections.push([
       `\n${divider(n, '呈改计划')}`,
       `命令号 ${item.commandId}（档位 ${item.grade ?? 'L1'}${item.planStatus === 'rejected' ? '，上一稿计划被舰长驳回' : '，尚未呈报计划'}）`,
@@ -370,7 +410,17 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
   for (const item of items) {
     if (item.kind !== 'publish') continue
     n += 1
-    if (item.planStatus === 'approved' && item.planText !== undefined) {
+    if (item.briefSigned !== undefined) {
+      // D24 两档制：签发发布——舰长定稿文本是唯一依据，逐字照抄不改写。
+      const s = item.briefSigned
+      sections.push([
+        `\n${divider(n, '发布（签发件）')}`,
+        `命令号 ${item.commandId}（档位 ${item.grade ?? 'L1'}）任务书已获舰长签发——按下述签发文本 war_publish 发布（务必携带 commandId=${item.commandId}）：brief 字段逐字写「背景与约束；非目标；交付物」三行内容，acceptance 字段逐字写「验收标准」，标题取自「目标」一句话。不要改写、不要增删——舰长签的是什么，发布的就是什么。`,
+        `命令原文：「${item.text}」`,
+        `签发任务书五项：\n目标：${s.goal}\n背景与约束：${s.background}\n验收标准：${s.acceptance}\n非目标：${s.nonGoals}\n交付物：${s.deliverables}`,
+        `发布成功后，最终答复末尾必须输出该命令的任务书块（五项=签发文本，见办结纪律）——缺块不算办结。`,
+      ].join('\n'))
+    } else if (item.planStatus === 'approved' && item.planText !== undefined) {
       sections.push([
         `\n${divider(n, '发布')}`,
         `命令号 ${item.commandId}（档位 ${item.grade ?? 'L1'}）计划已获舰长批准——按批准的计划成任务书，war_publish 发布（务必携带 commandId=${item.commandId}；标题一句话、brief 写背景/指引/边界、验收 ≤5 条可判定项，过系统 lint）。`,
@@ -389,7 +439,7 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
   }
   sections.push([
     '',
-    '【办结纪律】逐件推进到终态之一：已发布（war_publish 成功）/ 已呈计划待批 / 已澄清待答复（最终答复含澄清块，等舰长答复后系统另开成案轮）/ 确实无法成案（war_abandon_command 附一句人话原因——慎用）。凡已发布或已呈批的命令，最终答复必须包含该命令的【任务书】块（五项：目标/背景与约束/验收标准/非目标/交付物，头行【任务书】（命令号））——它是审核与翻译的入账凭证，缺块的办结不算办结。全办结即收工退出，不空转等待。发布被 lint 拦就按报错文案修稿重发；工具报错即纠错指引。禁止伪造账本、禁止对已终态命令动手、禁止替外勤执行者交证。',
+    '【办结纪律】逐件推进到终态之一：已发布（war_publish 成功）/ 已呈任务书待舰长签发（最终答复含任务书块，L1 档到此办结——签发后系统另开发布轮）/ 已澄清待答复（最终答复含澄清块，等舰长答复后系统另开成案轮）/ 确实无法成案（war_abandon_command 附一句人话原因——慎用）。凡已发布或已呈批的命令，最终答复必须包含该命令的【任务书】块（五项：目标/背景与约束/验收标准/非目标/交付物，头行【任务书】（命令号））——它是审核与翻译的入账凭证，缺块的办结不算办结。全办结即收工退出，不空转等待。发布被 lint 拦就按报错文案修稿重发；工具报错即纠错指引。禁止伪造账本、禁止对已终态命令动手、禁止替外勤执行者交证。',
   ].join('\n'))
   return sections.join('\n')
 }

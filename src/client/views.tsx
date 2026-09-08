@@ -1338,6 +1338,34 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   // 同级的舰长决策（宿主形态的正典仍是「结论说进大副会话」，此钮不渲染）。
   // P0-1 板内答复状态（talking ghost 的 composer，2026-09-02）。
   const [answerText, setAnswerText] = useState('')
+  // D24 两档制：L1 待签面板状态（find-my-goal 定稿语义——五项可改，签发即定稿）。
+  // signFields=null 表示未动过（显示原稿）；一动即落本地态（服务端回流不冲掉笔迹）。
+  const [signFields, setSignFields] = useState<{ goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null>(null)
+  const [signBusy, setSignBusy] = useState(false)
+  const [signNote, setSignNote] = useState('')
+  const [signStatus, setSignStatus] = useState('')
+  const signBriefOf = cmd.brief
+  const signFieldsShown = signFields ?? (signBriefOf !== null && signBriefOf !== undefined
+    ? { goal: signBriefOf.goal, background: signBriefOf.background, acceptance: signBriefOf.acceptance, nonGoals: signBriefOf.nonGoals, deliverables: signBriefOf.deliverables }
+    : null)
+  const signBrief = (): void => {
+    if (signBusy || signFieldsShown === null) return
+    setSignBusy(true)
+    setSignStatus('')
+    void decidePlan(cmd.commandId, 'approve', signNote.trim() === '' ? undefined : signNote.trim(), signFieldsShown).then(out => {
+      setSignStatus(out.ok ? fp.signDone : `${fp.signFail}${out.error ?? '未知'}`)
+      setSignBusy(false)
+    })
+  }
+  const redraftBrief = (): void => {
+    if (signBusy || signNote.trim() === '') return
+    setSignBusy(true)
+    setSignStatus('')
+    void decidePlan(cmd.commandId, 'reject', signNote.trim()).then(out => {
+      setSignStatus(out.ok ? fp.signDone : `${fp.signFail}${out.error ?? '未知'}`)
+      setSignBusy(false)
+    })
+  }
   // 计划定夺批注（驳回带意见，2026-09-02）：驳回=意见送达大副重拟；批准=批注入账。
   const [planNote, setPlanNote] = useState('')
   const [answerBusy, setAnswerBusy] = useState(false)
@@ -1405,9 +1433,14 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
     : fp.taskRelaying
   // 配置展开里的改档出口（旧 footer 折叠的语义新家）：已分诊且未批准未取消。
   const regradable = cmd.grade !== null && cmd.status !== 'approved' && cmd.status !== 'cancelled'
-  // 决策带动作判定（与收件箱四类同源，plan 优先级最高）。
-  const actionKind = cmd.plan?.status === 'pending'
-    ? 'plan'
+  // 决策带动作判定（与收件箱四类同源，plan 优先级最高）。D24：L1 待签不进
+  // 决策带——呈批件来自任务书的新流程归会议室（可编辑五项卡）；决策带 plan
+  // 分支只留给老账本的 plan 流程（呈批件=计划稿，无任务书）。
+  const awaitingSignNow = cmd.awaitingSign === true
+  const actionKind = awaitingSignNow
+    ? null
+    : cmd.plan?.status === 'pending'
+      ? 'plan'
     : cmd.status === 'talking'
       ? 'clarify'
       : lastReport !== undefined && chain.some(t => t.status === 'reported')
@@ -1486,8 +1519,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   }
   // D23（2026-09-08）：任务书五项卡——成案谈判产物的结构化展示（非目标单独
   // 成行，它是防跑偏的关键项），与 ghost 面板并列；未成案（无 brief）不渲染。
-  const briefPanel = (k?: string): ReactNode => {
-    const b = cmd.brief
+  // D24：override=签发定稿文本（签发后会议产物卡展示定稿，原稿在账本留审计）。
+  const briefPanel = (k?: string, override?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string }): ReactNode => {
+    const b = override ?? cmd.brief
     if (b === null || b === undefined) return null
     return createElement('div', { key: k, className: 'war-subdetail war-brief-card' },
       createElement('div', { className: 'war-subdetail-title' }, fp.briefTitle),
@@ -1496,6 +1530,50 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
       subRow(fp.briefAcceptance, b.acceptance),
       subRow(fp.briefNonGoals, b.nonGoals),
       subRow(fp.briefDeliverables, b.deliverables),
+    )
+  }
+  // D24 两档制（2026-09-08）：L1 待签面板——find-my-goal 定稿语义的板上形态：
+  // 五项以可编辑文本域呈批（出了强目标文字还能改），签发（可带附言）即定稿，
+  // 驳回必带意见回会议重拟。走既有 /commands/plan 通道（decidePlan），零新端点。
+  const signFieldsMeta: Array<[string, 'goal' | 'background' | 'acceptance' | 'nonGoals' | 'deliverables']> = [
+    [fp.briefGoal, 'goal'], [fp.briefBackground, 'background'], [fp.briefAcceptance, 'acceptance'], [fp.briefNonGoals, 'nonGoals'], [fp.briefDeliverables, 'deliverables'],
+  ]
+  const signComplete = signFieldsShown !== null && Object.values(signFieldsShown).every(v => v.trim() !== '')
+  const signPanel = (k?: string): ReactNode => {
+    if (!meetingAwaitingSign || signFieldsShown === null) return null
+    return createElement('div', { key: k, className: 'war-subdetail war-sign-card' },
+      createElement('div', { className: 'war-subdetail-title' }, fp.briefTitle),
+      createElement('p', { className: 'war-clarify-note' }, fp.signEditableNote),
+      ...signFieldsMeta.map(([label, key]) => createElement('div', { key, className: 'war-sub-row' },
+        createElement('span', { className: 'war-sub-label' }, label),
+        createElement('div', { className: 'war-sub-value' },
+          createElement('textarea', {
+            className: 'war-cd-answer war-sign-field', rows: 2,
+            value: signFieldsShown[key],
+            onChange: e => { setSignFields({ ...signFieldsShown, [key]: String(e.target.value ?? '') }) },
+          })))),
+      createElement('div', { className: 'war-sub-row' },
+        createElement('div', { className: 'war-sub-value' },
+          createElement('textarea', {
+            className: 'war-cd-answer', rows: 2, placeholder: fp.signNotePh,
+            value: signNote,
+            onChange: e => { setSignNote(String(e.target.value ?? '')) },
+          }),
+          subActions([
+            createElement('button', {
+              className: 'war-btn primary', type: 'button', disabled: signBusy || !signComplete,
+              title: fp.signEditableNote,
+              onClick: signBrief,
+            }, signBusy ? fp.signBusy : fp.signBtn),
+            createElement('button', {
+              className: 'war-btn war-btn-warn', type: 'button', disabled: signBusy || signNote.trim() === '',
+              title: fp.signNotePh,
+              onClick: redraftBrief,
+            }, fp.redraftBtn),
+          ]),
+          signStatus !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, signStatus) : null,
+        ),
+      ),
     )
   }
   // D23 第四刀（2026-09-08）真会议室：澄清收敛的专用场所——时间轴同屏（每轮
@@ -1511,8 +1589,12 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   // 夹具/旧投影缺席不误判「有会议室」。
   const meetingClar = cmd.clarification ?? null
   const meetingRounds = cmd.clarificationRounds ?? []
+  // D24 两档制：待签=呈批件来自任务书（L1 签发流，dashboard 投影派生）。
+  const meetingSigned = cmd.briefSigned ?? null
+  const meetingAwaitingSign = cmd.awaitingSign === true
   // talking 无澄清（大副还在读命令）也开会场——P0-1 答复通道的常驻的家。
-  const meetingActive = meetingClar !== null || meetingRounds.length > 0 || cmd.status === 'talking'
+  // 待签命令状态常停在 received（无澄清翻转）；签发后同样（已签卡是会议记录）。
+  const meetingActive = meetingClar !== null || meetingRounds.length > 0 || cmd.status === 'talking' || meetingAwaitingSign || meetingSigned !== null
   const meetingRoom = (k?: string): ReactNode => {
     if (!meetingActive) return null
     const pendingClar = meetingClar !== null && meetingClar.status === 'pending' ? meetingClar : null
@@ -1525,11 +1607,13 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
       : meetingClar !== null
         ? [{ round: meetingClar.round, questions: meetingClar.questions, ...(meetingClar.options !== undefined && meetingClar.options !== null ? { options: meetingClar.options } : {}), answer: meetingClar.answer }]
         : []
-    // ③过程态即段头结论：等你答复（pending）→ 成案中（answered）→ 任务书在案。
+    // ③过程态即段头结论：等你答复 → 成案中 → 待你签 → 已签发 → 任务书在案。
     const conclusion = pendingClar !== null
       ? fp.clarifyRound(pendingClar.round)
-      : finalizing ? fp.meetingFinalizing
-        : hasBrief ? fp.briefTitle : ''
+      : meetingAwaitingSign ? fp.meetingAwaitingSign
+        : meetingSigned !== null ? fp.meetingSigned
+          : finalizing ? fp.meetingFinalizing
+            : hasBrief ? fp.briefTitle : ''
     // D23 选择题式（V21.4）：点选选项 → 拼「N<字母>;」进答复框（人机共编，
     // 自由输入兜底）——送达通道不变（/commands/answer 文本）。
     const pickClarifyOption = (askIndex: number, letter: string): void => {
@@ -1574,9 +1658,10 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
               : null,
           )
         }),
-        // ②共识常驻：任务书（会议的产物）在场即渲染——不等成案；会议室存在时
-        // 它只在此处（命令段让位，避免同卡两处同屏）。
-        hasBrief ? briefPanel('panel-meeting-brief') : null,
+        // ②共识常驻：任务书（会议的产物）在场即渲染——不等成案；D24 L1 待签=
+        // 可编辑五项卡（find-my-goal 定稿语义：出了强目标文字还能改），签发后
+        // 展示定稿文本（原稿在账本留审计）。会议室存在时它只在此处（命令段让位）。
+        meetingAwaitingSign ? signPanel('panel-meeting-sign') : hasBrief ? briefPanel('panel-meeting-brief', meetingSigned ?? undefined) : null,
         // 空场：talking 但大副还没开问——提问会在时间轴上出现，先给预期。
         meetingClar === null && meetingRounds.length === 0
           ? createElement('p', { className: 'war-meeting-motto', role: 'status' }, fp.meetingEmpty)
@@ -1787,7 +1872,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
               subRow(fp.configText, cmd.text),
               regradable
                 ? subRow(fp.configRegrade, createElement('span', { className: 'war-sub-btns' },
-                  (['L0', 'L1', 'L2'] as const).filter(g => g !== cmd.grade).map(g =>
+                  // D24 两档制：改档只剩 L0/L1（L2 退役；历史 L2 卡照常显示）。
+                  (['L0', 'L1'] as const).filter(g => g !== cmd.grade).map(g =>
                     createElement('button', { key: g, className: 'war-btn', onClick: () => { onRegrade(g) } }, copy.regradeTo(GRADE_LABEL[g])))))
                 : null,
             )

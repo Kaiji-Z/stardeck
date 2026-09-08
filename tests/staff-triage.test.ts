@@ -46,9 +46,9 @@ function seedCommand(dir: string, id: string, text: string, received = true): vo
   if (received) appendDirectiveEvent(dir, { type: 'directive_received', ts: 't1', directiveId: id, staffSessionId: 'sec-1' })
 }
 
-test('overrideMarkerOf：!!直接做→L0、??先看方案→L2、无标记→undefined', () => {
+test('overrideMarkerOf：!!直接做→L0、??先看方案→L1（D24 签发档）、无标记→undefined', () => {
   assert.deepEqual(overrideMarkerOf('帮我清下日志 !!直接做'), { grade: 'L0', marker: '!!' })
-  assert.deepEqual(overrideMarkerOf('重构配置层 ??先看方案'), { grade: 'L2', marker: '??' })
+  assert.deepEqual(overrideMarkerOf('重构配置层 ??先看方案'), { grade: 'L1', marker: '??' })
   assert.equal(overrideMarkerOf('普通命令'), undefined)
 })
 

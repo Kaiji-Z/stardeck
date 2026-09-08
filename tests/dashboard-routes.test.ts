@@ -261,3 +261,87 @@ test('件④: planets POST 空/假路径 400，真目录注册 200', async () =>
     rmSync(realDir, { recursive: true, force: true })
   }
 })
+
+// ─── D24 两档制：签发走 /commands/plan 通道（approve 可携舰长修改后的五项）───
+
+function seedAwaitingSign(dir: string, cmdId: string): void {
+  appendDirectiveEvent(dir, { type: 'directive_created', ts: 't0', directiveId: cmdId, text: '清理实验脚本' })
+  appendDirectiveEvent(dir, { type: 'directive_received', ts: 't1', directiveId: cmdId, staffSessionId: `staff-${cmdId}` })
+  appendDirectiveEvent(dir, { type: 'directive_triaged', ts: 't2', directiveId: cmdId, grade: 'L1', reason: '不可逆' })
+  appendDirectiveEvent(dir, { type: 'directive_brief_ready', ts: 't3', directiveId: cmdId, goal: '原目标', background: '原背景', acceptance: '原验收', nonGoals: '原非目标', deliverables: '原交付物' })
+  appendDirectiveEvent(dir, { type: 'directive_plan_opened', ts: 't4', directiveId: cmdId, plan: '目标：原目标\n背景与约束：原背景' })
+}
+
+test('D24 签发：approve 携修改文本 → plan_approved + brief_signed 双入账（原稿保留）', async () => {
+  const dir = tmpStateDir()
+  seedAwaitingSign(dir, 'cmd-sign1')
+  const h = makeHandler({ stateDir: dir, flags: { 'staff-plan': true } })
+  const r = await call(h.handler, postReq('/warroom/api/commands/plan', {
+    commandId: 'cmd-sign1', decision: 'approve',
+    brief: { goal: '改后目标', background: '原背景', acceptance: '原验收', nonGoals: '舰长定稿非目标', deliverables: '原交付物' },
+    note: '非目标按我的来',
+  }))
+  assert.equal(r.body.ok, true)
+  const d = loadDirectives(dir).find(x => x.id === 'cmd-sign1')!
+  assert.equal(d.plan?.status, 'approved')
+  assert.equal(d.briefSigned?.nonGoals, '舰长定稿非目标', '签发文本=舰长定稿')
+  assert.equal(d.brief?.nonGoals, '原非目标', '原稿保留')
+  h.dispose()
+})
+
+test('D24 签发：approve 不携 brief → 照原稿签发；reject 必走 plan_rejected', async () => {
+  const dir = tmpStateDir()
+  seedAwaitingSign(dir, 'cmd-sign2')
+  const h = makeHandler({ stateDir: dir, flags: { 'staff-plan': true } })
+  const r1 = await call(h.handler, postReq('/warroom/api/commands/plan', { commandId: 'cmd-sign2', decision: 'approve' }))
+  assert.equal(r1.body.ok, true)
+  const d1 = loadDirectives(dir).find(x => x.id === 'cmd-sign2')!
+  assert.equal(d1.briefSigned?.goal, '原目标', '未修改照原稿签发')
+  h.dispose()
+
+  const dir2 = tmpStateDir()
+  seedAwaitingSign(dir2, 'cmd-sign3')
+  const h2 = makeHandler({ stateDir: dir2, flags: { 'staff-plan': true } })
+  const r2 = await call(h2.handler, postReq('/warroom/api/commands/plan', { commandId: 'cmd-sign3', decision: 'reject', note: '范围太大' }))
+  assert.equal(r2.body.ok, true)
+  const d2 = loadDirectives(dir2).find(x => x.id === 'cmd-sign3')!
+  assert.equal(d2.plan?.status, 'rejected')
+  assert.equal(d2.plan?.reason, '范围太大')
+  assert.equal(d2.briefSigned, undefined, '驳回无签发')
+  h2.dispose()
+})
+
+test('D24 签发：brief 字段不完整 → 400 不静默；无待批计划 → 400', async () => {
+  const dir = tmpStateDir()
+  seedAwaitingSign(dir, 'cmd-sign4')
+  const h = makeHandler({ stateDir: dir, flags: { 'staff-plan': true } })
+  const bad = await call(h.handler, postReq('/warroom/api/commands/plan', {
+    commandId: 'cmd-sign4', decision: 'approve',
+    brief: { goal: '只有一项' },
+  }))
+  assert.equal(bad.body.ok, false, '五项缺一即 400')
+  const none = await call(h.handler, postReq('/warroom/api/commands/plan', { commandId: 'cmd-sign4', decision: 'reject', note: 'x' }))
+  assert.equal(none.body.ok, true, '第一次调用未入账（400 拒收）——驳回仍可行')
+  const after = await call(h.handler, postReq('/warroom/api/commands/plan', { commandId: 'cmd-sign4', decision: 'reject', note: 'x' }))
+  assert.equal(after.body.ok, false, 'plan 已 rejected，再判=400')
+  h.dispose()
+})
+
+test('D24 签发：旧 plan 来路（无 brief）+ 携修改文本 → brief_signed 照落（舰长定稿权绝对化）', async () => {
+  const dir = tmpStateDir()
+  appendDirectiveEvent(dir, { type: 'directive_created', ts: 't0', directiveId: 'cmd-sign5', text: '重构配置层' })
+  appendDirectiveEvent(dir, { type: 'directive_received', ts: 't1', directiveId: 'cmd-sign5', staffSessionId: 'staff-x' })
+  appendDirectiveEvent(dir, { type: 'directive_triaged', ts: 't2', directiveId: 'cmd-sign5', grade: 'L1', reason: '大改' })
+  appendDirectiveEvent(dir, { type: 'directive_plan_opened', ts: 't3', directiveId: 'cmd-sign5', plan: '旧式计划稿' })
+  const h = makeHandler({ stateDir: dir, flags: { 'staff-plan': true } })
+  const r = await call(h.handler, postReq('/warroom/api/commands/plan', {
+    commandId: 'cmd-sign5', decision: 'approve',
+    brief: { goal: '舰长定稿目标', background: '定稿背景', acceptance: '定稿验收', nonGoals: '定稿非目标', deliverables: '定稿交付物' },
+  }))
+  assert.equal(r.body.ok, true)
+  const d = loadDirectives(dir).find(x => x.id === 'cmd-sign5')!
+  assert.equal(d.plan?.status, 'approved')
+  assert.equal(d.briefSigned?.goal, '舰长定稿目标', '无原稿也落签发（定稿权不依赖来路）')
+  assert.equal(d.brief, undefined, '原稿本来就缺，不伪造')
+  h.dispose()
+})

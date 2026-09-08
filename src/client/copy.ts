@@ -414,6 +414,16 @@ export interface WarCopy {
     meetingRoundDone: (n: number) => string
     meetingFinalizing: string
     meetingEmpty: string
+    /** D24 两档制 L1 签发档：待签可编辑五项卡。 */
+    meetingAwaitingSign: string
+    meetingSigned: string
+    signEditableNote: string
+    signBtn: string
+    signBusy: string
+    signDone: string
+    signFail: string
+    redraftBtn: string
+    signNotePh: string
     briefTitle: string
     briefGoal: string
     briefBackground: string
@@ -776,7 +786,7 @@ export const warCopy: WarCopy = {
     retryBtnTitle: '起草重试令——预填任务号并续接本战线，提交前可改',
     retryTemplate: id => `这个 ${id} 执行失败，重试，要求是：`,
   },
-  grade: { L0: 'L0 直发', L1: 'L1 呈批', L2: 'L2 澄清' },
+  grade: { L0: 'L0 直发', L1: 'L1 签发', L2: 'L2 退役' },
   chain: {
     genBadgeTitle: n => `本命令是这条战线的第 ${n} 代续作`,
     breadcrumbAria: '战线族谱：历代替续，逐级可跳',
@@ -963,6 +973,15 @@ export const warCopy: WarCopy = {
     meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
     meetingFinalizing: '成案中——大副正带你的答复重开定案',
     meetingEmpty: '大副正在读命令——它的提问会出现在这里。',
+    meetingAwaitingSign: '任务书待你签',
+    meetingSigned: '已签发——大副发布中',
+    signEditableNote: '五项都可改——签发文本就是最终任务书，原稿留档可审计。',
+    signBtn: '✓ 签发',
+    signBusy: '签发中…',
+    signDone: '签发已入账——大副即将按定稿文本发布。',
+    signFail: '签发失败：',
+    redraftBtn: '驳回重拟',
+    signNotePh: '签发附言（可空）；驳回时这里必填意见——送达大副重拟任务书',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',
@@ -996,7 +1015,7 @@ export const warCopy: WarCopy = {
     gradeSection: '自主度（放权多少）',
     gradeAuto: { name: '参谋分诊', hint: '默认。参谋掂量轻重：小改直做，大改呈方案' },
     gradeL0: { name: '!! 直接做', hint: '不等确认一路到底，适合有把握的小改动' },
-    gradeL2: { name: '?? 先看方案', hint: '先呈计划待批，点头后才动工，适合大动作' },
+    gradeL2: { name: '?? 先看方案', hint: '签发档：大副出任务书，你逐项改定稿签发后才动工，适合大动作' },
     scheduleSection: '发布时机（何时出发）',
     schedNow: { name: '立即', hint: '下达即转达参谋' },
     schedCron: { name: '定时', hint: '到点自动下达（一次有效）' },
@@ -1331,7 +1350,7 @@ export const plainCopy: WarCopy = {
     retryBtnTitle: '重试——起草器预填任务号并续接本战线，提交前可改',
     retryTemplate: id => `这个 ${id} 执行失败，重试，要求是：`,
   },
-  grade: { L0: 'L0 直发', L1: 'L1 呈批', L2: 'L2 澄清' },
+  grade: { L0: 'L0 直发', L1: 'L1 签发', L2: 'L2 退役' },
   chain: {
     genBadgeTitle: n => `这条命令是同一件事的第 ${n} 次跟进`,
     breadcrumbAria: '跟进链路：历史各步，逐级可看',
@@ -1518,6 +1537,15 @@ export const plainCopy: WarCopy = {
     meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
     meetingFinalizing: '成案中——规划 Agent 正带你的答复重开定案',
     meetingEmpty: '规划 Agent 正在读命令——它的提问会出现在这里。',
+    meetingAwaitingSign: '任务书待你签',
+    meetingSigned: '已签发——规划 Agent 发布中',
+    signEditableNote: '五项都可改——签发文本就是最终任务书，原稿留档可审计。',
+    signBtn: '✓ 签发',
+    signBusy: '签发中…',
+    signDone: '签发已入账——规划 Agent 即将按定稿文本发布。',
+    signFail: '签发失败：',
+    redraftBtn: '驳回重拟',
+    signNotePh: '签发附言（可空）；驳回时这里必填意见——送达规划 Agent 重拟任务书',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',
@@ -1551,7 +1579,7 @@ export const plainCopy: WarCopy = {
     gradeSection: '自主度',
     gradeAuto: { name: '让规划 Agent 定', hint: '默认。小改动直接做，大改动先给方案' },
     gradeL0: { name: '!! 直接做', hint: '不等确认一路做完，适合有把握的小事' },
-    gradeL2: { name: '?? 先看方案', hint: '先给方案等你点头，适合大动作' },
+    gradeL2: { name: '?? 先看方案', hint: '签发档：出任务书等你逐项改定并签发，适合大动作' },
     scheduleSection: '开始时间',
     schedNow: { name: '马上', hint: '下达就转给规划 Agent' },
     schedCron: { name: '定时', hint: '到点自动下达（一次有效）' },

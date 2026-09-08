@@ -79,6 +79,10 @@ export interface BoardCommand {
   clarificationRounds?: Array<{ round: number; questions: string[]; options?: string[][]; answer: string | null; requestedAt: string }> | null
   /** D23 任务书一等事件（五项；未成案为 null）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null
+  /** D24 签发定稿（五项；未签发为 null）——签发后它是发布的唯一依据，原稿 brief 保留。 */
+  briefSigned?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null
+  /** D24 待签态（投影派生）：L1 呈批件来自任务书且 plan pending——会议室渲染可编辑五项卡。 */
+  awaitingSign?: boolean | null
 }
 
 export interface BoardTask {
@@ -212,12 +216,21 @@ export async function archiveCommand(commandId: string): Promise<{ ok: boolean; 
   }
 }
 
-export async function decidePlan(commandId: string, decision: 'approve' | 'reject', note?: string): Promise<{ ok: boolean; error?: string }> {
+/** D24：brief 五项（签发时可携舰长修改后的定稿文本）。 */
+export interface BriefFive {
+  goal: string
+  background: string
+  acceptance: string
+  nonGoals: string
+  deliverables: string
+}
+
+export async function decidePlan(commandId: string, decision: 'approve' | 'reject', note?: string, brief?: BriefFive): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch('/warroom/api/commands/plan', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commandId, decision, ...(note !== undefined ? { note } : {}) }),
+      body: JSON.stringify({ commandId, decision, ...(note !== undefined ? { note } : {}), ...(brief !== undefined ? { brief } : {}) }),
     })
     const body = await res.json() as { ok: boolean; error?: string }
     return body

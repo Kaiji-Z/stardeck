@@ -597,3 +597,82 @@ test('V19 字体缩放：设置抽屉滑杆在场，调值 → .war-root zoom �
   assert.equal(localStorage.getItem('warroom-cfg-zoom'), '1', '重置回 1')
   r.unmount()
 })
+
+// ─── D24 两档制：L1 待签面板（find-my-goal 定稿语义）─────────────────────────
+
+test('D24 L1 待签：可编辑五项卡在场，编辑后签发打到 /commands/plan 携定稿文本', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-l1s', status: 'talking', staffSessionId: 'staff-x', grade: 'L1',
+    brief: { goal: '原目标', background: '原背景', acceptance: '原验收', nonGoals: '原非目标', deliverables: '原交付物' },
+    plan: { text: '五项文本', status: 'pending' },
+    awaitingSign: true,
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  try {
+    const text = r.text()
+    assert.ok(document.querySelector('.war-sign-card') !== null, '待签卡结构在场')
+    assert.ok(text.includes('任务书待你签') || text.includes('awaiting your signature'), '段头结论=待你签')
+    assert.equal(document.querySelectorAll('.war-sign-field').length, 5, '五项可编辑文本域在场')
+    // 编辑非目标字段 → 点签发 → 通道携定稿文本（/commands/plan + brief）。
+    const area = document.querySelectorAll('.war-sign-field')[3] as HTMLTextAreaElement
+    const setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(area, '舰长定稿非目标')
+    area.dispatchEvent(new win.Event('input', { bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 80))
+    calls.length = 0
+    const btn = r.click(/签发/)
+    assert.ok(btn !== null, '签发钮在场')
+    await new Promise(resolve => setTimeout(resolve, 120))
+    const sign = calls.find(c => String(c.url).includes('/commands/plan'))
+    assert.ok(sign !== undefined, '签发打到 /commands/plan')
+    const body = sign!.body as { decision?: string; brief?: { nonGoals?: string } }
+    assert.equal(body.decision, 'approve')
+    assert.equal(body.brief?.nonGoals, '舰长定稿非目标', '定稿文本随通道上行')
+  } finally { r.unmount() }
+})
+
+test('D24 L1 待签：驳回需意见（空意见钮禁用）；已签发展示定稿文本+结论翻转', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-l1r', status: 'talking', staffSessionId: 'staff-x', grade: 'L1',
+    brief: { goal: '原目标', background: '原背景', acceptance: '原验收', nonGoals: '原非目标', deliverables: '原交付物' },
+    plan: { text: '五项文本', status: 'pending' },
+    awaitingSign: true,
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  try {
+    const rejectBtn = [...document.querySelectorAll('button')].find(b => (b.textContent ?? '').includes('驳回重拟')) as HTMLButtonElement | undefined
+    assert.ok(rejectBtn !== undefined, '驳回钮在场')
+    assert.equal(rejectBtn!.disabled, true, '空意见驳回禁用')
+    // 决策带不让位：待签不渲染旧计划批准面（brief 在场=新流程归会议室）。
+    assert.ok(!r.text().includes('计划已获'), '旧计划批准面不在场')
+  } finally { r.unmount() }
+
+  const signed = mkCmd({
+    commandId: 'cmd-l1d', status: 'talking', staffSessionId: 'staff-x', grade: 'L1',
+    brief: { goal: '原目标', background: '原背景', acceptance: '原验收', nonGoals: '原非目标', deliverables: '原交付物' },
+    briefSigned: { goal: '定稿目标', background: '原背景', acceptance: '原验收', nonGoals: '定稿非目标', deliverables: '原交付物' },
+    plan: { text: '五项文本', status: 'approved' },
+  })
+  const el2 = createElement(views.FocusPage, {
+    cmd: signed, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [signed],
+  })
+  const r2 = await render(el2)
+  try {
+    const text = r2.text()
+    assert.ok(text.includes('已签发——大副发布中') || text.includes('Signed'), '结论翻转为已签发')
+    assert.ok(text.includes('定稿非目标'), '定稿文本展示')
+    assert.ok(!text.includes('任务书待你签'), '待签结论退场')
+  } finally { r2.unmount() }
+})
