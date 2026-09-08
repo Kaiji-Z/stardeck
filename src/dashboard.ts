@@ -363,6 +363,16 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
           status: d.clarification.status,
           answer: d.clarification.answer ?? null,
         },
+      // D23 第四刀会议室时间轴（只读投影）：全轮问答史——场所化渲染的数据面。
+      clarificationRounds: d.clarificationRounds === undefined
+        ? null
+        : d.clarificationRounds.map(r => ({
+          round: r.round,
+          questions: r.questions,
+          ...(r.options !== undefined ? { options: r.options } : {}),
+          answer: r.answer ?? null,
+          requestedAt: r.requestedAt,
+        })),
       brief: d.brief === undefined ? null : { goal: d.brief.goal, background: d.brief.background, acceptance: d.brief.acceptance, nonGoals: d.brief.nonGoals, deliverables: d.brief.deliverables },
     }
   })

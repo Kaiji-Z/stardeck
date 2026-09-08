@@ -74,6 +74,10 @@ export interface Directive {
    * 清账——对话化为行动后澄清态失去意义。options=逐问选择题选项（开放问
    * []，旧日志缺省——渲染层按开放问处理）。 */
   clarification?: { questions: string[]; options?: string[][]; round: number; status: 'pending' | 'answered'; requestedAt: string; answeredAt?: string; answer?: string }
+  /** 会议室时间轴（D23 第四刀 2026-09-08，纯读投影派生）：每轮问答一条——
+   * requested 追加、answered 回填答复；成案动作只清 clarification 活动态，
+   * 历史轮次保留（「聊到哪了」的全史在场可见）。旧日志零迁移（缺席=未定义）。 */
+  clarificationRounds?: Array<{ round: number; questions: string[]; options?: string[][]; requestedAt: string; answeredAt?: string; answer?: string }>
   /** 任务书一等账本事件（五项，后写覆盖）：大副成案的谈判产物——先于计划
    * 存在、独立于发布审计在案（计划稿/发布只留结果，任务书留下「怎么谈拢的」）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string; ts: string }
@@ -219,19 +223,31 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
       // 一并翻 talking——挂起即「在大副对话里成形」）；answered 只翻 pending 态
       // （对无挂起命令的答复是重放/撕账——忽略不动）；成案动作清账（对话化为
       // 行动后澄清态失去意义，常规 plan/publish 路由接管）。
-      case 'directive_clarification_requested':
+      case 'directive_clarification_requested': {
+        const round = (current.clarification?.round ?? 0) + 1
         current.clarification = {
           questions: event.questions,
           ...(event.options !== undefined ? { options: event.options } : {}),
-          round: (current.clarification?.round ?? 0) + 1,
+          round,
           status: 'pending',
           requestedAt: event.ts,
         }
+        current.clarificationRounds = [
+          ...(current.clarificationRounds ?? []),
+          { round, questions: event.questions, ...(event.options !== undefined ? { options: event.options } : {}), requestedAt: event.ts },
+        ]
         if (current.status === 'draft' || current.status === 'received') current.status = 'talking'
         break
+      }
       case 'directive_clarification_answered':
         if (current.clarification !== undefined && current.clarification.status === 'pending') {
           current.clarification = { ...current.clarification, status: 'answered', answer: event.text, answeredAt: event.ts }
+          const rounds = [...(current.clarificationRounds ?? [])]
+          const last = rounds[rounds.length - 1]
+          if (last !== undefined && last.round === current.clarification.round) {
+            rounds[rounds.length - 1] = { ...last, answer: event.text, answeredAt: event.ts }
+            current.clarificationRounds = rounds
+          }
         }
         break
       // V5-R3 计划态：opened 覆盖待批稿；判定只在 pending 时生效（幂等——

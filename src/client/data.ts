@@ -74,6 +74,9 @@ export interface BoardCommand {
   /** D23 澄清协议（2026-09-08，无挂澄清为 null）：pending=等舰长答复；round 由 fold 推导。
    *  V21.4 选择题式：options 逐问选项（开放问 []，旧日志缺省 undefined）——渲染层据此给选项组。 */
   clarification?: { questions: string[]; options?: string[][]; round: number; status: 'pending' | 'answered'; answer: string | null } | null
+  /** D23 第四刀会议室时间轴（2026-09-08，无史为 null）：全轮问答史（每轮 requested 追加、
+   *  answered 回填答复）——会议室区「聊到哪了」的数据面，读投影。 */
+  clarificationRounds?: Array<{ round: number; questions: string[]; options?: string[][]; answer: string | null; requestedAt: string }> | null
   /** D23 任务书一等事件（五项；未成案为 null）。 */
   brief?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null
 }

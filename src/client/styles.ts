@@ -665,6 +665,15 @@ body[data-ds-dark-theme] .war-root .war-alarm-time,body[data-ds-dark-theme] .war
 h2.war-col-title{margin:0;font-size:calc(13px*var(--war-fs))}
 
 /* == WAR_CSS 追加锚点：新 CSS 插在本行之后 == */
+/* --- D23 第四刀 真会议室（2026-09-08）：场所化时间轴 ------------------------
+ * 「场所感」长在结构上：段头下先一行场所铭（只做一件事：模糊命令→强目标），
+ * 时间轴用左竖线贯穿——每轮问答一块圆角井、答复随轮内、任务书（会议产物）
+ * 收尾；成案中过程态用等待色 role=status 播报。全令牌取自静态定义。 */
+.war-meeting-motto{margin:2px 0 8px;font-size:calc(11px*var(--war-fs));color:var(--war-text-3);font-family:var(--war-font-code)}
+.war-meeting-line{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--war-border-soft);padding-left:12px;margin:0 0 4px 4px}
+.war-meeting-round{padding:8px 10px;border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);background:var(--war-well-bg)}
+.war-meeting-round .war-subdetail-title{margin-bottom:4px}
+.war-meeting-finalizing{margin:4px 0 0;font-size:calc(12px*var(--war-fs));color:var(--war-wait)}
 /* --- D23 澄清协议会议室（V21.1/V21.4）：问题列表 + 选择题选项组 -------------
  * 会议室的「目标指向明确」长在样式上：问干醒目、选项是小号可点标签（点选
  * 即拼装进答复框），选中态高亮回写——读题、点选、送达三步不离开同卡。 */

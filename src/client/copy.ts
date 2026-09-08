@@ -348,7 +348,6 @@ export interface WarCopy {
     triagePending: string
     talkingGhostTitle: string
     talkingGhostCard: string
-    talkingGhostNote: string
     talkingEnterBtn: string
     /** V19.9 可读性④：待翻阅态结论预览（战报首句不点开即可瞄到；预览≠翻阅）。 */
     reportPreview: (s: string) => string
@@ -409,6 +408,12 @@ export interface WarCopy {
     clarifyAnswered: string
     /** V21.4 选择题式：点选选项后的拼装提示。 */
     clarifyPickNote: string
+    /** D23 第四刀真会议室（2026-09-08）：场所化时间轴——场地名/场所铭/历史轮标签/过程态。 */
+    meetingTitle: string
+    meetingMotto: string
+    meetingRoundDone: (n: number) => string
+    meetingFinalizing: string
+    meetingEmpty: string
     briefTitle: string
     briefGoal: string
     briefBackground: string
@@ -905,7 +910,6 @@ export const warCopy: WarCopy = {
     triagePending: '参谋尚未分诊',
     talkingGhostTitle: '参谋在等你回答',
     talkingGhostCard: '参谋在等你回答——点开进对话',
-    talkingGhostNote: '任务卡在等你的回答成形——进对话答一句，参谋就能继续。',
     talkingEnterBtn: '进入对话回答',
     reportPreview: s => `战报预览 · ${s}`,
     taskBrief: '任务书',
@@ -954,6 +958,11 @@ export const warCopy: WarCopy = {
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——大副正带答复开新一轮定案',
     clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
+    meetingTitle: '会议室',
+    meetingMotto: '这里只做一件事：把模糊命令收敛成强目标。',
+    meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
+    meetingFinalizing: '成案中——大副正带你的答复重开定案',
+    meetingEmpty: '大副正在读命令——它的提问会出现在这里。',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',
@@ -1456,7 +1465,6 @@ export const plainCopy: WarCopy = {
     triagePending: '规划 Agent 还没分诊',
     talkingGhostTitle: '规划 Agent 在等你回答',
     talkingGhostCard: '规划 Agent 在等你回答——点开进对话',
-    talkingGhostNote: '任务卡要等你的回答才能成形——进对话说一句，规划 Agent 就能继续。',
     talkingEnterBtn: '进入对话回答',
     reportPreview: s => `先看一眼 · ${s}`,
     taskBrief: '任务说明',
@@ -1505,6 +1513,11 @@ export const plainCopy: WarCopy = {
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——规划 Agent正带答复开新一轮定案',
     clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
+    meetingTitle: '会议室',
+    meetingMotto: '这里只做一件事：把模糊命令收敛成强目标。',
+    meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
+    meetingFinalizing: '成案中——规划 Agent 正带你的答复重开定案',
+    meetingEmpty: '规划 Agent 正在读命令——它的提问会出现在这里。',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',

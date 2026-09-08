@@ -1470,86 +1470,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
           : null,
       )
     }
-    if (ghostVariant === 'talking') {
-      const clarify = cmd.clarification ?? null
-      // D23 选择题式（V21.4）：点选选项 → 拼「N<字母>;」进答复框（人机共编，
-      // 自由输入兜底）——送达通道不变（/commands/answer 文本）。
-      const pickClarifyOption = (askIndex: number, letter: string): void => {
-        setAnswerText(t => {
-          const cleaned = t.replace(new RegExp(`(?:^|\\s)${askIndex + 1}[A-Z];?`, 'g'), '').trim()
-          const addition = `${askIndex + 1}${letter};`
-          return cleaned === '' ? addition : `${cleaned} ${addition}`
-        })
-      }
-      return createElement('div', { key, className: 'war-subdetail' },
-        createElement('div', { className: 'war-subdetail-title' }, fp.talkingGhostTitle),
-        // D23 澄清协议（2026-09-08）：大副的结构化提问直接在板上渲染——问题
-        // 列表贴着答复框，舰长读完即答，不再绕道会话历史弹窗；answered 后
-        // 问答史留卡（答复了什么、定案进行到哪，一眼可见）。
-        clarify !== null
-          ? createElement('div', { className: 'war-clarify' },
-            createElement('div', { className: 'war-subdetail-title' }, clarify.status === 'pending' ? fp.clarifyRound(clarify.round) : fp.clarifyHistory),
-            createElement('ol', { className: 'war-clarify-q' }, ...clarify.questions.map((q, i) => {
-              const stem = q.split(/(?=A[.、::]?\s)/)[0] ?? q
-              const options = clarify.options?.[i] ?? []
-              return createElement('li', { key: i },
-                createElement('span', { className: 'war-clarify-stem' }, stem),
-                clarify.status === 'pending' && options.length > 0
-                  ? createElement('span', { className: 'war-clarify-opts' }, ...options.map((opt, j) => createElement('button', {
-                    key: j,
-                    className: `war-btn war-clarify-opt${answerText.includes(`${i + 1}${String.fromCharCode(65 + j)}`) ? ' war-clarify-opt-on' : ''}`,
-                    type: 'button',
-                    title: fp.clarifyPickNote,
-                    onClick: () => { pickClarifyOption(i, String.fromCharCode(65 + j)) },
-                  }, opt)))
-                  : null,
-              )
-            })),
-            clarify.status === 'answered'
-              ? [
-                createElement('div', { key: 'ca', className: 'war-sub-row' },
-                  createElement('span', { className: 'war-sub-label' }, fp.clarifyCaptain),
-                  createElement('div', { className: 'war-sub-value' }, clarify.answer ?? '')),
-                createElement('p', { key: 'cn', className: 'war-clarify-note', role: 'status' }, fp.clarifyAnswered),
-              ]
-              : null,
-          )
-          : null,
-        createElement('div', { className: 'war-sub-value' }, fp.talkingGhostNote),
-        standalone || staffTarget !== null
-          ? subActions([createElement('button', {
-              className: 'war-btn primary war-btn-warn',
-              onClick: () => { void markTalking(cmd.commandId); openStaffPane(staffTarget) },
-            }, fp.talkingEnterBtn)])
-          : null,
-        // P0-1 板内答复（2026-09-02）：talking 命令的答复 composer——经 pi RPC
-        // 续跑送进大副会话（定案案：答复面就在读到的位置，不再绕道宿主会话）。
-        standalone
-          ? createElement('div', { className: 'war-sub-row' },
-              createElement('span', { className: 'war-sub-label' }, fp.answerLabel),
-              createElement('div', { className: 'war-sub-value' },
-                createElement('textarea', {
-                  className: 'war-cd-answer', rows: 3, placeholder: fp.answerPh,
-                  value: answerText,
-                  onChange: e => { setAnswerText(String(e.target.value ?? '')) },
-                  onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
-                }),
-                clarify !== null && clarify.status === 'pending' && (clarify.options?.some(o => o.length > 0) ?? false)
-                  ? createElement('p', { className: 'war-clarify-note' }, fp.clarifyPickNote)
-                  : null,
-                subActions([
-                  createElement('button', {
-                    className: 'war-btn primary', type: 'button', disabled: answerBusy || answerText.trim() === '',
-                    title: fp.answerTitle,
-                    onClick: () => { void sendAnswer() },
-                  }, answerBusy ? fp.answerBusy : fp.answerBtn),
-                ]),
-                answerNote !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, answerNote) : null,
-              ),
-            )
-          : null,
-      )
-    }
+    // D23 第四刀（2026-09-08）：talking 变体不再在 ghost 里展开问答面板——
+    // 澄清收敛整体搬进专用「会议室」段（见 meetingRoom），ghost 卡只当指针
+    // （点击滚到会议室），面板不再两处同屏。
     return createElement('div', { key, className: 'war-subdetail' },
       createElement('div', { className: 'war-subdetail-title' }, fp.draftingGhostTitle),
       subRow(fp.triageLabel, cmd.grade !== null
@@ -1573,6 +1496,128 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
       subRow(fp.briefAcceptance, b.acceptance),
       subRow(fp.briefNonGoals, b.nonGoals),
       subRow(fp.briefDeliverables, b.deliverables),
+    )
+  }
+  // D23 第四刀（2026-09-08）真会议室：澄清收敛的专用场所——时间轴同屏（每轮
+  // 问题+选项 → 舰长答复 → 任务书五项），answered 给「成案中」过程态。读投影
+  // 红线内：数据全是既有账本字段的投影（clarificationRounds 只读派生），写只
+  // 走答复 composer（既有 /commands/answer 通道，零新端点）；pending 轮选项
+  // 药丸点选拼装沿用 answerText 人机共编。
+  // D23 第四刀（2026-09-08）真会议室：澄清收敛的专用场所——时间轴同屏（每轮
+  // 问题+选项 → 舰长答复 → 任务书五项），answered 给「成案中」过程态。读投影
+  // 红线内：数据全是既有账本字段的投影（clarificationRounds 只读派生），写只
+  // 走答复 composer（既有 /commands/answer 通道，零新端点）；pending 轮选项
+  // 药丸点选拼装沿用 answerText 人机共编。字段先归一（undefined→null）——
+  // 夹具/旧投影缺席不误判「有会议室」。
+  const meetingClar = cmd.clarification ?? null
+  const meetingRounds = cmd.clarificationRounds ?? []
+  // talking 无澄清（大副还在读命令）也开会场——P0-1 答复通道的常驻的家。
+  const meetingActive = meetingClar !== null || meetingRounds.length > 0 || cmd.status === 'talking'
+  const meetingRoom = (k?: string): ReactNode => {
+    if (!meetingActive) return null
+    const pendingClar = meetingClar !== null && meetingClar.status === 'pending' ? meetingClar : null
+    const finalizing = meetingClar !== null && meetingClar.status === 'answered'
+    const hasBrief = cmd.brief !== null && cmd.brief !== undefined
+    // 时间轴数据面：轮次史优先；缺席（老投影/夹具）时从活动态合成单轮——
+    // 渲染层对任一字段缺席都诚实降级，不空转。
+    const roundsList = meetingRounds.length > 0
+      ? meetingRounds
+      : meetingClar !== null
+        ? [{ round: meetingClar.round, questions: meetingClar.questions, ...(meetingClar.options !== undefined && meetingClar.options !== null ? { options: meetingClar.options } : {}), answer: meetingClar.answer }]
+        : []
+    // ③过程态即段头结论：等你答复（pending）→ 成案中（answered）→ 任务书在案。
+    const conclusion = pendingClar !== null
+      ? fp.clarifyRound(pendingClar.round)
+      : finalizing ? fp.meetingFinalizing
+        : hasBrief ? fp.briefTitle : ''
+    // D23 选择题式（V21.4）：点选选项 → 拼「N<字母>;」进答复框（人机共编，
+    // 自由输入兜底）——送达通道不变（/commands/answer 文本）。
+    const pickClarifyOption = (askIndex: number, letter: string): void => {
+      setAnswerText(t => {
+        const cleaned = t.replace(new RegExp(`(?:^|\\s)${askIndex + 1}[A-Z];?`, 'g'), '').trim()
+        const addition = `${askIndex + 1}${letter};`
+        return cleaned === '' ? addition : `${cleaned} ${addition}`
+      })
+    }
+    return createElement('section', { key: k, className: 'war-cd-stage war-meeting', 'data-stage': 'meeting' },
+      createElement('div', { className: 'war-cd-stage-head' },
+        createElement('span', { className: 'war-cd-stage-name' }, fp.meetingTitle),
+        createElement('span', { className: 'war-cd-stage-conc' }, conclusion),
+      ),
+      createElement('div', { className: 'war-meeting-motto' }, fp.meetingMotto),
+      createElement('div', { className: 'war-meeting-line' },
+        ...roundsList.map((r, ri) => {
+          const isPendingRound = pendingClar !== null && r.round === pendingClar.round && ri === roundsList.length - 1
+          return createElement('div', { key: ri, className: 'war-meeting-round' },
+            createElement('div', { className: 'war-subdetail-title' },
+              isPendingRound ? fp.clarifyRound(r.round) : fp.meetingRoundDone(r.round)),
+            createElement('ol', { className: 'war-clarify-q' }, ...r.questions.map((q, qi) => {
+              const stem = q.split(/(?=A[.、::]?\s)/)[0] ?? q
+              const options = r.options?.[qi] ?? []
+              return createElement('li', { key: qi },
+                createElement('span', { className: 'war-clarify-stem' }, stem),
+                isPendingRound && options.length > 0
+                  ? createElement('span', { className: 'war-clarify-opts' }, ...options.map((opt, oj) => createElement('button', {
+                    key: oj,
+                    className: `war-btn war-clarify-opt${answerText.includes(`${qi + 1}${String.fromCharCode(65 + oj)}`) ? ' war-clarify-opt-on' : ''}`,
+                    type: 'button',
+                    title: fp.clarifyPickNote,
+                    onClick: () => { pickClarifyOption(qi, String.fromCharCode(65 + oj)) },
+                  }, opt)))
+                  : null,
+              )
+            })),
+            r.answer !== null && r.answer !== undefined
+              ? createElement('div', { className: 'war-sub-row' },
+                createElement('span', { className: 'war-sub-label' }, fp.clarifyCaptain),
+                createElement('div', { className: 'war-sub-value' }, r.answer))
+              : null,
+          )
+        }),
+        // ②共识常驻：任务书（会议的产物）在场即渲染——不等成案；会议室存在时
+        // 它只在此处（命令段让位，避免同卡两处同屏）。
+        hasBrief ? briefPanel('panel-meeting-brief') : null,
+        // 空场：talking 但大副还没开问——提问会在时间轴上出现，先给预期。
+        meetingClar === null && meetingRounds.length === 0
+          ? createElement('p', { className: 'war-meeting-motto', role: 'status' }, fp.meetingEmpty)
+          : null,
+        // ③过程态：答复已入账、成案单在途——「大副正带答复重开」机器侧动态可辨。
+        finalizing
+          ? createElement('p', { className: 'war-meeting-finalizing', role: 'status' }, `⏳ ${fp.meetingFinalizing}——${fp.clarifyAnswered}`)
+          : null,
+        cmd.status === 'talking' && (standalone || staffTarget !== null)
+          ? subActions([createElement('button', {
+            className: 'war-btn primary war-btn-warn',
+            onClick: () => { void markTalking(cmd.commandId); openStaffPane(staffTarget) },
+          }, fp.talkingEnterBtn)])
+          : null,
+        // P0-1 板内答复 composer（独立形态）：答复面就在读到的位置——会议室
+        // 常驻可见后它从 ghost 面板搬来此处，通道不变。
+        standalone && cmd.status === 'talking'
+          ? createElement('div', { className: 'war-sub-row' },
+            createElement('span', { className: 'war-sub-label' }, fp.answerLabel),
+            createElement('div', { className: 'war-sub-value' },
+              createElement('textarea', {
+                className: 'war-cd-answer', rows: 3, placeholder: fp.answerPh,
+                value: answerText,
+                onChange: e => { setAnswerText(String(e.target.value ?? '')) },
+                onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
+              }),
+              (pendingClar?.options?.some(o => o.length > 0) ?? false)
+                ? createElement('p', { className: 'war-clarify-note' }, fp.clarifyPickNote)
+                : null,
+              subActions([
+                createElement('button', {
+                  className: 'war-btn primary', type: 'button', disabled: answerBusy || answerText.trim() === '',
+                  title: fp.answerTitle,
+                  onClick: () => { void sendAnswer() },
+                }, answerBusy ? fp.answerBusy : fp.answerBtn),
+              ]),
+              answerNote !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, answerNote) : null,
+            ),
+          )
+          : null,
+      ),
     )
   }
   // 链上任务卡的展开（V9.10 补全）：命令级最终计划（若有）+ 该环任务书 + 验收
@@ -1749,8 +1794,12 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             : null,
           // D23 翻译显性化（V21.4）：任务书五项卡挂在命令段——任何状态（含
           // approved 快道）只要账本有 brief，舰长都能看到「强目标被翻译成了什么」。
-          briefPanel('panel-command-brief'),
+          // 第四刀：会议室存在时任务书归会议室（会议的产物），命令段让位防两处同屏。
+          !meetingActive ? briefPanel('panel-command-brief') : null,
         ),
+        // D23 第四刀（2026-09-08）会议室段：介于「你说了什么」与「变成了什么」
+        // 之间——命令与任务之间的对话发生地。澄清收敛全程在此同屏。
+        meetingRoom('stage-meeting'),
         // ② 任务 · 变成了什么：链上全部任务卡按序拉进来，点任一张卡下展开
         // 「最终计划+该环任务书+验收标准」（reported/failed 环带处理动作）；空链
         // 按状态机给 ghost 卡（计划/等你答问/起草中——任务成形的车间入口）或
@@ -1769,12 +1818,15 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             ]),
             ghostVariant !== null
               ? [(() => {
+                  // 第四刀：talking 变体不再展开面板（会议室常驻在上方）——点击
+                  // 滚到会议室；plan/drafting 变体保留原展开行为。
                   const toggleGhost = (): void => { setOpen(o => o !== null && o.kind === 'plan' ? null : { kind: 'plan', taskId: '' }) }
+                  const ghostActivate = ghostVariant === 'talking' ? (): void => { scrollToStage('meeting') } : toggleGhost
                   return createElement('div', {
                     key: 'ghost', className: `war-tour-ghost clickable${ghostVariant === 'talking' ? ' warn' : ''}`, role: 'button', tabIndex: 0,
                     'aria-label': ghostVariant === 'talking' ? fp.talkingGhostTitle : ghostVariant === 'drafting' ? fp.draftingGhostTitle : fp.planTitle,
-                    onClick: toggleGhost,
-                    onKeyDown: keyActivate(toggleGhost),
+                    onClick: ghostActivate,
+                    onKeyDown: keyActivate(ghostActivate),
                   },
                   createElement('span', { className: 'war-tour-ghost-icon' }, ghostVariant === 'talking' ? '⚠' : '◷'),
                   createElement('span', null,
@@ -1782,7 +1834,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       ? ((cmd.plan as { status: 'pending' | 'approved' | 'rejected' }).status === 'pending' ? fp.taskGhostPlanning : fp.taskGhostApproved)
                       : ghostVariant === 'talking' ? fp.talkingGhostCard : fp.draftingGhostCard))
                 })(),
-                open !== null && open.kind === 'plan' && open.taskId === '' ? ghostPanel('panel-ghost') : null]
+                open !== null && open.kind === 'plan' && open.taskId === '' && ghostVariant !== 'talking' ? ghostPanel('panel-ghost') : null]
               : null,
             taskHint !== null ? createElement('div', { key: 'hint', className: 'war-tour-hint' }, taskHint) : null,
           ),

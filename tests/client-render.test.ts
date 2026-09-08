@@ -150,7 +150,7 @@ async function expandGhost(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 80))
 }
 
-test('D23 澄清面板 pending：问题列表与答复框同卡（读完即答，不绕道会话弹窗）', async () => {
+test('D23 第四刀 会议室区 pending：问答免展开常驻同屏（问题+选项药丸+答复框）', async () => {
   const cmd = mkCmd({
     commandId: 'cmd-q1', status: 'talking', staffSessionId: 'staff-x',
     clarification: { questions: ['「工具箱」指哪个项目？', '验收标准是什么？'], round: 1, status: 'pending', answer: null },
@@ -161,17 +161,21 @@ test('D23 澄清面板 pending：问题列表与答复框同卡（读完即答�
     onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
   })
   const r = await render(el)
-  await expandGhost()
-  const text = r.text()
-  assert.ok(text.includes('第 1 轮提问') || text.includes('round 1'), '轮数标题在场（等舰长一眼可辨）')
-  assert.ok(text.includes('「工具箱」指哪个项目？'), '问题一渲染')
-  assert.ok(text.includes('验收标准是什么？'), '问题二渲染')
-  assert.ok(document.querySelector('.war-clarify-q li') !== null, '问题列表结构化（ol>li）')
-  assert.ok(document.querySelector('.war-cd-answer') !== null, '答复框贴在同卡')
-  r.unmount()
+  try {
+    const text = r.text()
+    assert.ok(document.querySelector('.war-cd-stage[data-stage="meeting"]') !== null, '会议室段结构在场（独立 stage）')
+    assert.ok(text.includes('会议室') || text.includes('Meeting room'), '会议室场地名在场')
+    assert.ok(text.includes('第 1 轮提问') || text.includes('round 1'), '轮数标题在场（等舰长一眼可辨）')
+    assert.ok(text.includes('「工具箱」指哪个项目？'), '问题一渲染')
+    assert.ok(text.includes('验收标准是什么？'), '问题二渲染')
+    assert.ok(document.querySelector('.war-cd-stage[data-stage="meeting"] .war-clarify-q li') !== null, '问题列表结构化（ol>li）')
+    assert.ok(document.querySelector('.war-cd-answer') !== null, '答复框贴在同卡（点选即答不离开会场）')
+    // 场所铭：目标指向明确的场所正典上墙。
+    assert.ok(text.includes('把模糊命令收敛成强目标') || text.includes('a vague order becomes a strong goal'), '场所铭在场')
+  } finally { r.unmount() }
 })
 
-test('D23 澄清面板 answered：问答史留卡 + 定案提示（ghost 卡无澄清时不受影响）', async () => {
+test('D23 第四刀 会议室区 answered：过程态+问答史常驻（成案中可见，不靠展开）', async () => {
   const cmd = mkCmd({
     commandId: 'cmd-q2', status: 'talking', staffSessionId: 'staff-x',
     clarification: { questions: ['验收标准是什么？'], round: 1, status: 'answered', answer: '跑通即可' },
@@ -182,12 +186,41 @@ test('D23 澄清面板 answered：问答史留卡 + 定案提示（ghost 卡无�
     onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
   })
   const r = await render(el)
-  await expandGhost()
-  const text = r.text()
-  assert.ok(text.includes('澄清问答史') || text.includes('Clarification thread'), '问答史标题在场')
-  assert.ok(text.includes('跑通即可'), '舰长答复渲染')
-  assert.ok(text.includes('答复已入账') || text.includes('Reply logged'), '定案提示在场')
-  r.unmount()
+  try {
+    const text = r.text()
+    assert.ok(document.querySelector('.war-cd-stage[data-stage="meeting"]') !== null, '会议室段在场')
+    assert.ok(text.includes('成案中') || text.includes('Finalising'), '③过程态在场（大副正带答复重开）')
+    assert.ok(text.includes('跑通即可'), '舰长答复渲染（问答史留场）')
+    assert.ok(text.includes('答复已入账') || text.includes('Reply logged'), '定案提示在场')
+    // 过程态给辅助技术（读屏）播报。
+    assert.ok(document.querySelector('.war-meeting-finalizing[role="status"]') !== null, '过程态 role=status')
+  } finally { r.unmount() }
+})
+
+test('D23 第四刀 会议室时间轴：多轮问答史全轮可见（第 1 轮已答复+第 2 轮挂起）', async () => {
+  const cmd = mkCmd({
+    commandId: 'cmd-q3', status: 'talking', staffSessionId: 'staff-x',
+    clarification: { questions: ['部署到哪台机器？'], round: 2, status: 'pending', answer: null },
+    clarificationRounds: [
+      { round: 1, questions: ['验收标准是什么？'], answer: '跑通即可', requestedAt: new Date().toISOString() },
+      { round: 2, questions: ['部署到哪台机器？'], options: [['本机', '你的帮我定']], requestedAt: new Date().toISOString() },
+    ],
+  })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  try {
+    const text = r.text()
+    const rounds = document.querySelectorAll('.war-cd-stage[data-stage="meeting"] .war-meeting-round')
+    assert.ok(rounds.length === 2, `两轮问答同屏（got ${rounds.length}）`)
+    assert.ok(text.includes('跑通即可'), '第 1 轮答复史在场')
+    assert.ok(text.includes('部署到哪台机器？'), '第 2 轮问题在场')
+    // 只有挂起轮给选项药丸；历史轮答复已定不再给钮。
+    assert.ok(document.querySelectorAll('.war-clarify-opt').length > 0, '挂起轮选项药丸在场')
+  } finally { r.unmount() }
 })
 
 test('D23 任务书五项卡：成案后五项结构化可见；无 brief 命令不渲染空卡', async () => {
