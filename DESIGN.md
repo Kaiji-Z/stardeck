@@ -148,6 +148,12 @@
 
 **边界**：不碰 war_* 出口协议 24 件、不碰 KillCredit、无新依赖、账本向后兼容（旧日志无澄清/任务书事件照常 fold；`directive_answered` P0-1 语义原样保留，澄清答复走独立事件类型）。
 
+**完整形态段（2026-09-08 第二刀，V21.1）**：
+- **板上闭环 UI**：聚焦页 talking ghost 面板直接渲染 `cmd.clarification`——pending=「大副第 N 轮提问（等你答复）」+编号问题列表（ol.war-clarify-q）+答复框同卡（读完即答，不再绕道会话历史弹窗）；answered=问答史留卡+「答复已入账」定案提示。`cmd.brief` 五项卡（war-brief-card）与 ghost 面板并列：目标/背景与约束/验收标准/非目标/交付物逐行结构化（非目标是防跑偏的关键项，单独成行）。「等舰长」的板面可辨性由既有 ghost 卡（⚠+等你答问 warn 态）承载。
+- **双语**：新键入 `focusPage` 子典（接口+warCopy/plainCopy/enWarCopy/enPlainCopy 五处；trek 词表自动派生），皮肤术语分野照三皮正典（war=大副、plain=规划 Agent）；copy-lang 完备性锁自动管辖。
+- **机械闸**：`CLARIFY_ROUNDS_CAP=2`——与征召令纪律「第 2 轮起必须定案」同数。harvest 拆纯核心（`staffHarvestEventsFromText`：解析+闸门，可直测）与 glue（`harvestStaffDirectiveEvents`：attach-map+history 读取）；过限澄清请求不入账、`rejectedClarifications` 如实上报（daemon console.warn）。混合文本（任务书+澄清同卡）成案优先：任务书入账、澄清静默弃（都成案了就不该再问，无需告警）。命令停在 answered 态、成案单持续出——不死锁、不被系统单方面弃案。
+- **证据**：UI 目检四截图（zh pending/zh answered+brief/zh brief 卡/en pending）落 `.goal/evidence/ui-*.png`（人可读亲看）；渲染断言入 client-render.test（pending 问题列表+答复框同卡/answered 问答史/brief 五项/无澄清不受影响）；机械闸三态单测（撞闸/未超限/恰在闸上/混合成案优先）。
+
 **理由**：委托式的代价是每跳有损转译，而最大的损耗发生在入口——命令的模糊性如果在计划层被消化，误差是 minutes；漏到执行层，误差是整轮征召。stardeck 的差异化主张由此从「别人管分工，我们管交账」扩为「**别人管 plan，我们管作战会议+交账**」：plan mode 在别家长在执行 agent 身上（自己澄清自己，既当运动员又当裁判），本仓把澄清职能还给参谋岗——大副的正名。
 
 ---
