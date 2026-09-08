@@ -508,6 +508,7 @@ export const enWarCopy: WarCopy = {
     attemptFailedNeutral: 'This attempt failed — open the review for the full run',
     waitingReport: 'Evidence verified — awaiting the Sovereign\'s review to close',
     cardTitle: sessionId => `Field Commander session ${sessionId} — click for operation details`,
+    seatTitle: seat => `Executed by the ${seat} fleet (recorded at conscription)`,
   },
   detail: {
     reportPrefix: ts => `[Report · ${ts}]`,
@@ -1063,6 +1064,7 @@ export const enPlainCopy: WarCopy = {
     attemptFailedNeutral: 'This attempt failed — open the review for the full run',
     waitingReport: 'Evidence verified — awaiting your review',
     cardTitle: sessionId => `Execution agent session ${sessionId} — click for details`,
+    seatTitle: seat => `Executed by ${seat} (recorded at dispatch)`,
   },
   detail: {
     reportPrefix: ts => `[Report · ${ts}]`,

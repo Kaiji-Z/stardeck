@@ -105,6 +105,10 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         }
         if (state.hqSessionId === undefined) state.hqSessionId = event.claimedBy
         break
+      case 'task_conscripted':
+        // V24.1 席别上账（spawn 时 daemon 记）——卡面徽标/考古不依赖会话捕获。
+        state.executorSeat = event.executor
+        break
       case 'task_submitted':
         state.status = 'reported'
         state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}), ...(event.testsTrail !== undefined ? { testsTrail: event.testsTrail } : {}) })

@@ -303,6 +303,9 @@ body[data-ds-dark-theme] .war-root{
 .war-card{border:1px solid var(--war-border);border-radius:var(--war-r-md);background:var(--war-card-bg);padding:8px 10px;display:flex;flex-direction:column;gap:6px;transition:border-color .12s ease,transform .12s ease,box-shadow .12s ease,opacity .15s ease}
 .war-card.clickable{cursor:pointer}
 .war-card.clickable:hover{border-color:var(--war-border-hover);transform:translateY(-1px);box-shadow:var(--war-shadow-1)}
+/* V24.1 舰长定：聚焦态压暗卡无悬停高亮——压暗=退场，光标路过不抬升不描边。 */
+.war-card.war-rel-dim.clickable:hover{border-color:var(--war-border);transform:none;box-shadow:none}
+.war-chip.war-seat-chip{color:var(--war-text-3);border-style:dashed} /* V24.1 席别徽标：最弱信息层（虚线框次级 chip） */
 .war-card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .war-chip{font-size:calc(12px*var(--war-fs));line-height:calc(18px*var(--war-fs));padding:0 8px;border-radius:9px;border:1px solid var(--war-border);color:var(--war-text-2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis} /* V24.1：大字号下不硬裁（容器内省略号让位） */
 .war-title{font-size:calc(13px*var(--war-fs));font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}

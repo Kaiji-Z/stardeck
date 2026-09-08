@@ -222,3 +222,18 @@ test('spawnHeadlessOpencode：框定产物——简报落地 + MCP 注入 + 角�
     assert.notEqual(session.exitCode, null) // 假 bin 必须退场（exit code 已记账）
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('V24.1 seatAgentPrefix：编号前缀=席别（oc- 全席遗留退场）', async () => {
+  const { seatAgentPrefix, SEAT_AGENT_PREFIX } = await import('../src/executor.ts')
+  assert.equal(seatAgentPrefix('opencode'), 'oc')
+  assert.equal(seatAgentPrefix('pi'), 'pi')
+  assert.equal(seatAgentPrefix('zcode'), 'zx')
+  assert.equal(seatAgentPrefix('claude'), 'cl')
+  assert.equal(seatAgentPrefix('codex'), 'cx')
+  assert.equal(seatAgentPrefix('dsh'), 'dsh')
+  assert.equal(seatAgentPrefix('gemini'), 'gm')
+  assert.equal(seatAgentPrefix('qwen'), 'qw')
+  // 未知席=退前两字符，不抛错（新席先能跑再补表）。
+  assert.equal(seatAgentPrefix('mistral'), 'mi')
+  assert.ok(Object.keys(SEAT_AGENT_PREFIX).length >= 8)
+})

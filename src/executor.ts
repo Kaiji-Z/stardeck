@@ -941,6 +941,16 @@ export function codexSummonArtifact(args: { boardUrl: string }): { relativePath:
   }
 }
 
+// ═══ 执行者编号席别前缀（V24.1）═══
+// claimedBy/日志一眼可辨席别——`oc-` 曾是 opencode 独占时代的全席硬编码遗留，
+// pi/zcode 任务也叫 oc-xxx（舰长实抓）。未知席退前两字符，不抛错。
+export const SEAT_AGENT_PREFIX: Record<string, string> = {
+  opencode: 'oc', pi: 'pi', zcode: 'zx', claude: 'cl', codex: 'cx', dsh: 'dsh', gemini: 'gm', qwen: 'qw',
+}
+export function seatAgentPrefix(seat: string): string {
+  return SEAT_AGENT_PREFIX[seat] ?? seat.slice(0, 2)
+}
+
 // ═══ zcode 适配器（第四舰队，2026-09-02）═══
 // 引擎=ZCode 桌面应用内打包的 zcode.cjs（Electron resources/glm/，无 PATH 裸名）。
 // 无头=`--prompt <text> --json`（--prompt 缺省 yolo 权限模式——无人值守即所需）。

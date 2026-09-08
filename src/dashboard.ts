@@ -234,6 +234,7 @@ export function boardProjection(stateDir: string, activityOf?: (sessionId: strin
         workspacePath: task.workspacePath ?? null,
         workspaceKind: task.workspaceKind ?? null,
         claimedBy: task.claimedBy ?? null,
+        executorSeat: task.executorSeat ?? null,
         startedAt: task.startedAt,
         brief: task.brief ?? '',
         acceptance: task.acceptance ?? '',

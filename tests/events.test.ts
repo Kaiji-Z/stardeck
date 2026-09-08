@@ -42,6 +42,19 @@ test('fold derives the full task lifecycle from the append-only log', () => {
   assert.equal(isActiveUnit(u1), false)
 })
 
+test('V24.1 task_conscripted folds the seat onto the task (spawn-time, pre-claim)', () => {
+  const events = [
+    { type: 'task_created', ts: 't0', campaignId: 'c2', title: 'i', brief: 'b', acceptance: 'a', priority: 'normal' },
+    { type: 'task_published', ts: 't1', campaignId: 'c2', workspacePath: '/w' },
+    // 席别上账发生在 spawn（早于 war_claim）——pi 席退场才捕会话的空窗也有席别。
+    { type: 'task_conscripted', ts: 't2', campaignId: 'c2', executor: 'pi', agentId: 'pi-c2-abc' },
+    { type: 'task_claimed', ts: 't3', campaignId: 'c2', claimedBy: 'pi-c2-abc' },
+  ] as const
+  const state = foldCampaign('c2', events)
+  assert.equal(state.executorSeat, 'pi')
+  assert.equal(state.claimedBy, 'pi-c2-abc')
+})
+
 test('intermediate statuses fold correctly', () => {
   const draft = foldCampaign('c2', [{ type: 'task_created', ts: 't0', campaignId: 'c2', title: 'x', brief: 'b', acceptance: 'a', priority: 'normal' }])
   assert.equal(draft.status, 'draft')

@@ -518,6 +518,8 @@ export interface WarCopy {
     attemptFailedNeutral: string
     waitingReport: string
     cardTitle: (sessionId: string) => string
+    /** V24.1 席别徽标 tooltip（task_conscripted 上账）。 */
+    seatTitle: (seat: string) => string
   }
   /** V9.9 瘦身：任务/会话详情模态已裁撤（详情面只剩聚焦页），detail 词典只剩
    *  会话卡与聚焦页战报面板仍在用的两个词条。 */
@@ -1076,6 +1078,7 @@ export const warCopy: WarCopy = {
     attemptNTitle: '重试尝试',
     failReason: e => `败因：${e}`,
     attemptFailedNeutral: '该次尝试失败——进复盘看全程',
+    seatTitle: seat => `由 ${seat} 舰队执行（征召时上账）`,
     waitingReport: '证据已核验，等舰长翻阅收官',
     cardTitle: sessionId => `指挥官会话 ${sessionId}——点击查看作战详情`,
   },
@@ -1640,6 +1643,7 @@ export const plainCopy: WarCopy = {
     attemptNTitle: '重试尝试',
     failReason: e => `失败原因：${e}`,
     attemptFailedNeutral: '该次没成——进复盘看全程',
+    seatTitle: seat => `由 ${seat} 执行（派出时记录）`,
     waitingReport: '证据已核验，等你验收',
     cardTitle: sessionId => `执行会话 ${sessionId}——点击查看详情`,
   },

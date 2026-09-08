@@ -75,6 +75,9 @@ export interface CampaignState {
   hqSessionId?: string
   title?: string
   brief?: string
+  /** V24.1 席别上账：spawn 时记下征召席（task_conscripted）——卡面徽标数据源，
+   * 不依赖 attach-map 的会话捕获时机（pi 席要退场才入映射）。 */
+  executorSeat?: string
   acceptance?: string
   priority?: 'normal' | 'high'
   /** Bounty rarity (WoW color language); default common. */
@@ -189,6 +192,7 @@ export type WarEvent =
   | { type: 'task_created'; ts: string; campaignId: string; title: string; brief: string; acceptance: string; priority: 'normal' | 'high'; publishedBy?: string; quality?: QualityTier; deps?: string[] }
   | { type: 'task_published'; ts: string; campaignId: string; workspacePath: string; publishedBy?: string; workspaceKind?: 'bound' | 'bound-worktree' | 'instance' | 'auto-worktree' | 'auto-dir' }
   | { type: 'task_claimed'; ts: string; campaignId: string; claimedBy: string; attemptId?: string; attempt?: number }
+  | { type: 'task_conscripted'; ts: string; campaignId: string; executor: string; agentId: string }
   | { type: 'task_submitted'; ts: string; campaignId: string; report: string; from: string; evidence?: SubmissionEvidence; deliverables?: Deliverable[]; testsTrail?: string }
   | { type: 'task_commented'; ts: string; campaignId: string; comment: string; from: string }
   | { type: 'task_closed'; ts: string; campaignId: string; verdict: string }

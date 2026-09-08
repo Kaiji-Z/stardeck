@@ -20,7 +20,7 @@ import { appendEvent, listCampaignIds, loadCampaign } from './events.ts'
 import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives } from './directives.ts'
 import { deliverViaOpencode, deliverViaRpc } from './steer.ts'
 import { conscriptPlan } from './rules.ts'
-import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, type ExecutorSession, type AttachEntry } from './executor.ts'
+import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, seatAgentPrefix, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
 import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, renderBriefForSign, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
@@ -91,13 +91,16 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     id === 'codex' ? detectCodexBin(config.executorBin) : id === 'pi' ? detectPiBin(config.executorBin) : id === 'zcode' ? detectZcodeBin(config.executorBin) : id === 'claude' ? detectClaudeBin(config.executorBin) : id === 'gemini' ? detectGeminiBin(config.executorBin) : id === 'dsh' ? detectDshBin(config.executorBin) : detectOpencodeBin(config.executorBin)
 
   // ---------- 执行者适配器 → CommanderOps（征召面） ----------
-  const newAgentId = (taskId: string): string => `oc-${taskId}-${Date.now().toString(36)}`
+  // V24.1：编号前缀=席别（oc- 曾是全席硬编码遗留）；spawn 即上账席别
+  // （task_conscripted），卡面徽标不依赖 attach-map 的会话捕获时机。
+  const newAgentId = (seat: string, taskId: string): string => `${seatAgentPrefix(seat)}-${taskId}-${Date.now().toString(36)}`
   const conscript = async (task: CampaignState, _signal: AbortSignal): Promise<{ spawned: true; childId: string } | { spawned: false; reason: string }> => {
     if (task.workspacePath === undefined) return { spawned: false, reason: '任务无工作区——无从框定执行者' }
     if (registry.liveFor(task.campaignId) !== undefined) return { spawned: false, reason: '该任务已有在役执行者（spawn-once 守卫）' }
     if (registry.live().length >= config.maxExecutors) return { spawned: false, reason: `执行者满编（${config.maxExecutors}）——排队等巡检补征` }
     const adapter = ADAPTERS[activeExecutor] ?? ADAPTERS.opencode!
-    const agentId = newAgentId(task.campaignId)
+    const agentId = newAgentId(activeExecutor, task.campaignId)
+    appendEvent(stateDir, { type: 'task_conscripted', ts: new Date().toISOString(), campaignId: task.campaignId, executor: activeExecutor, agentId })
     const session: ExecutorSession = await adapter.spawn({
       taskId: task.campaignId,
       title: task.title ?? task.intent,

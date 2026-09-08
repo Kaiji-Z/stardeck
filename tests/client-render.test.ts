@@ -676,3 +676,33 @@ test('D24 L1 待签：驳回需意见（空意见钮禁用）；已签发展示�
     assert.ok(!text.includes('任务书待你签'), '待签结论退场')
   } finally { r2.unmount() }
 })
+
+test('V24.1 席别徽标：task_conscripted 上账的席别在聚焦页执行会话行可见', async () => {
+  const task = mkTask({
+    taskId: '20260908-seat1', title: '席别徽标 x', status: 'reported',
+    workspacePath: '/tmp/w/tasks/seat1', executorSeat: 'pi',
+    attemptLog: [{ id: 'pi-1', sessionId: 'pi-seat-1', startedAt: new Date().toISOString(), outcome: 'reported' }],
+    reports: [{ ts: new Date().toISOString(), text: '完成', evidence: null, deliverables: null }],
+  })
+  const cmd = mkCmd({ commandId: 'cmd-seat1', text: '席别徽标', status: 'approved', taskId: '20260908-seat1' })
+  const el = createElement(views.FocusPage, {
+    cmd, chain: [task], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  const r = await render(el)
+  const chip = document.querySelector('.war-seat-chip')
+  assert.ok(chip !== null, '席别徽标在场')
+  assert.equal(chip?.textContent, 'pi')
+  // 老任务（无上账）不渲染徽标——投影可选字段缺席=安静无物。
+  const oldTask = mkTask({ taskId: '20260908-seat0', title: '老任务', status: 'reported', attemptLog: [{ id: 'a', sessionId: 's0', startedAt: new Date().toISOString(), outcome: 'reported' }] })
+  const el2 = createElement(views.FocusPage, {
+    cmd: mkCmd({ commandId: 'cmd-seat0', text: '老任务', status: 'approved', taskId: '20260908-seat0' }), chain: [oldTask], statuses: new Map(), hqSessionId: null, services,
+    focusSegment: null, onClose: () => {}, onRegrade: () => {}, onDecidePlan: () => {},
+    onReportSeen: () => {}, onJumpMiss: () => {}, chainMembers: [cmd],
+  })
+  r.unmount()
+  const r2 = await render(el2)
+  assert.equal(document.querySelector('.war-seat-chip'), null, '无上账=无徽标')
+  r2.unmount()
+})

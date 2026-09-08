@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { loadCampaign } from '../src/events.ts'
+import { seatAgentPrefix } from '../src/executor.ts'
 import { loadDirectives } from '../src/directives.ts'
 import { killCreditAllGreen } from '../src/tools.ts'
 import { jumpArgs, readAttachMap } from '../src/executor.ts'
@@ -112,7 +113,7 @@ try {
     if (task.status === 'reported' || task.status === 'failed' || task.status === 'closed') break
     if (Date.now() > deadline) throw new Error('外勤 8 分钟未交卷')
   }
-  check('外部 agent（opencode，零宿主）完成 claim→执行→submit', task.claimedBy !== undefined && task.claimedBy.startsWith('oc-') && (task.status === 'reported' || task.status === 'closed'), `status=${task.status} attempts=${task.attempts} claimedBy=${task.claimedBy}`)
+  check('外部 agent（opencode，零宿主）完成 claim→执行→submit', task.claimedBy !== undefined && task.claimedBy.startsWith(seatAgentPrefix('opencode') + '-') && (task.status === 'reported' || task.status === 'closed'), `status=${task.status} attempts=${task.attempts} claimedBy=${task.claimedBy}`)
 
   const report = task.reports[task.reports.length - 1]
   const evidence = report?.evidence as SubmissionEvidence | undefined
@@ -302,7 +303,7 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       if (staffTask.status === 'reported' || staffTask.status === 'failed' || staffTask.status === 'closed') break
       if (Date.now() > endStaff) throw new Error('大副相位外勤 8 分钟未交卷')
     }
-    check('外勤全链（大副发布的任务）claim→执行→submit', staffTask.claimedBy !== undefined && staffTask.claimedBy.startsWith('oc-') && (staffTask.status === 'reported' || staffTask.status === 'closed'), `status=${staffTask.status} claimedBy=${staffTask.claimedBy}`)
+    check('外勤全链（大副发布的任务）claim→执行→submit', staffTask.claimedBy !== undefined && staffTask.claimedBy.startsWith(seatAgentPrefix(staffFleetLive) + '-') && (staffTask.status === 'reported' || staffTask.status === 'closed'), `status=${staffTask.status} claimedBy=${staffTask.claimedBy}`)
     const staffReport = staffTask.reports[staffTask.reports.length - 1]
     const staffEvidence = staffReport?.evidence as SubmissionEvidence | undefined
     if (staffEvidence === undefined) throw new Error('大副相位回报无 evidence')
@@ -483,7 +484,7 @@ if (liveExecutor === 'codex' || liveExecutor === 'pi' || liveExecutor === 'zcode
       if (taskX.status === 'reported' || taskX.status === 'failed' || taskX.status === 'closed') break
       if (Date.now() > endE) throw new Error(`${liveExecutor} 外勤 10 分钟未交卷`)
     }
-    check(`${liveExecutor} 执行者全链 claim→执行→submit`, taskX.claimedBy !== undefined && taskX.claimedBy.startsWith('oc-') && (taskX.status === 'reported' || taskX.status === 'closed'), `status=${taskX.status} claimedBy=${taskX.claimedBy}`)
+    check(`${liveExecutor} 执行者全链 claim→执行→submit`, taskX.claimedBy !== undefined && taskX.claimedBy.startsWith(seatAgentPrefix(liveExecutor) + '-') && (taskX.status === 'reported' || taskX.status === 'closed'), `status=${taskX.status} claimedBy=${taskX.claimedBy}`)
     const reportE = taskX.reports[taskX.reports.length - 1]
     const evidenceE = reportE?.evidence as SubmissionEvidence | undefined
     if (evidenceE === undefined) throw new Error(`${liveExecutor} 相位回报无 evidence`)

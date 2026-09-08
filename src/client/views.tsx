@@ -1987,6 +1987,7 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                       },
                       createElement('span', { className: `war-chip ${(a.outcome ?? 'live') === 'live' ? 'st-in_progress' : a.outcome === 'failed' ? 'oc-fail' : a.outcome === 'reported' ? 'oc-reported' : 'oc-done'}` }, outcomeLabel(a.outcome ?? 'live').label),
                       createElement('span', { className: 'war-taskid' }, `⌁ ${a.sessionId.slice(0, 10)}… · ${t.taskId}`),
+                      t.executorSeat != null && t.executorSeat !== '' ? createElement('span', { className: 'war-chip war-seat-chip' }, t.executorSeat) : null,
                       createElement('span', { className: 'war-time' }, relTime(a.startedAt)),
                       ))))
                     : null,
@@ -2243,6 +2244,10 @@ function SessionCard(task: BoardTask, attempt: BoardAttempt, onDetail: (task: Bo
   // V8 卡片保守瘦身：品质/工作区/任务产出摘要挪进会话详情；卡上留状态+尝试+时间。
   createElement('div', { className: 'war-card-top' },
     createElement('span', { className: 'war-taskid', title: attempt.sessionId }, `⌁ ${attempt.sessionId.slice(0, 10)}…`),
+    // V24.1 席别徽标：spawn 时 task_conscripted 上账——哪支舰队干的卡面可辨。
+    task.executorSeat != null && task.executorSeat !== ''
+      ? createElement('span', { className: 'war-chip war-seat-chip', title: activeCopy().session.seatTitle(task.executorSeat) }, task.executorSeat)
+      : null,
   ),
   // V9.11 R2 实时活动行：live attempt 上宿主动词单点计算的 label（思考中/探索中/
   // 编辑中…双皮肤同词）——原生会话窗口的过程语汇简略版，点卡仍直跳原生全文。

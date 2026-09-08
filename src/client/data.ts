@@ -99,6 +99,8 @@ export interface BoardTask {
   /** V15：工作区绑定形态投影（null=旧任务，客户端回落路径启发式）。 */
   workspaceKind: string | null
   claimedBy: string | null
+  /** V24.1 席别徽标（task_conscripted 上账；null=老任务/未征召；可选=旧投影兼容）。 */
+  executorSeat?: string | null
   startedAt: string
   brief: string
   acceptance: string
