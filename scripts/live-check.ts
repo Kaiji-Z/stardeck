@@ -242,6 +242,14 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       return d?.status === 'approved' && d.taskId !== undefined ? d.taskId! : undefined
     })
     check('大副外聘自动成案（draft→分诊→L0 直发发布）', true, `${cmdA} → ${taskA}`)
+    // V22 翻译显性化：成熟命令（!!直接做=强目标快道）的任务书也要入账——
+    // 大副按征召令指引在最终答复输出任务书块（审核+翻译的凭证，板上可见）。
+    const briefA = await until(4 * 60_000, `${cmdA} 翻译显性化（任务书入账）`, () => {
+      const d = dirState().find(x => x.id === cmdA)
+      const b = d?.brief
+      return b !== undefined && [b.goal, b.background, b.acceptance, b.nonGoals, b.deliverables].every(s => s !== '') ? b.goal : undefined
+    })
+    check('翻译显性化：成熟命令的审核+翻译产出任务书一等事件', true, briefA)
     await until(3 * 60_000, `${cmdB} 定时令到点派发`, () => {
       const d = dirState().find(x => x.id === cmdB)
       return d?.schedule?.dispatchedAt !== undefined ? d.schedule.dispatchedAt : undefined
@@ -260,7 +268,10 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       return d?.clarification?.status === 'pending' ? `round${d.clarification.round}(${d.clarification.questions.length}问)` : undefined
     })
     const dirC = dirState().find(x => x.id === cmdC)
+    // V22 选择题式：至少一问带选项（options 非空）——舰长点选即答的实证面。
+    const withOptions = (dirC?.clarification?.options ?? []).filter(o => o.length > 0).length
     check('澄清协议：模糊命令被追问而非硬派活（澄清挂起入账）', dirC?.taskId === undefined, `${pendingC}；问题：${dirC?.clarification?.questions.join(' / ') ?? '?'}`)
+    check('澄清协议选择题式：追问附选项（舰长点选即答）', withOptions > 0, `${withOptions}/${dirC?.clarification?.questions.length ?? 0} 问带选项`)
     const answerC = await post2('/warroom/api/commands/answer', { commandId: cmdC, text: '「入口问题」指：工具箱首页按钮在窄屏（375px 宽）下溢出容器。验收标准：375px 视口下按钮完整可见、可点击，无横向滚动；非目标：不改后端接口、不做响应式全面重构；交付物：修复改动与验收说明。' }) as { ok?: boolean; note?: string; error?: string }
     check('舰长板内答复入账（澄清回环受理）', answerC.ok === true, answerC.note ?? answerC.error ?? '')
     await until(8 * 60_000, `${cmdC} 成案轮任务书入账`, () => {
