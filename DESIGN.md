@@ -194,6 +194,40 @@
 
 ---
 
+## D25 Jev（System One）适配调研：定位收窄为「参谋信号」——五个 advisory 落点 + 两段 spike（2026-09-23，舰长令「研究可能性」；**议案待批，未实施**）
+
+**背景**：插件仓 HANDOFF（2026-09-23）对 Jev 有初判（最强契合=分诊预判「明显 L0 一次前向直接放行省整轮大副」）。舰长令本仓调研可行性。本条目为调研定案：外部核实（官方文档/独立实测/开源生态）+ 本仓接缝核对，结论对初判做了一处核心修正。
+
+**调研核实的事实底座**（来源：TypeSafe 官方文档与 launch post、OpenRouter 指南、独立实测三份 [TrueStandard 108-claim / Every / Near Here]、HN 49765348、开源模型卡）：
+
+- **本体**：TypeSafe AI（Diogo Almeida，ex-OpenAI InstructGPT/GPT-4）2026-09-15 发布，$40M DCVC。非生成式：入参=`state`+typed `questions`，出参=类型化答案+概率分布+置信度，零文本零 JSON 解析。三原语：**Choice**（≤255 选项，回选项+逐项概率+confidence）、**Score**（2-10 级有序量表，回概率加权分位+confidence）、**Noul**（是非断言，回单一概率，无独立 confidence——阈值自理：`noul>0.9 放行 / <0.1 拒 / 中间带交人`）。**单调用内多问并行求值，时延几乎不随问题数增长**——对本仓 fan-out 场景（逐条筛、逐项问）是最有用的工程性质。
+- **商业面**：`POST api.typesafe.ai/v1/systemone`（或 OpenRouter 双面）；$0.042/MTok 输入、输出免费；32k 上下文；70-500ms。发布 8 天，waitlist/alpha，官方自认定价「无法证明不是补贴的」。
+- **诚实的边界**（官方自查+独立实测双确认）：①「零幻觉」=schema 合规（不可能输出名单外的值），不是正确性——创始人自己承认可 "confidently wrong"；②RLCD 校准声明**无公开数据**（无 ECE/Brier/可靠性曲线），独立 108-claim 实测 ECE 与便宜 chat 模型打平（0.066 vs 0.061/0.067）——但**难例（对抗近似）上 Jev 明显更强**（91.7% vs 83.3/80.6，该层 Brier 减半，「错也错得犹豫」）；③官方 193.6×/444.6× 是自建 workflow 最佳 case，独立实测 5-25×；④官方 jaggedness 页自认：数数不可靠、hex/RGB 弱、日期当文本、无 P(x)+P(¬x)=1 保证。
+- **开源生态**（Apache-2.0 为主）：**AgentJev-0.6B**（Qwen3-0.6B 去 LM 头+置换等变候选头；自带 loopback server `:8149` + Claude Code PreToolUse hook；Typed Decisions 基准 79.25% top-1/Brier 0.0448/ECE 0.169；ctx 2048）、**kev-0.6b**（LoRA+pointer head，**直接 serve TypeSafe /v1/systemone 契约**=换 base URL 即用；in-dist 0.805/OOD 0.598）、**Laya**（421M ModernBERT，短题更快，ctx 1024）、**EdgeJev**（pypi：laya/kev 转 ONNX 量化纯 CPU——4 vCPU int8 单题 15.6ms，运行时仅 onnxruntime+tokenizers+numpy）、**Open-Jev 2B/9B**（更强：2B 94.7%/OOD 86.0%，9B 97.5%，需 GPU）。共同短板：**英文域训练的 specialist，中文命令域零样本迁移未知**（Qwen3 骨干双语但决策头是英文数据训的）——spike 必测项。本机实况：GTX 1660 Ti 6GB+16GB RAM——0.6B 级本地可跑，EdgeJev CPU 路径兜底，9B 级不可行。
+- **AutoJev**：第三方托管 MCP（六预设 route_model/guard_tool_call/route_task/check_research/review_completion/decide）+Skills。**判定不采用**——决策层引入托管中间商=供应链依赖+违背「判断接线在仓内」的边界直觉；但其预设请求形状（tool/action/side_effects/safeguards/policy/reversibility→allow/confirm/review/deny）是极好的设计参照。
+
+**核心修正（对 HANDOFF 初判）**：「明显 L0 一次前向直接放行、省整轮大副 spawn」**不成立**——L0 直发仍需任务书五项（title/brief/acceptance/nonGoals/deliverables），Jev 非生成式写不了；auto-brief 模板化会砸 brief 质量（brief 是给外勤的正典 prompt）。大副轮的实质是生成工作。**省不掉 spawn，能省的是轮数（澄清误开）与质量（先验锚定/注入屏/筛料）**。
+
+**修正后的五个落点**（全部 advisory、旗控 `jev-advice` 默认 OFF、provider 缺席=诚实降级同 goals face 惯例）：
+
+1. **澄清预判升级（最值钱）**：`inputMaturityOf`（staff.ts:137）现为正则启发式四判型；升级为 Jev Noul fan-out（缺关键信息吗/涉舰长独有上下文吗/可自行补全吗）嵌入 `staffOrderFor` 征召令。每省一轮**多余**澄清=省一整轮大副 spawn+舰长等待（分钟级）。错向成本不对称：误判「不完整」多问一轮（烦）vs 误判「完整」出坏任务书（贵）→ 阈值偏向问。
+2. **命令注入筛查（新能力）**：命令文本拼进征召令/简报前置一道 Noul 屏（官方 prompt-injection screen 正是 `>0.9/<0.1` 中间带交人的形）。fail-open 到舰长审，绝不静默放行或静默拦截。
+3. **context sieve（fan-out 优势区）**：chain-note 固定字符 cap（1500/600/400）+detailGens 新近度启发式 → 逐条「值不值得进简报」Noul 并行判定。注意：链档案+板态可超本地复刻 1-2k ctx → 此落点倾向托管 Jev（32k）。
+4. **档位先验**：triage 前 Choice(L0/L1)+confidence 作为 `suggested` 锚注入征召令——D24 的 suggested/override（!!/??）机制原样收编，大副可覆写。一致性增益，非裁决。
+5. **验收陪审**：reported 任务卡旁挂 check_research 形状（证据支持陈述吗）advisory 评分。KillCredit 与强制人工验收正典不动——**Jev 最多陪审，不能法官**。
+
+**红线（调研后更硬，非软化）**：KillCredit/越界/attemptId/互斥/身份门=确定性代码（上一轮刚从「提示词维持」改成「代码强制」，这是结论不是起点）；生成职责（澄清对话/任务书/外勤编码）不沾；签发权绝对化在成形端。另立一条方法论闸：独立实测证明「便宜 chat 模型按正确姿势（明确要求用满 0-1 全距）要概率」可达相近 ECE——**任何 Jev 信号在 spike 里必须有此对照组**，否则增益归因不成立（TrueStandard 自曝其 22-claim 初版正是被自己的 prompt 质量骗了）。
+
+**部署形态（若批）**：`src/jev.ts` 类型化客户端（plain fetch 零新依赖），provider 三态 off/remote（TYPESAFE_API_KEY 或 OpenRouter）/local（loopback：AgentJev server 或 kev 的 systemone 兼容端点；EdgeJev ONNX 为无 GPU 兜底）。config 走 `STARDECK_JEV_URL`/`STARDECK_JEV_KEY`+config.json。数据面注记：命令文本出机（remote 时）——本仓已 BYOK 外呼 z.ai 非新增类别，README 数据边界需补一行。审计：`directive_prejudged`（append-only，预判入账板上可见——「谁在参谋」不黑箱）。
+
+**两段 spike（VERIFICATION 闭环，批后开工）**：
+- **Phase A 校准台（不接 daemon，零产品面风险）**：`eval/jev/` 标定集=**自家 append-only 账本就是现成 ground truth**（directive_created 文本+大副实际分档+澄清史）+插件仓 v5/v15 考题语料。指标：分档一致率/澄清预测 P/R/Brier/ECE/**非对称成本矩阵**（错放 L0≠错留 L1 分开计）；对照组=便宜 chat 模型全距概率基线；双被试=托管 Jev+本地 AgentJev（中文迁移是最大风险点）。产出指标报告，**不过线归档结论不上线**（promptfoo 基建复用，无 key/无模型=诚实 SKIP 退出门 0，同 verify:eval 契约）。预算：千级样本 ≈ 几美分（托管）。
+- **Phase B 接线（Phase A 过线才做）**：旗控五落点（1/2/4 先，3/5 视 Phase A 数据）+`directive_prejudged` 事件+快照/单测+verify 双面+live。
+
+**结论一句话**：可行，但 Jev 在本仓的身份是「参谋的参谋」——给大副与舰长的判断喂先验信号，不是省掉大副的引擎；五个落点里澄清预判+注入屏最值得先 spike；托管 Jev 主路径（32k ctx+generalist），本地 0.6B 复刻可选离线路径（中文迁移未知，Phase A 必测）。
+
+---
+
 ### 后续决策（待记）
 
 - npm 发布管线（release.mjs/OIDC 移植）
