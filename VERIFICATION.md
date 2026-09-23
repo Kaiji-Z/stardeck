@@ -214,7 +214,7 @@ A feature is done if and only if ALL hold:
 
 ### 8.5 Acceptance criteria [must-ask] — **已答**（8.5.1/8.5.3 继承上游原答；8.5.2 判据本仓化——上游指 .goal/SPEC.md，本仓对位物=自家三门）
 1. Happy path（八步，本仓形态）：下命令（板 UI 指挥中心 / POST commands）→ 大副接令（外聘进程自动分诊 war_triage）→ 澄清/计划呈批（命令卡，L1/L2 走 war_plan）→ 批准（war_publish 携 commandId，L0 直发免批）→ 任务落栏+自动物化工作区+征召外勤 → 外勤作战（war_claim 令牌，in_progress）→ 交证待翻阅（war_submit，KillCredit 机械复核+强制人工验收 reported）→ 舰长收官（war_close_task，closed 归档/释放/接力征召）。
-2. 验收判据 = 本仓三门全绿：`pnpm verify` 三段式（281 测+零宿主负针脚）、`pnpm live` 实弹 10+6 断言（含大副相位）、八步链路回归 `tests/e2e-regression.test.ts`；涉及 LLM 行为的特性另过 `pnpm verify:eval`（§8.4 三维门）。
+2. 验收判据 = 本仓三门全绿：`pnpm verify` 三段式（460 测+零宿主负针脚）、`pnpm live` 实弹门（10+6 断言 + attach 面，2026-09-23 回流轮实测 17/17）、八步链路回归 `tests/e2e-regression.test.ts`；涉及 LLM 行为的特性另过 `pnpm verify:eval`（§8.4 三维门）。
 3. 反验收（MUST NEVER，上游原答继承）：浏览器端出现板投影之外的写操作；测试或脚本伪造事件冒充真实 LLM 行为；降低 verify 断言强度或改判据凑达标。
 
 ### 8.6 Fill status (maintained by the agent)
@@ -274,4 +274,4 @@ Output that violates a red line in VERIFICATION.md §7 is void.
 | P2 | 模糊输入集未建 | 未动——从 live/实弹记录沉淀野输入语料（取材地 `.goal/evidence/live/`） |
 | P2 | live 门外置于 verify（前提=本机 opencode+模型，设计使然） | 记录不改；opt-in 大副相位 `STARDECK_LIVE_STAFF=1` 已接 |
 
-**验证体系现状**：确定性断言（281 测）→ 回归门（三段式+opt-in 旗面矩阵）→ 实弹端到端（10+6 断言）→ 监督层（promptfoo 三维门）——四层齐装。剩余迭代：模糊输入语料、监督用例扩容（每道新特性一正一负）。
+**验证体系现状**：确定性断言（460 测，2026-09-23 回流批后）→ 回归门（三段式+opt-in 旗面矩阵）→ 实弹端到端（10+6 断言）→ 监督层（promptfoo 三维门）——四层齐装。剩余迭代：模糊输入语料、监督用例扩容（每道新特性一正一负）。

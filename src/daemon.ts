@@ -14,7 +14,7 @@ import { createWarStore } from './state.ts'
 import { registerDashboard } from './dashboard.ts'
 import { warTools, type CommanderOps, type SubagentsServiceFace, type WorkspaceOps } from './tools.ts'
 import { loadRoster } from './units.ts'
-import { materializeTaskWorkspace, materializeInstanceWorkspace, releaseTaskWorkspace } from './workspace.ts'
+import { materializeTaskWorkspace, materializeInstanceWorkspace, releaseTaskWorkspace, resolveWorkspaceRoot } from './workspace.ts'
 import { runtimeFlags } from './flags.ts'
 import { appendEvent, listCampaignIds, loadCampaign } from './events.ts'
 import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives } from './directives.ts'
@@ -120,6 +120,12 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   }
   const commander: CommanderOps = {
     conscript,
+    // B1-重派死锁修复（插件仓回流 P0）：requeue 落账点先释放 spawn-once 守卫
+    //——本仓守卫形态=ExecutorRegistry 的活进程判定（liveFor），war_fail 的调用
+    // 方执行者进程自身还在役，不显式遗忘则重派征召恒被「该任务已有在役执行者」
+    // 挡回。遗忘后旧令牌即刻失效（claim 发新令牌），旧进程若再交卷会被令牌
+    // 核对拒绝——不会双头执行。
+    releaseSpawned(taskId) { registry.forgetTask(taskId) },
     // P0-1 中途投递（pi 先行，2026-09-02）：批注转达=attach 映射定位该任务会话
     // → pi RPC 续跑投 follow_up 帧（回执成功即转达成立）。非 pi 席/无映射/投递
     // 失败=诚实 false（账面只记「已上栏」不记「已转达」——老降级语义原样）。
@@ -215,6 +221,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     commander,
     workspace,
     warRoot: config.warRoot,
+    workspaceRoot: resolveWorkspaceRoot('', config.warRoot),
     flags,
   }) as Record<string, { name: string; description: string; parameters: Record<string, unknown>; execute(args: Record<string, unknown>, exec: unknown): Promise<unknown> }>
   const toolList = Object.values(tools)
@@ -286,11 +293,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   }
 
   // ---------- 巡检：回收失联 + 补征召（独立形态下进程即生命，定义比宿主更硬） ----------
-  function boardCandidates(): Array<{ taskId: string; status: CampaignState['status']; workspacePath?: string; priority?: string; startedAt: string }> {
+  function boardCandidates(): Array<{ taskId: string; status: CampaignState['status']; workspacePath?: string; priority?: string; startedAt: string; deps?: string[] }> {
     return listCampaignIds(stateDir)
       .map(id => loadCampaign(stateDir, id))
       .filter(t => t.startedAt !== '')
-      .map(t => ({ taskId: t.campaignId, status: t.status, workspacePath: t.workspacePath, priority: t.priority, startedAt: t.startedAt }))
+      .map(t => ({ taskId: t.campaignId, status: t.status, workspacePath: t.workspacePath, priority: t.priority, startedAt: t.startedAt, deps: t.deps }))
   }
   function patrolTick(): void {
     try {
@@ -304,6 +311,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendEvent(stateDir, { type: 'task_attempt_failed', ts: new Date().toISOString(), campaignId: c.taskId, reason: `执行者进程退出（stardeck 巡检回收，exit=${session.exitCode}）`, from: session.agentId })
         if (attempts < config.maxAttempts) {
           appendEvent(stateDir, { type: 'task_requeued', ts: new Date().toISOString(), campaignId: c.taskId, reason: `第 ${attempts} 次尝试失联：执行者进程退出` })
+          // B1-重派死锁修复（插件仓回流）：判死回栏先释放 spawn-once 守卫
+          //（本仓=registry 遗忘）——下一轮巡检补征段即可接手。
           registry.forgetTask(c.taskId)
         } else {
           appendEvent(stateDir, { type: 'task_failed', ts: new Date().toISOString(), campaignId: c.taskId, reason: `第 ${attempts} 次尝试失联（重试上限 ${config.maxAttempts} 已用尽）` })
@@ -314,7 +323,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       // 含「起跑即夭折」回收（mtit94od 实测案例）：执行者 spawn 后未 claim 即退（如 API key 缺失），
       // 死会话若不遗忘会永久占住任务——①的失联回收只管 in_progress，published 态无人清，
       // 卡片就停在「等待外勤小队领取」且账本零痕迹。故：已注册但进程已死 → 先遗忘再补征。
-      const plannable = conscriptPlan(boardCandidates())
+      // B2（插件仓回流）：计划滤 deps——dep-locked 任务不被提前征召（claim 被
+      // 拒空转、简报只发一次）也不遮蔽同工作区可跑任务。
+      const candidates = boardCandidates()
+      const statusOf = (id: string) => candidates.find(t => t.taskId === id)?.status
+      const plannable = conscriptPlan(candidates, statusOf)
       for (const t of plannable) {
         const prior = registry.anyFor(t.taskId)
         if (prior !== undefined) {
@@ -460,10 +473,22 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     return false
   }
 
+  /** 请求体读取（工具调用/fleet/attach 面）。C2 加固（插件仓回流同款）：
+   * 64KB 上限（超限 413 拒）+ 流中断自然终止（async 迭代不挂起 handler）。 */
+  const BODY_LIMIT = 64 * 1024
+  class HttpBodyError extends Error {
+    constructor(message: string, readonly status: number) { super(message) }
+  }
   async function readBody(req: IncomingMessage): Promise<string> {
-    const chunks: Buffer[] = []
-    for await (const chunk of req) chunks.push(chunk as Buffer)
-    return Buffer.concat(chunks).toString('utf8')
+    const parts: Buffer[] = []
+    let size = 0
+    for await (const chunk of req) {
+      const buf = chunk as Buffer
+      size += buf.length
+      if (size > BODY_LIMIT) throw new HttpBodyError('请求体超过 64KB 上限。', 413)
+      parts.push(buf)
+    }
+    return Buffer.concat(parts).toString('utf8')
   }
   function sendJson(res: ServerResponse, code: number, body: unknown): void {
     res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -619,6 +644,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         if (key === 'GET /favicon.ico') { res.writeHead(204); return void res.end() }
         sendJson(res, 404, { ok: false, error: `no route: ${key}` })
       } catch (err) {
+        if (err instanceof HttpBodyError) return sendJson(res, err.status, { ok: false, error: err.message })
         sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     })()

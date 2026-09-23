@@ -30,13 +30,36 @@ export function resolveWarRoot(configured: string): string {
   return configured !== '' ? resolve(configured) : join(process.cwd(), '.warroom')
 }
 
+/** V18 物化根目录名（对抗审查 2026-09-23 自插件仓回流，B9 守卫判据）：
+ *  resolveWorkspaceRoot 的缺省段——auto 任务工作区的共同母目录。 */
+export const WORKSPACE_ROOT_DIRNAME = 'warroom-workspaces'
+
 /** V18 指定默认目录（定案：大副自建工作区=真实文件夹）：配置优先，
  * 缺省 <warRoot 同级>/warroom-workspaces——在 .warroom 之外（非合成沙盒，
  * 任务可挂真实星球）。 */
 export function resolveWorkspaceRoot(configured: string, warRoot: string): string {
   if (configured.trim() !== '') return resolve(configured.trim())
   const wr = resolveWarRoot(warRoot)
-  return join(dirname(wr), 'warroom-workspaces')
+  return join(dirname(wr), WORKSPACE_ROOT_DIRNAME)
+}
+
+/** B9（插件仓回流）：路径是否 auto 物化根（旧 `.warroom` 根 **或** V18 物化根）
+ *  之下的合成工作区——「auto 任务不写 dossier、征召不按 bound 注入档案」两道
+ *  守卫的判据。旧守卫只比对 .warroom 前缀（startsWith），既漏 sep 边界
+ *  （`C:\x\warroom2` 误判 auto）又漏 V18 物化根。本仓现行物化全在 warRoot
+ *  之下，但双根守卫与插件仓同构——未来启用外置物化根时不再踩同一个坑。
+ *  workspaceRoot 缺席时按缺省物化根推导（与 resolveWorkspaceRoot 同式）。 */
+export function isAutoWorkspace(path: string, warRoot: string, workspaceRoot?: string): boolean {
+  const oldRoot = resolve(warRoot)
+  const effectiveRoot = workspaceRoot !== undefined && workspaceRoot.trim() !== ''
+    ? resolve(workspaceRoot)
+    : join(dirname(oldRoot), WORKSPACE_ROOT_DIRNAME)
+  return isUnder(path, oldRoot) || isUnder(path, effectiveRoot)
+}
+
+function isUnder(path: string, root: string): boolean {
+  const p = resolve(path)
+  return p === root || p.startsWith(root + sep)
 }
 
 /**

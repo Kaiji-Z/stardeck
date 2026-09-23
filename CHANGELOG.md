@@ -2,6 +2,17 @@
 
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
+## [Unreleased]
+
+### Fixed（对抗审查回流批，2026-09-23 自插件仓 4cd746b）
+
+- **P0 war_fail 重派死锁（本仓形态）**：war_fail 重派路径的补征恒被 spawn-once 守卫挡回（调用 war_fail 的执行者进程自身还在役，`registry.liveFor()` 判活）而回执无视征召结果虚报「已派遣新外勤小队」；恢复只能靠巡检②「起跑即夭折」误标分支（错因入账+延迟）。修=CommanderOps 增 `releaseSpawned?`（daemon 实现=`registry.forgetTask`），war_fail 先释放守卫再补征并**消费征召结果**（未成如实回执「巡检会自动补征」）；巡检①判死回栏点同款先遗忘（原本已 forget，补注释正名）。
+- **P1×4**：①已取消定时令账本灌水——dueScheduledDirectives 只认 draft（cancelled 不再每 15s 被重判到期涨废 dispatched）；②收官判定 `includes('通过')` 子串误判（「打回：验收**未通过**」折成 succeeded 胜局）→ events.ts `isPassVerdict`（词头+句读边界）；③conscriptPlan 滤 deps——dep-locked 任务不被提前征召（claim 拒空转+占死工作区遮蔽同区可跑任务），巡检②/closeTaskInternal 两调用点带 statusOf；④大副侧动词五道身份/状态门（close 通过语义须 reported+所属大副/HQ 会话、comment 舰长批注形态降级、deploy/orders/recall/log_report 通话方校验；孤儿任务 legacy 宽容）。
+- **P2×8（适用项）**：dashboard send() 真实落码（旧 `void code` 全错误 200 出线——测试 helper 假 200 同步清除，**AGENTS 坑录「send 恒 200 家法」作废**）；cron 严格解析（空段/尾随垃圾拒收）+ `assertCronUsable` 可满足性双侧校验（创建+war_publish，2 月 30 日类永不触发不再入库烧 CPU）+ nextRunMs 游标跨度封顶；KillCredit 双处否决 `failed>0`（exit 0 但有失败项不算全绿）；新模块 `src/jsonl.ts`（appendJsonl 尾字节检测补 \n 治崩断粘连 + appendJsonlBatch 单 write 原子）——events/directives/threads/planets 四路账本统一走它，war_publish 的 created+published[+scheduled] 批量单写；normalizeWorkspaceKey 叠 best-effort realpath（junction 别名两写法判同区）；归档幂等续档（部分失败重入只补缺失会话、账面合并）；toolFilter fail-open loud 告警。
+- **P3 适用项**：定时任务令停用路径（非通过语义收官落 `task_scheduled enabled:false`，dueBounties 扫描侧本就滤 enabled）；state.json 原子写（tmp+rename）；directive ID 后缀 4→8 hex；normalizeFront 大小写折叠（win32/darwin）；SSE close 监听进分支先挂+interval 回调自查 destroyed 自清；readBody 64KB 上限+断线不挂起（dashboard 与 daemon 双面）+坏 JSON→400 干净文案；错误反射截断 120 字符；planets 追加建目录（全新装首请求不再 ENOENT）；fold-cache 返回 Object.freeze；ActivityTracker 驱逐 LRU 化（安静但被板读的会话不逐）；war_publish goal 结算前移+结算后重读（并发双发布竞态窗）；boardRevision planets 缺档标签正名。
+- **未回流（正当分叉/不适用）**：goal disarm clear 降级（本仓 goals 面独立形态恒缺席，无 armed 残留可补偿）；rescue 连败隔离（本仓无 resume 语义——进程即生命，判死即遗忘）；relay 毒命令/pivot 批量写（本仓 relay 为类型载体，宿主面专属）；C11 allowedAbs 大小写（本仓 file 守卫=war_root 单根形态，无星球授权面）；user-seen 封顶（本仓无该模块）；插件侧 /warroom 绕过宿主 token 鉴权（宿主 route registry 根因，本仓 daemon 自家 127.0.0.1 服务无此面）。
+- 测试 431→460（+29 回归断言）；`pnpm verify` + `STARDECK_VERIFY_MATRIX=1` 双面 + `pnpm live` 17/17 全绿。另修一处被矩阵暴露的既有隐患：plan-reject e2e 继承矩阵全旗 OFF 环境致 plan 路由 404——spawn 显式钉 `WARROOM_FEATURES=staff-plan`。
+
 ## [0.1.0] - 2026-09-01
 
 ### Added

@@ -5,8 +5,9 @@
  * @module dsh-plugin-warroom/events
  */
 
-import { appendFileSync, mkdirSync, readdirSync } from 'node:fs'
+import { mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { appendJsonl } from './jsonl.ts'
 import { readJsonlCached } from './fold-cache.ts'
 import type { AttemptRecord, CampaignState, UnitRecord, WarEvent } from './types.ts'
 
@@ -17,10 +18,12 @@ export function ensureCampaignsDir(stateDir: string): string {
   return dir
 }
 
-/** Append one event as a JSON line to the campaign's log (creates the file). */
+/** Append one event as a JSON line to the campaign's log (creates the file).
+ * 对抗审查 2026-09-23（插件仓回流）：经 appendJsonl——尾部半行先治愈再追加，
+ * 崩断粘连不再吞事件。 */
 export function appendEvent(stateDir: string, event: WarEvent): void {
   const file = join(ensureCampaignsDir(stateDir), `${event.campaignId}.jsonl`)
-  appendFileSync(file, `${JSON.stringify(event)}\n`, 'utf8')
+  appendJsonl(file, event)
 }
 
 /** Read and parse a campaign's events; malformed lines are skipped, not fatal.
@@ -37,6 +40,15 @@ export function listCampaignIds(stateDir: string): string[] {
     .filter(f => f.endsWith('.jsonl'))
     .map(f => f.slice(0, -'.jsonl'.length))
     .sort()
+}
+
+/** 收官判定识别（对抗审查 2026-09-23 自插件仓回流：旧 `includes('通过')` 子串
+ * 误判——「打回：验收未通过」含「通过」二字即被记成 succeeded 胜局）。认可
+ * 形态：剥离「判定：/验收：」类前缀标签后以 通过/通过收官/合格/验收合格/验收通过
+ * 开头，且后随句读、空白、括号或结尾；「未通过」「不通过」「通过性…」不认。 */
+export function isPassVerdict(verdict: string): boolean {
+  const v = verdict.trim().replace(/^(?:判定|验收|结论|批语)\s*[：:]\s*/u, '')
+  return /^(?:通过(?: ?收官)?|合格|验收合格|验收通过)(?=$|[，,。！!；;\s（(【[）)】])/u.test(v)
 }
 
 /**
@@ -236,8 +248,8 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
       case 'task_closed':
         state.status = 'closed'
         state.closedVerdict = event.verdict
-        // A 通过 verdict upgrades the reported attempt into the winning session.
-        if (event.verdict.includes('通过')) settleAttempt('succeeded', event.ts, ['reported', undefined])
+        // A passing verdict upgrades the reported attempt into the winning session.
+        if (isPassVerdict(event.verdict)) settleAttempt('succeeded', event.ts, ['reported', undefined])
         break
       case 'campaign_started':
         // v0.1 compat: an old log's campaign header doubles as a task header.

@@ -48,18 +48,19 @@ function makeHandler(deps: Record<string, unknown> = {}): {
   return { handler: (req, res) => Promise.resolve(handler!(req, res)), dispose }
 }
 
+/** C1 配套（插件仓回流）：真实捕获 send() 写入的 statusCode——旧 helper 硬
+ * 编码 code:200，把「全部错误码 200 出线」的 bug 藏在测试面之下。 */
 async function call(handler: (req: unknown, res: unknown) => Promise<void>, req: unknown): Promise<{ code: number; body: any }> {
   let body = ''
-  const res = {
+  const res: { setHeader(): void; write(): boolean; end(b?: string): void; on(): void; statusCode: number } = {
     setHeader: () => {},
     write: () => true,
     end: (b?: string) => { body = b ?? '' },
     on: () => {},
+    statusCode: 200,
   }
-  ;(res as { code?: number }).code = 200
-  const wrapped = { ...res, end: (b?: string) => { body = b ?? '' } }
-  await handler(req, wrapped)
-  return { code: 200, body: JSON.parse(body) }
+  await handler(req, res)
+  return { code: res.statusCode, body: JSON.parse(body) }
 }
 
 /** seed：命令已批准挂任务 + 任务走到指定状态（claimed 才有 attempt 会话）。 */
@@ -109,22 +110,74 @@ test('件④: archive 面缺席 → 501；缺 commandId → 400；未知命令 �
   }
 })
 
-test('件④: archive 链未终局 → 400 拒绝；已归档 → 400', async () => {
+test('件④: archive 链未终局 → 400 拒绝；已归档（全覆盖）→ 400', async () => {
   const dir = tmpStateDir()
   try {
     seedApprovedWithTask(dir, 'cmd-live', 'task-live', 'in_progress')
     seedApprovedWithTask(dir, 'cmd-done', 'task-done', 'closed')
-    appendDirectiveEvent(dir, { type: 'directive_archived', ts: 't9', directiveId: 'cmd-done', sessions: [] })
+    // C5 更新（插件仓回流）：旧种子 sessions:[] 断言的是「已归档即拒」旧闸
+    //——新语义为「已入档会话覆盖全部相关会话才拒」，种子改为全覆盖
+    //（staff+尝试会话）以保持 400 用例。
+    appendDirectiveEvent(dir, { type: 'directive_archived', ts: 't9', directiveId: 'cmd-done', sessions: ['staff-cmd-done', 'cmdr-task-done'] })
     const { handler, dispose } = makeHandler({ stateDir: dir, archiveSession: okArchive })
     try {
       const live = await call(handler, postReq('/warroom/api/archive', { commandId: 'cmd-live' }))
+      assert.equal(live.code, 400) // C1
       assert.equal(live.body.ok, false)
       assert.match(live.body.error, /战线未全终局/)
       const done = await call(handler, postReq('/warroom/api/archive', { commandId: 'cmd-done' }))
+      assert.equal(done.code, 400) // C1
       assert.equal(done.body.ok, false)
       assert.match(done.body.error, /已归档/)
     } finally {
       dispose()
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('C5: archive 部分失败 → 第二次调用补齐缺失会话；全覆盖后第三次 400（幂等续档）', async () => {
+  const dir = tmpStateDir()
+  try {
+    seedApprovedWithTask(dir, 'cmd-r', 'task-r', 'closed')
+    const calls: string[] = []
+    const mk = (failFor: (s: string) => boolean) => async (sessionId: string) => {
+      calls.push(sessionId)
+      return failFor(sessionId) ? { ok: false as const, code: 'E_TIMEOUT', message: '超时' } : { ok: true as const }
+    }
+    // 第一次：cmdr 尝试会话「超时」失败（超时≠宿主失败，可能账实分离）→ 落档只含 staff。
+    const h1 = makeHandler({ stateDir: dir, archiveSession: mk(s => s.startsWith('cmdr')) })
+    try {
+      const r1 = await call(h1.handler, postReq('/warroom/api/archive', { commandId: 'cmd-r' }))
+      assert.equal(r1.code, 200)
+      assert.equal(r1.body.archived, 1)
+      const after1 = loadDirectives(dir).find(d => d.id === 'cmd-r')!.archived!
+      assert.deepEqual([...after1.sessions], ['staff-cmd-r'])
+    } finally {
+      h1.dispose()
+    }
+    // 第二次：重入不被「已归档」堵死——只补归档缺失的 cmdr 会话，账面合并既往+新成功。
+    const h2 = makeHandler({ stateDir: dir, archiveSession: mk(() => false) })
+    try {
+      const callsBefore = calls.length
+      const r2 = await call(h2.handler, postReq('/warroom/api/archive', { commandId: 'cmd-r' }))
+      assert.equal(r2.code, 200)
+      assert.equal(r2.body.archived, 1)
+      assert.deepEqual(calls.slice(callsBefore), ['cmdr-task-r'], '只扇出缺失会话，不重打已入档会话')
+      const after2 = loadDirectives(dir).find(d => d.id === 'cmd-r')!.archived!
+      assert.deepEqual([...after2.sessions].sort(), ['cmdr-task-r', 'staff-cmd-r'].sort())
+    } finally {
+      h2.dispose()
+    }
+    // 第三次：全覆盖 → 400 已归档（幂等终点）。
+    const h3 = makeHandler({ stateDir: dir, archiveSession: mk(() => false) })
+    try {
+      const r3 = await call(h3.handler, postReq('/warroom/api/archive', { commandId: 'cmd-r' }))
+      assert.equal(r3.code, 400)
+      assert.match(r3.body.error, /已归档/)
+    } finally {
+      h3.dispose()
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })

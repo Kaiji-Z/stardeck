@@ -206,7 +206,7 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
       body: JSON.stringify({ commandId: 'cmd-recv', text: 'x' }),
     })
     const recvBody = await recv.json() as { ok?: boolean; error?: string }
-    assert.equal(recv.status, 200, 'dashboard send 家法=恒 200，状态在 body')
+    assert.equal(recv.status, 409, 'C1（对抗审查 2026-09-23 回流）：dashboard send 真实落码——非 talking 409 出线')
     assert.equal(recvBody.ok, false)
     assert.ok(recvBody.error?.includes('不是追问中'))
     // ③ opencode 席（大副默认席）→ run -s 续跑投递：argv 落盘 + 审计 channel=opencode-run。

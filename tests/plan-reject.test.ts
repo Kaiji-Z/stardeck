@@ -104,7 +104,10 @@ process.stdin.on('end', () => process.exit(0))
   const port = 41210 + (process.pid % 50)
   const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
     cwd: repoRoot,
-    env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_EXECUTOR_BIN: stubPath },
+    // 旗面矩阵下（全旗 OFF 的对照跑）本测试会被继承的 !staff-plan 干掉——
+    // plan 路由旗控 404。这里测的是计划驳回链路本身，不是旗门：显式钉 staff-plan
+    // 整体替换继承环境，矩阵两面下行为一致。
+    env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_EXECUTOR_BIN: stubPath, WARROOM_FEATURES: 'staff-plan' },
     stdio: 'ignore',
   })
   const base = `http://127.0.0.1:${port}`

@@ -9,7 +9,7 @@
    - **会话内的执行归 agent 本体**：执行工具由执行者自带，stardeck 不越界；
    - **出口协议不可裁剪**：`war_claim` 令牌制（attemptId 即 capability）、`war_submit` 证据核验（KillCredit 机械判据：checks 全过 + tests 退出码 0 + 无越界文件 + **取证轨迹**——tests_evidence 指向 .stardeck/evidence/ 下的真实运行日志，存在/mtime 晚于领取/尾部退出码与自报一致三查；相悖打回，缺轨迹受理但账本注记「无取证轨迹」板上可见。BYOK 下舰桥无力重放，内容真实性归舰长翻阅——V19.12 对抗审查定案）、`war_fail`、`war_close_task`。快照测试点名断言这些段，动即 FAIL。
 2. **不变量红线（随内核继承）**：attemptId 令牌制、KillCredit 证据链、JSON-text 通道（evidence/deliverables 是**字符串**，内容为 JSON）、SSE revision-only、**板是读投影**（浏览器端不提供改任务的写操作；舰长的「写」都经通道——左区 composer 下令，聚焦页答复/驳回意见经大副通道送达，板上无任务级写操作）。
-3. 每轮收尾必须 `pnpm verify` PASS 并提交（tests 266 + build + needle 三段式，含**零宿主引用负针脚**——import 层出现任何 `@deepseek-ai`/`cordis` 即 FAIL，这是独立形态的完整性铁证）。
+3. 每轮收尾必须 `pnpm verify` PASS 并提交（tests + build + needle 三段式，含**零宿主引用负针脚**——import 层出现任何 `@deepseek-ai`/`cordis` 即 FAIL，这是独立形态的完整性铁证）。
 4. 交付特性前跑 `pnpm live`（实弹门：真 opencode 外勤全链，10 项断言）；改提示词必须过快照门（见「提示词纪律」）。
 5. **强制验证协议**：开发任何特性/改任何代码前，先读并遵循仓内 [`VERIFICATION.md`](VERIFICATION.md)（本仓验证体系实例：§8 参数、ACI 审计证据、缺口清单都在那）。违反其 §7 红线的产出无效；[must-ask] 项（监督设计/验收标准）不得反推填充。
 
@@ -24,12 +24,13 @@
 | `mcp-bridge.mjs` | stdio JSON-RPC 桥（外部 agent 的 MCP server；转发 tools/call 给 daemon HTTP；stdout 只走协议帧） |
 | `tool.ts` | **defineTool shim**（对齐 dsh-tools 契约：参数描述→JSON Schema + 执行前校验 + `invalid arguments:` 教学错误；子集=string/text/number/boolean/array） |
 | `config.ts` | 独立配置：`~/.stardeck/config.json` + `STARDECK_*` env（PORT/STATE_DIR/WAR_ROOT/MODEL/EXECUTOR_BIN）+ CLI 覆盖 |
-| `tools.ts` | war_* 工具 24 件（与插件仓同名同义；唯一分叉点=defineTool import） |
+| `tools.ts` | war_* 工具 24 件（与插件仓同名同义；唯一分叉点=defineTool import）。**2026-09-23 回流批**：CommanderOps 增 releaseSpawned（requeue 先释放守卫再补征+回执消费征召结果）、staffOwnerOf 身份考古+五道身份/状态门（close/comment/deploy/orders/recall/log_report）、KillCredit 双处否决 failed>0、war_publish cron 可满足性门+goal 结算前移+campaign 连写批量单写、closeTaskInternal 定时停用（非通过语义落 enabled:false）+计划滤 deps |
 | `staff.ts` | **大副外聘**（HANDOFF①落地）：staffWorklist 工单判定（纯：终态/未到点/计划待批/**澄清挂起**不出单）+ staffOrderFor 征召令（staffPersonaText 正典 + 接入面 face=mcp/http/pi-extension + relayPromptFor 内嵌 + **输入成熟度评估/澄清块/任务书块指引**；快照门在 tests/staff.test.ts）+ spawnStaffAgent（zcode/pi/claude/dsh/codex/opencode 六席 dispatch）+ **澄清协议面**（D23：inputMaturityOf 四判型预评 + clarificationBlocksOf/briefBlocksOf 块解析（五项缺一即弃；V22.4 容忍 markdown 列表变体）+ **选择题式追问**（ClarifyAsk{raw,text,options}——`A x / B y / C 你帮我定` 行内选项入账，板上点选拼装 `1A;2B` 答复，DESIGN D23 第三刀）+ staffHarvestEventsFromText 纯核心/harvestStaffDirectiveEvents glue 退场收割 + **CLARIFY_ROUNDS_CAP=2 轮数机械闸**（过限拒收+rejected 上报）+ **D24 两档制**（L0 直发/L1 签任务书——分诊后成任务书块停轮等签，签发发布单逐字照抄，重拟单携原稿+意见；renderBriefForSign 代开呈批件））；staffExecutorFor=**双席正典闸**（V19.13：可选舰队必须大副+外勤双接通） |
 | `fleet.ts` | **舰队兵种面**（UI 入口绑定，2026-09-01）：probeFleet 十二席探测（绝对入口 existsSync/裸名 --version 探针）+ fleetSeatIds 校验 + **bindableSeatIds 双席判别式（adapter && staffReady——gemini/qwen 降不可选）**；daemon 持 activeExecutor 运行态（`GET/POST /warroom/api/fleet`，切换只影响后续征召，大副随舰队过 staffExecutorFor 闸）；绑定门 UI 在 fleet-gate.tsx |
 | `dashboard.ts` | /warroom/api/* 全路由（板投影/board SSE/commands/trace/archive…单 prefix、handler 内自分发） |
-| `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1；directives 侧 V20.1 增澄清协议三事件——requested 挂起/answered 翻 pending/brief_ready 任务书一等事件，fold 向后兼容老账本；V23 增 clarificationRounds 只读派生（每轮问答史——会议室时间轴数据面）） |
-| `rules.ts`/`workspace.ts`/`schedule.ts`/`state.ts`/`fold-cache.ts` | 征召计划/工作区物化与释放/cron/全局态/装载缓存（1:1） |
+| `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1；directives 侧 V20.1 增澄清协议三事件——requested 挂起/answered 翻 pending/brief_ready 任务书一等事件，fold 向后兼容老账本；V23 增 clarificationRounds 只读派生（每轮问答史——会议室时间轴数据面））。**2026-09-23 回流批**：四路 append 统一走 `jsonl.ts`（尾字节检测治崩断粘连+批量单写原子）；events 增 `isPassVerdict`（词头+句读边界——`includes('通过')` 子串误判退役）；dueScheduledDirectives 只认 draft；directive ID 后缀 8hex |
+| `jsonl.ts` | **JSONL 追加唯一入口**（2026-09-23 对抗审查回流新模块）：appendJsonl 追加前查尾字节非换行先补 \n（崩断半行不再吞后续事件）+ appendJsonlBatch 多事件单次 write（war_publish 的 created+published[+scheduled] 写级原子） |
+| `rules.ts`/`workspace.ts`/`schedule.ts`/`state.ts`/`fold-cache.ts` | 征召计划/工作区物化与释放/cron/全局态/装载缓存（1:1）。**2026-09-23 回流批**：conscriptPlan 滤 deps（statusOf 给出时跳过 dep-locked）；normalizeFront 大小写折叠（win32/darwin）+ normalizeWorkspaceKey realpath 归一（junction 别名）；workspace 增 isAutoWorkspace 双根守卫；schedule 严格解析+assertCronUsable+horizon 封顶；state 原子写（tmp+rename）；fold-cache 返回 Object.freeze |
 | `prompts.ts`/`persona.ts`/`skill.ts`/`chain-note.ts` | 提示词资产单一源（快照门管辖；1:1） |
 | `goals.ts`/`relay.ts`/`wake.ts`/`quota.ts` | 宿主面结构接口（faces 注入；独立形态诚实降级路径的类型载体） |
 | `client/` | 板 UI 前端（views.tsx 三级布局/皮肤词典/星域/到访件…1:1，除 shell-entry 已由独立入口替代；V23 聚焦页增**会议室段**（data-stage=meeting，澄清时间轴+共识草稿常驻+成案中过程态，DESIGN D23 第四刀））。**i18n**（2026-09-02）：copy.ts=皮肤×语言双语层（setLang/subscribeLang 与皮肤轴共用监听；activeCopy 按两轴取典）+ copy-en.ts=war/plain 两份英典（键形与中文词典逐键对齐，tests/copy-lang.test.ts 锁完备性——缺键即 FAIL 不许静默回落）+ EN trek 词表派生第三皮肤；fleet-gate.tsx 自带双语门面文案；账本与提示词资产保持中文单一源（agent 面正典不随语言切换） |
@@ -39,7 +40,7 @@
 | `codex-shim.ts` | **Responses→chat 垫片**（V19.13）：GLM 直驱 codex 的翻译面（SSE created→output_item.done→completed）+ 回环服（`stardeck codex-shim` 启动，仅绑 127.0.0.1，key 不入 codex 配置）；codexShimProviderArgs=适配器 `-c` 五旗 |
 | `backfill.ts` | **attach-map 补齐**（P1-6）：自家日志反查老会话（ses_/sess_/uuid 三席判型），daemon 启动时补缺失键、不覆盖既有 |
 
-tests/ 与内核一一对应（46 文件 281 测；新增 staff.test.ts 工单/征召令快照 + executor-face.test.ts 合并注入/适配器面）+ `prompts-snapshots/` 快照 fixtures + `staff-snapshots/`；`scripts/verify.mjs` 三段式验收门（+opt-in 旗面双跑矩阵）、`scripts/build.mjs` esbuild 构建、`scripts/live-check.ts` 实弹门（+opt-in 大副相位）。
+tests/ 与内核一一对应（68 文件 460 测，含 2026-09-23 对抗审查回流批 +29 测：war_fail 重派/B3 身份门×5/B4 failed>0/B5 cron 门/B6 发布原子/B9 守卫/B11 定时停用/A1-A8/C1-C8 等）+ `prompts-snapshots/` 快照 fixtures + `staff-snapshots/`；`scripts/verify.mjs` 三段式验收门（+opt-in 旗面双跑矩阵）、`scripts/build.mjs` esbuild 构建、`scripts/live-check.ts` 实弹门（+opt-in 大副相位）。
 
 ## 架构铁律（改代码前默诵）
 
@@ -70,7 +71,7 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 
 | 层 | 内容 | 命令 |
 |---|---|---|
-| 确定性断言 | node:test + assert/strict，46 文件 281 测（fold/规则/工具链/路由/SSE/快照/大副工单） | `pnpm test` |
+| 确定性断言 | node:test + assert/strict，68 文件 460 测（fold/规则/工具链/路由/SSE/快照/大副工单/对抗审查回流批） | `pnpm test` |
 | 回归门 | 三段式：tests + build + needle（正针脚产品面在场 + **负针脚零宿主引用**）；opt-in 旗面双跑矩阵（VERIFICATION.md §4） | `pnpm verify`（矩阵加 `STARDECK_VERIFY_MATRIX=1`） |
 | 实弹端到端 | 真 opencode/GLM 外勤全链 10 断言 + opt-in 大副相位 5 断言（证据 `.goal/evidence/live/`，gitignored） | `pnpm live`（大副相位加 `STARDECK_LIVE_STAFF=1`） |
 | 监督层 | **已接**（2026-09-01 自 dsh 插件版 1:1 移植 promptfoo 体系）：三维评分（achieve/evidence/boundary ≥7 + 越界一票否决），裁判=glm-5.2+隔离提示词；无网关 env 显式 SKIP 绝不放行；接线/坑录见 `eval/README.md` | `pnpm verify:eval`（env：OPENAI_BASE_URL/OPENAI_API_KEY，本机=LookatStudy/.env 的 Z_AI_* 映射） |
@@ -89,7 +90,7 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 - 浏览器自动化一律 Playwright（domcontentloaded + 等待，SSE 挡 networkidle）；截图取证存 `.goal/evidence/`。**同页重载不保证拿新 client.js**——no-store 也拦不住内存缓存（接线轮两次实测确认：新构建已上盘、页面仍跑旧 bundle），UI 改后验证须 `?cb=<n>` 强变更 URL 重载。
 - **执行者侧 shell 编码污染战报入账**（2026-09-02 实测确认）：老账本里 `盘点工作区…` 战报带 U+FFFD 乱码——写入时已坏（executor 用 Windows GBK 控制台 curl 拼 war_submit；stardeck 读侧恒 UTF-8 无辜，板忠实渲染）。daemon 已设哨兵：war_submit 回执遇 U+FFFD 附 warning 提示改走 MCP/UTF-8 重交；坏数据本身板面无法复原，让执行者重交。
 - 按钮接线红线（2026-09-02 全量审计立）：**独立形态不许 `services.sessions?.open` 裸调**（services.sessions 缺席=静默无操作，用户视角「按钮没反应」）——一律经 openStaffPane/openAttemptPane/jumpSession 双形态助手或 standalone 分支先 return；staffTarget 门控同理（老命令可无大副会话捕获，独立形态不等它）。
-- **dashboard 的 send() 恒 HTTP 200**（状态在 body ok/error——家法）：测试断言状态码必错层；要真状态码的端点在 daemon 层（sendJson）。
+- **dashboard 的 send() 真实落码**（2026-09-23 对抗审查回流 C1，反转旧家法）：statusCode 写入真 ServerResponse——400/404/409/413/500 等按码出线，状态语义不再只藏在 body ok/error；测试断言状态码是对层。daemon 层（sendJson）本就真实落码。
 - **live 门/测试起 daemon 必须隔离 STARDECK_CONFIG**（指到临时目录）：P0-2 起 POST /fleet 会写配置文件——不隔离会把测试绑定泄漏进用户全局 config（实测确认一次）；另 staff 相位模型串要 fleet-aware（pi=zai/glm-5.2，其余=zai-coding-plan/glm-5.2——pi 被灌 opencode 格式串起不来，实测确认一次）。
 - **派生面要过语义关**：host-workspaces 拿 war_root 扫描派生=错（内部任务目录≠用户工作区），会顶掉 HQ 弹窗手动注册区（用户实抓）；独立形态「清单缺席→手动区」本就是正解，别手痒补派生。
 - Node 在 Windows 上 process.exit 时 fetch 句柄未排干会崩 libuv 断言（UV_HANDLE_CLOSING）——CLI 面用 process.exitCode 自然退场，不硬 exit。
