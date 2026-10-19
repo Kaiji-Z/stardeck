@@ -38,6 +38,9 @@ export interface StardeckConfig {
   staff: boolean
   /** 大副单役时长上限（分钟）——超龄熔断重开（防挂死堵塞接令管道）。 */
   staffTimeoutMin: number
+  /** 舰桥频道（D26 对话范式，默认开）：聊天窗为默认脸面 + chat 工单 + 机械战报。
+   *  STARDECK_BRIDGE=0/false/off 关（回退看板先行老形态——旗 OFF 面字节等价）。 */
+  bridge: boolean
 }
 
 export function stardeckHome(): string {
@@ -58,6 +61,7 @@ interface ConfigFilePart {
   extraFeatures?: unknown
   staff?: unknown
   staffTimeoutMin?: unknown
+  bridge?: unknown
 }
 
 /** 纯合并：默认值 ← 配置文件 ← 环境变量 ← 调用方显式覆盖。 */
@@ -89,6 +93,7 @@ export function loadConfig(overrides: Partial<StardeckConfig> = {}): StardeckCon
     extraFeatures: pick(file.extraFeatures, env.WARROOM_FEATURES, ''),
     staff: boolPick(file.staff, env.STARDECK_STAFF, true),
     staffTimeoutMin: Number(env.STARDECK_STAFF_TIMEOUT_MIN ?? file.staffTimeoutMin ?? 30),
+    bridge: boolPick(file.bridge, env.STARDECK_BRIDGE, true),
   }
   return { ...cfg, ...overrides }
 }

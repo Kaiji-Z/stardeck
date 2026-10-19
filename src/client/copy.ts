@@ -582,6 +582,37 @@ export interface WarCopy {
     segLine: (counts: { pending: number; waiting: number; active: number; failed: number }) => string
     unread: (n: number) => string
   }
+  /** D26 舰桥频道（v0.3.0 对话范式的默认脸面）：聊天 chrome 文案。决策卡
+   *  词汇（签发五项/验收/选项拼装）复用 focusPage 词典——一处正典不双写。 */
+  bridge: {
+    title: string
+    motto: string
+    welcome: string
+    roleYou: string
+    roleManager: string
+    roleSystem: string
+    inputPh: string
+    send: string
+    sending: string
+    sentNote: string
+    loadFail: string
+    dockTitle: string
+    dockEmpty: string
+    cardClarify: string
+    cardSign: string
+    cardReview: string
+    cardRetry: string
+    openFocus: string
+    knockBtn: string
+    retryBtn: string
+    actionBusy: string
+    actionFail: string
+    /** 三态视图切换（壳层药丸：聊天全屏/分屏旁观/看板全屏）。 */
+    viewChat: string
+    viewSplit: string
+    viewBoard: string
+    settings: string
+  }
 }
 
 /** 默认皮肤：军事风（当前文案，逐字保留）。 */
@@ -1146,6 +1177,34 @@ export const warCopy: WarCopy = {
     segLine: c => `作战室${c.pending > 0 ? ` 等·参谋${c.pending}` : ''} 等·指挥官${c.waiting} 进行${c.active}${c.failed > 0 ? ` 失败${c.failed}` : ''}`,
     unread: n => `${n} 新`,
   },
+  bridge: {
+    title: '舰桥频道',
+    motto: '和你的大副说话：下令、问战况、问概念——舰队的事他兜着。',
+    welcome: '这里是舰桥频道。想做什么直接说，大副会驱动舰队并在这里回话；机械战报也会推到这里。',
+    roleYou: '舰长',
+    roleManager: '大副',
+    roleSystem: '战报',
+    inputPh: '跟大副说点什么……（Ctrl+Enter 发送）',
+    send: '发送',
+    sending: '发送中…',
+    sentNote: '已入账——大副下一轮回话（约 15 秒起档）。',
+    loadFail: '频道消息读取失败（daemon 不在或舰桥未开）。',
+    dockTitle: '等你定夺',
+    dockEmpty: '没有等你定夺的事——舰队自转中，有事大副会来请示。',
+    cardClarify: '等你答复',
+    cardSign: '等你签发',
+    cardReview: '等你验收',
+    cardRetry: '等你定夺重试',
+    openFocus: '打开聚焦页',
+    knockBtn: '打回',
+    retryBtn: '下重试令',
+    actionBusy: '处理中…',
+    actionFail: '操作失败——稍后重试或进看板处置。',
+    viewChat: '聊天',
+    viewSplit: '分屏',
+    viewBoard: '看板',
+    settings: '设置',
+  },
 }
 
 /**
@@ -1706,6 +1765,34 @@ export const plainCopy: WarCopy = {
     titleLine: c => `等·规划 Agent ${c.pending} · 等·执行 Agent ${c.waiting} · 执行中 ${c.active}${c.failed > 0 ? ` · 已失败 ${c.failed}` : ''} —— 点击回到工作台`,
     segLine: c => `工作台${c.pending > 0 ? ` 等·规划 Agent${c.pending}` : ''} 等·执行 Agent${c.waiting} 执行${c.active}${c.failed > 0 ? ` 失败${c.failed}` : ''}`,
     unread: n => `${n} 新`,
+  },
+  bridge: {
+    title: '对话频道',
+    motto: '和你的规划 Agent 说话：下单、问进度、问用法——项目的事他兜着。',
+    welcome: '这里是对话频道。想做什么直接说，规划 Agent 会调度执行 Agent 并在这里回话；系统通知也会推到这里。',
+    roleYou: '我',
+    roleManager: '规划 Agent',
+    roleSystem: '通知',
+    inputPh: '说点什么……（Ctrl+Enter 发送）',
+    send: '发送',
+    sending: '发送中…',
+    sentNote: '已入账——下一轮回话（约 15 秒起档）。',
+    loadFail: '频道消息读取失败（daemon 不在或频道未开）。',
+    dockTitle: '等你定夺',
+    dockEmpty: '没有等你定夺的事——一切自动运转中，有事他会来请示。',
+    cardClarify: '等你答复',
+    cardSign: '等你签发',
+    cardReview: '等你验收',
+    cardRetry: '等你定夺重试',
+    openFocus: '打开详情页',
+    knockBtn: '打回',
+    retryBtn: '下重试单',
+    actionBusy: '处理中…',
+    actionFail: '操作失败——稍后重试或进看板处置。',
+    viewChat: '聊天',
+    viewSplit: '分屏',
+    viewBoard: '看板',
+    settings: '设置',
   },
 }
 

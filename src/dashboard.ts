@@ -15,6 +15,7 @@ import { appendDirectiveEvent, chainHueSlot, deriveContinuation, loadDirectives,
 import type { ContinuationMode, ContinuationTaskFace } from './directives.ts'
 import { appendEvent, listCampaignIds, loadCampaign, readEvents } from './events.ts'
 import { appendThreadEvent, loadAttachedThreads } from './threads.ts'
+import { appendBridgeEvent, loadBridgeMessages } from './bridge.ts'
 import { assertCronUsable, nextRunOf } from './schedule.ts'
 import { queuePositionOf } from './rules.ts'
 import type { Roster } from './units.ts'
@@ -190,6 +191,14 @@ export function boardRevision(stateDir: string, activitySalt?: string): string {
     sig += 'threads:-;'
   }
   try {
+    // D26 舰桥频道（v0.3.0）：第六账本入 revision——SSE rev 变化即聊天窗/板
+    // 双双刷新（分屏旁观「看板被聊天驱动」的数据面）。
+    const st = statSync(join(stateDir, 'bridge.jsonl'))
+    sig += `bridge:${st.mtimeMs}:${st.size};`
+  } catch {
+    sig += 'bridge:-;'
+  }
+  try {
     const st = statSync(join(stateDir, 'state.json'))
     sig += `state:${st.mtimeMs}:${st.size}`
   } catch {
@@ -214,8 +223,12 @@ export interface DashboardDeps {
    *  面接线；缺席/失败 best-effort，不阻塞判定入账）。 */
   pushToStaff?: (sessionId: string, text: string) => void
   /** P0-1 板内答复（2026-09-02）：talking 命令的舰长答复 → pi RPC 续跑大副会话。
-   *  daemon 注入实现；缺席 → /commands/answer 501（纯路由测试可省略）。 */
-  answerCommand?: (commandId: string, text: string) => Promise<{ ok: true; note: string } | { ok: false; error: string }>
+   *  daemon 注入实现；缺席 → /commands/answer 501（纯路由测试可省略）。
+   *  D26：channel 入参（'board'|'bridge'）——审计可分对话面/板面来源，缺省 board。 */
+  answerCommand?: (commandId: string, text: string, channel?: string) => Promise<{ ok: true; note: string } | { ok: false; error: string }>
+  /** D26 舰桥频道开关（daemon 注入 config.bridge；缺省 false=旗 OFF 面：bridge
+   *  三端点 404、/board 不带 bridge 字段——与改前字节等价）。 */
+  bridgeEnabled?: boolean
   /** P1-5 优雅停服（CLI stop 面）：缺席 → /shutdown 501（纯路由测试可省略）。 */
   shutdown?: () => void
   /** v3: fired after a command card is created — the host ticks the command
@@ -439,6 +452,72 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
 }
 
 /**
+ * D26 舰队全况 digest（纯读盘组装）：经理人「报战况」的紧凑底料（工单附页/
+ * /bridge/digest 端点共用）。四段封顶——pendingDecisions（collectInbox 语义的
+ * 服务端化：plan 待签优先于 talking 澄清；reported=待验收；failed=待重试）+
+ * commands（活跃命令摘要）+ tasks（活跃任务含最新战报节选）+ stats。token
+ * 友好：标题/战报截断、条目封顶，绝不给全量板。
+ */
+export interface BridgeDigest {
+  generatedAt: string
+  pendingDecisions: Array<{ kind: 'clarify' | 'sign' | 'review' | 'retry'; refId: string; title: string; since: string }>
+  commands: Array<{ commandId: string; status: string; grade: string | null; title: string }>
+  tasks: Array<{ taskId: string; title: string; status: string; attempts: number; latestReport: string | null }>
+  stats: { commands: number; tasks: number; inProgress: number; reported: number; failed: number }
+}
+
+export function bridgeDigest(stateDir: string, now = new Date()): BridgeDigest {
+  const clip = (s: string, n: number): string => {
+    const t = s.replaceAll('\n', ' ').trim()
+    return t.length > n ? `${t.slice(0, n)}…` : t
+  }
+  const directives = loadDirectives(stateDir)
+  const pendingDecisions: BridgeDigest['pendingDecisions'] = []
+  for (const d of directives) {
+    if (d.status === 'approved' || d.status === 'cancelled') continue
+    if (d.plan?.status === 'pending') pendingDecisions.push({ kind: 'sign', refId: d.id, title: clip(d.text, 80), since: d.createdAt })
+    else if (d.status === 'talking' || d.clarification?.status === 'pending') pendingDecisions.push({ kind: 'clarify', refId: d.id, title: clip(d.text, 80), since: d.createdAt })
+  }
+  const tasks = listCampaignIds(stateDir).map(id => loadCampaign(stateDir, id)).filter(t => t.startedAt !== '')
+  for (const t of tasks) {
+    if (t.status === 'reported') {
+      const last = t.reports.length > 0 ? t.reports[t.reports.length - 1]!.ts : t.startedAt
+      pendingDecisions.push({ kind: 'review', refId: t.campaignId, title: clip(t.title ?? t.intent, 80), since: last })
+    }
+    if (t.status === 'failed') {
+      pendingDecisions.push({ kind: 'retry', refId: t.campaignId, title: clip(t.title ?? t.intent, 80), since: t.startedAt })
+    }
+  }
+  pendingDecisions.sort((a, b) => (a.since < b.since ? -1 : 1))
+  const activeCmds = directives
+    .filter(d => d.status !== 'approved' && d.status !== 'cancelled')
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(0, 8)
+    .map(d => ({ commandId: d.id, status: d.status, grade: d.grade ?? null, title: clip(d.text, 60) }))
+  const activeTasks = tasks
+    .filter(t => t.status !== 'closed')
+    .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
+    .slice(0, 8)
+    .map(t => ({
+      taskId: t.campaignId, title: clip(t.title ?? t.intent, 60), status: t.status, attempts: t.attempts,
+      latestReport: t.reports.length > 0 ? clip(t.reports[t.reports.length - 1]!.text, 200) : null,
+    }))
+  return {
+    generatedAt: now.toISOString(),
+    pendingDecisions,
+    commands: activeCmds,
+    tasks: activeTasks,
+    stats: {
+      commands: directives.length,
+      tasks: tasks.length,
+      inProgress: tasks.filter(t => t.status === 'in_progress').length,
+      reported: tasks.filter(t => t.status === 'reported').length,
+      failed: tasks.filter(t => t.status === 'failed').length,
+    },
+  }
+}
+
+/**
  * B1-件② 单命令追踪投影（纯，只读——板是读投影红线内的调试面）：命令摘要 +
  * 该命令的原始 directive 事件时间线 + 关联任务（复用板投影：attemptLog /
  * queueAhead / quotaPaused 全在）+ 其原始 campaign 事件 + 引信/征召视角。
@@ -508,6 +587,8 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           warRoot: deps.warRoot,
           hqSessionId: deps.store.get().hqSessionId ?? null,
           revision: boardRevision(deps.stateDir, deps.activity?.salt()),
+          // D26 舰桥频道（旗 ON 面才有此字段）：客户端据此决定默认脸面=聊天窗。
+          ...(deps.bridgeEnabled === true ? { bridge: { enabled: true } } : {}),
           commands: directiveProjection(deps.stateDir),
           tasks: boardProjection(deps.stateDir, deps.activity?.snapshot.bind(deps.activity)),
           threads: loadAttachedThreads(deps.stateDir).map(t => ({ sessionId: t.sessionId, note: t.note, attachedAt: t.attachedAt })),
@@ -744,9 +825,11 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
       if (r.method === 'POST' && pathname === '/warroom/api/commands/answer') {
         // P0-1 板内答复（2026-09-02）：talking 命令的舰长答复经 pi RPC 续跑送进
         // 大副会话。通道实现由 daemon 注入（deps.answerCommand）；缺席=未接线 501。
-        const body = await readJsonBody(r) as { commandId?: unknown; text?: unknown }
+        const body = await readJsonBody(r) as { commandId?: unknown; text?: unknown; channel?: unknown }
         const commandId = typeof body.commandId === 'string' ? body.commandId.trim() : ''
         const text = typeof body.text === 'string' ? body.text.trim().slice(0, 2000) : ''
+        // D26：答复来源面入账（'board'|'bridge'，其余值按 board——审计字面受控）。
+        const channel = body.channel === 'bridge' ? 'bridge' : 'board'
         if (commandId === '' || text === '') {
           send(400, { ok: false, error: 'commandId 与 text 必填（text ≤2000 字）。' })
           return
@@ -755,8 +838,52 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           send(501, { ok: false, error: '答复通道未接线（deps.answerCommand 缺席）。' })
           return
         }
-        const out = await deps.answerCommand(commandId, text)
+        const out = await deps.answerCommand(commandId, text, channel)
         send(out.ok ? 200 : out.error.includes('不存在') ? 404 : 409, out)
+        return
+      }
+      if (r.method === 'GET' && pathname === '/warroom/api/bridge/messages') {
+        // D26 舰桥频道消息流（只读投影；旗 OFF 面 404=与改前等价）。?since= 增量。
+        if (deps.bridgeEnabled !== true) {
+          send(404, { ok: false, error: `路由不存在：${r.method ?? 'GET'} ${pathname}` })
+          return
+        }
+        const q = new URL(r.url ?? '/', 'http://local').searchParams
+        const since = q.get('since') ?? ''
+        let messages = loadBridgeMessages(deps.stateDir)
+        if (since !== '') messages = messages.filter(m => m.ts > since)
+        send(200, { ok: true, messages: messages.slice(-200), revision: boardRevision(deps.stateDir, deps.activity?.salt()) })
+        return
+      }
+      if (r.method === 'POST' && pathname === '/warroom/api/bridge/messages') {
+        // D26 舰长发话入账（写通道本体：账本追加即受理——大副 15s tick 出 chat
+        // 工单回话；「实时感」由机械战报+板面刷新承载）。旗 OFF 面 404。
+        if (deps.bridgeEnabled !== true) {
+          send(404, { ok: false, error: `路由不存在：${r.method ?? 'GET'} ${pathname}` })
+          return
+        }
+        const body = await readJsonBody(r) as { text?: unknown }
+        const text = typeof body.text === 'string' ? body.text.trim() : ''
+        if (text === '') {
+          send(400, { ok: false, error: '消息内容为空：跟经理人说什么，写一句就行。' })
+          return
+        }
+        if (text.length > 8000) {
+          send(400, { ok: false, error: '消息太长（>8000 字）：请拆成几条说。' })
+          return
+        }
+        const ts = new Date().toISOString()
+        appendBridgeEvent(deps.stateDir, { type: 'bridge_user_message', ts, text })
+        send(200, { ok: true, ts })
+        return
+      }
+      if (r.method === 'GET' && pathname === '/warroom/api/bridge/digest') {
+        // D26 舰队全况 digest（经理人的战况底料 + 聊天决策坞的数据面；紧凑封顶）。
+        if (deps.bridgeEnabled !== true) {
+          send(404, { ok: false, error: `路由不存在：${r.method ?? 'GET'} ${pathname}` })
+          return
+        }
+        send(200, { ok: true, digest: bridgeDigest(deps.stateDir) })
         return
       }
       if (r.method === 'POST' && pathname === '/warroom/api/commands/regrade') {

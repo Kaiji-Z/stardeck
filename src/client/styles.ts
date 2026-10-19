@@ -1111,6 +1111,51 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 /* 3D 图例 lg-front + 战线信息卡链色点 */
 .war-wz-legend .lg-front{background:linear-gradient(90deg,var(--war-run-strong),var(--war-done))}
 .war-wz-tip .dot.chain{background:var(--chain-hue,#888)}
+/* ═══ D26 舰桥频道（v0.3.0 对话范式默认脸面）════════════════════════════════ */
+.war-bridge{display:flex;flex-direction:column;min-height:0;flex:1;background:var(--war-canvas);font-family:var(--war-font)}
+.war-bridge-head{display:flex;align-items:baseline;gap:10px;padding:12px 16px 8px;border-bottom:1px solid var(--war-border-soft)}
+.war-bridge-title{font-size:calc(16px*var(--war-fs));font-weight:600;color:var(--war-text-1)}
+.war-bridge-motto{font-size:calc(12px*var(--war-fs));color:var(--war-text-2)}
+.war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.war-bridge-welcome{color:var(--war-text-2);font-size:calc(13px*var(--war-fs));padding:8px 2px}
+.war-bridge-err{color:var(--war-fail,var(--war-text-2));font-size:calc(12px*var(--war-fs));margin:0}
+.war-bmsg{max-width:86%;display:flex;flex-direction:column;gap:3px;padding:8px 11px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-card-bg);font-size:calc(13px*var(--war-fs))}
+.war-bmsg-user{align-self:flex-end;background:color-mix(in srgb,var(--war-run-strong) 8%,var(--war-card-bg))}
+.war-bmsg-agent{align-self:flex-start}
+.war-bmsg-system{align-self:center;max-width:96%;background:var(--war-well-bg);border-style:dashed;font-size:calc(12px*var(--war-fs))}
+.war-bmsg-meta{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bmsg-body{color:var(--war-text-1);line-height:1.55;overflow-wrap:anywhere}
+.war-bmsg-plain{white-space:pre-wrap}
+.war-bmsg-refs{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.war-bmsg-chips{display:inline-flex;gap:6px;flex-wrap:wrap}
+.war-bref{font-size:calc(11px*var(--war-fs));padding:1px 8px}
+.war-bnotice-reported{border-color:var(--war-run-border,var(--war-border))}
+.war-bnotice-retry{border-color:var(--war-fail,var(--war-border))}
+.war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:44%;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.war-bridge-dock[data-bridge-dock='empty']{max-height:none}
+.war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em}
+.war-bcard{border:1px solid var(--war-border);border-radius:8px;background:var(--war-card-bg);padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--war-shadow-1)}
+.war-bcard-head{display:flex;align-items:center;gap:8px;min-width:0}
+.war-bcard-tag{flex:none;font-size:calc(11px*var(--war-fs));padding:1px 8px;border-radius:var(--war-r-pill);background:var(--war-well-bg);color:var(--war-text-1);white-space:nowrap}
+.war-bcard-title{flex:1;min-width:0;font-size:calc(13px*var(--war-fs));color:var(--war-text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.war-bcard-id{flex:none;font-size:calc(10px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bcard-input{width:100%;min-height:34px;resize:vertical;font-family:var(--war-font);font-size:calc(12px*var(--war-fs));color:var(--war-text-1);background:var(--war-well-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:5px 8px;outline:none;box-sizing:border-box}
+.war-bcard-input:focus-visible{outline:2px solid var(--war-focus);outline-offset:1px}
+.war-bcard-field{display:flex;flex-direction:column;gap:2px}
+.war-bcard-flabel{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
+.war-bcard-hint{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);margin:0}
+.war-bcard-evi{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bcard-body{max-height:180px;overflow-y:auto;font-size:calc(12px*var(--war-fs))}
+.war-bcard-actions{display:flex;gap:8px;flex-wrap:wrap}
+.war-bridge-input{border-top:1px solid var(--war-border-soft);padding:8px 16px 12px;display:flex;flex-direction:column;gap:6px}
+.war-bridge-ta{width:100%;resize:vertical;font-family:var(--war-font);font-size:calc(13px*var(--war-fs));color:var(--war-text-1);background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 10px;outline:none;box-sizing:border-box}
+.war-bridge-ta:focus{border-color:var(--war-run-border,var(--war-run-strong))}
+.war-bridge-sendrow{display:flex;justify-content:flex-end}
+.war-bridge-switch{position:fixed;top:12px;right:14px;z-index:40;display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--war-card-bg);border:1px solid var(--war-border);box-shadow:var(--war-shadow-1)}
+.war-bridge-switch .war-btn{font-size:calc(12px*var(--war-fs));padding:3px 10px;border-radius:999px}
+.war-bridge-settings{width:min(420px,92vw)}
+.war-bridge-settings-body{padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.war-bridge-settings-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px}
 `
 
 

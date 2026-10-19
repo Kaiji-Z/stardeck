@@ -131,6 +131,8 @@ export interface BoardData {
   warRoot: string
   hqSessionId: string | null
   revision?: string
+  /** D26 舰桥频道面（旗 ON 时服务端才带）：客户端据此决定默认脸面=聊天窗。 */
+  bridge?: { enabled: boolean }
   commands: BoardCommand[]
   tasks: BoardTask[]
   threads: BoardThread[]
@@ -260,15 +262,40 @@ export async function closeTask(taskId: string, verdict: string): Promise<{ ok: 
 }
 
 /** P0-1 板内答复（2026-09-02 脱离宿主九件）：talking 命令的舰长答复 →
- *  POST /commands/answer → daemon 经 pi RPC 续跑送进大副会话（受理即回）。 */
-export async function answerCommand(commandId: string, text: string): Promise<{ ok: boolean; note?: string; error?: string }> {
+ *  POST /commands/answer → daemon 经 pi RPC 续跑送进大副会话（受理即回）。
+ *  D26：channel 入参（'board'|'bridge'，缺省 board）——审计可分对话面来源。 */
+export async function answerCommand(commandId: string, text: string, channel: 'board' | 'bridge' = 'board'): Promise<{ ok: boolean; note?: string; error?: string }> {
   try {
     const res = await fetch('/warroom/api/commands/answer', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commandId, text }),
+      body: JSON.stringify({ commandId, text, channel }),
     })
     return await res.json() as { ok: boolean; note?: string; error?: string }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** D26 舰桥频道消息（/bridge/messages 的渲染面形状——与服务端 BridgeMessage 同构）。 */
+export interface BridgeChatMessage {
+  kind: 'user' | 'agent' | 'system'
+  ts: string
+  text: string
+  commandRefs?: string[]
+  noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled'
+  refs?: Record<string, string>
+}
+
+/** D26 舰长发话入账（写通道本体：追加即受理，大副 15s tick 回话）。 */
+export async function sendBridgeMessage(text: string): Promise<{ ok: boolean; ts?: string; error?: string }> {
+  try {
+    const res = await fetch('/warroom/api/bridge/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    return await res.json() as { ok: boolean; ts?: string; error?: string }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

@@ -2,6 +2,25 @@
 
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
+## [0.3.0] - 2026-10-20
+
+### Added（D26 舰桥频道：对话范式回归，DESIGN D26 三轮拍板）
+
+- **聊天窗=默认脸面**：打开 stardeck 就是「舰桥频道」+设置入口——舰长和一位经理人（大副正典升格：经理人职责+回话纪律入 staffPersonaText）对话：下令、问战况（digest 数据底料，不编造）、问概念（产品自带导购）；看板收为可展开面板，三态切换（聊天全屏/分屏旁观/看板全屏），分屏下 SSE rev 驱动「看着看板被聊天驱动」。`STARDECK_BRIDGE` 默认 ON，=0 回退看板先行老形态（旗 OFF 面：/board 无 bridge 字节、三端点 404，与 0.2.x 等价）。
+- **bridge 账本**（`src/bridge.ts`，第六账本入 revision 签名）：舰长发话/经理人终答全文/机械战报三态消息流；append-only JSONL 纪律（jsonl.ts 崩断治愈+fold-cache 冻结缓存）。
+- **chat 工单与收割双写**：staffOrderFor 增第四参 chat 附页（舰长发话+携史 24 条+舰队速览+对话纪律；chat 缺席字节不变——旗 OFF 快照零波及）；staffTick 15s 出单，大副终答经 finalStaffReply 单源取文全文入 bridge，【任务书】【澄清】结构化块照旧入 directives——两账并行不漂移。**逻辑常驻、物理按需**：opencode/pi 席 chat-only 轮优先 resume 续跑（deliverVia* 原语复用，失败退避 2 分钟），全席兜底=工单携史（重启不失忆，历史在账不在进程）。
+- **机械战报五触发**（不跑模型，dedupKey=源事件指纹幂等）：任务交证待验收/澄清挂起/失败待重试/收官与成任务终局/定时令派发——模板+点穿链接，聊天窗保持「活着」零 token。
+- **三端点**：`GET/POST /warroom/api/bridge/messages`（?since= 增量）、`GET /warroom/api/bridge/digest`（pendingDecisions/commands/tasks/stats 紧凑封顶——collectInbox 服务端化：plan 待签>clarify 同令只出一条、reported→review、failed→retry）；`/commands/answer` 增 channel:'bridge' 审计面（板面/对话面来源可分）。
+- **聊天内三决策卡**（`src/client/bridge.tsx` 决策坞，词汇复用 focusPage 词典）：澄清选择题药丸（1A;2B 拼装与会议室同款）+任务书签发五项可编辑卡（D24 签发权在聊天内的对位物）+验收证据卡（战报节选+机械核对行+验收/打回一键）+失败重试卡；消息体 md-lite 渲染与板同源（reportBody 导出共用）；系统消息带点穿按钮（hash 深链聚焦页，WarView 增 hashchange 监听）。
+- **i18n**：bridge 词典段四典齐备（war/plain 双语，trek 自动派生；含三态切换/设置弹层文案）；聊天/分屏态迷你设置弹层（皮肤/语言/明暗）。
+- **监督用例一正一负**（eval/tests.yaml 8→10）：正=经理人呈证据请示不代签；负=舰长离席诱导代签验收被否决——红线①（验收定夺归舰长）的 LLM 侧镜像。
+- **live 门新相位** `STARDECK_LIVE_BRIDGE=1`（+6 断言）：/board bridge 面→发话入账→chat 工单→大副终答入 bridge 全链→未答清空→digest 全况→机械战报在场；bridge.jsonl 随相位落证据。
+- 新增测试 22 条（bridge 账本 7/路由与 digest 6/chat 工单与收割 4/渲染 harness 5），全量 460→482；快照随人设升格真实重生成（staff-persona+四征召令 fixtures）。
+
+### 边界（本轮明确不做）
+
+- 分级授权档（经理人自决例行运营）——未来另案拍板；zcode/claude/dsh/codex 四席进程级续跑留在候选清单（携史兜底保功能完整）；npm 发版等舰长令。
+
 ## [Unreleased]
 
 ### Fixed（对抗审查回流批，2026-09-23 自插件仓 4cd746b）

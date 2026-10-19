@@ -23,7 +23,9 @@ import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, seatAgentPrefix, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, renderBriefForSign, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
+import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices } from './bridge.ts'
+import { bridgeDigest } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
@@ -149,15 +151,15 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // 席别分发（P0-1 收尾）：pi=RPC prompt 帧（受理回执即返）；opencode=run -s
   // 续跑（活过观察窗即受理——大副默认席自此可答）；其余席仍诚实拒绝。
   const answering = new Set<string>()
-  const answerCommand = async (commandId: string, text: string): Promise<{ ok: true; note: string } | { ok: false; error: string }> => {
+  const answerCommand = async (commandId: string, text: string, channel: string = 'board'): Promise<{ ok: true; note: string } | { ok: false; error: string }> => {
     const directive = loadDirectives(stateDir).find(d => d.id === commandId)
     if (directive === undefined) return { ok: false, error: `命令 ${commandId} 不存在。` }
     if (directive.status !== 'talking') return { ok: false, error: `命令 ${commandId} 当前不是追问中（${directive.status}）——无可答复的大副提问。` }
     // 澄清协议答复（2026-09-08）：挂起澄清的命令走账本回环——入账即受理，
     // 大副下一轮带问答史重开成案（外聘无头进程不续跑；账本即状态，全席通用，
-    // 也避免与成案轮双发）。
+    // 也避免与成案轮双发）。D26：channel 入账（board/bridge——审计分面对话来源）。
     if (directive.clarification?.status === 'pending') {
-      appendDirectiveEvent(stateDir, { type: 'directive_clarification_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel: 'board' })
+      appendDirectiveEvent(stateDir, { type: 'directive_clarification_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel })
       console.log(`[stardeck] 舰长澄清答复入账 ${commandId}（第 ${directive.clarification.round} 轮）——大副将开新一轮成案`)
       return { ok: true, note: '答复已入账——大副将带着答复开新一轮定案，进展看命令卡与任务链。' }
     }
@@ -181,11 +183,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         })
       if (!out.ok) return { ok: false, error: `答复投递失败：${out.error ?? '未知'}` }
       settled = out.settled
-      const channel = entry.executor === 'pi' ? 'pi-rpc' : 'opencode-run'
+      const viaChannel = entry.executor === 'pi' ? 'pi-rpc' : 'opencode-run'
       // 审计入账（append-only；不改 fold 状态——talking 态由大副后续动作推进）。
-      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel })
-      console.log(`[stardeck] 舰长答复已送达 ${commandId} → ${entry.executor} 会话 ${entry.sessionId}（${channel} 续跑）`)
-      return { ok: true, note: `答复已送达大副会话（${channel} 续跑）——它将继续推进；进展看命令卡与任务链。` }
+      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel: viaChannel })
+      console.log(`[stardeck] 舰长答复已送达 ${commandId} → ${entry.executor} 会话 ${entry.sessionId}（${viaChannel} 续跑）`)
+      return { ok: true, note: `答复已送达大副会话（${viaChannel} 续跑）——它将继续推进；进展看命令卡与任务链。` }
     } finally {
       // 在途守卫持续到「消化完」（settled）——受理即放行会双进程续跑同一会话文件。
       void (settled ?? Promise.resolve(false)).finally(() => { answering.delete(commandId) })
@@ -262,6 +264,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       conscription: () => ({ spawned: registry.spawned(), skips: {} }),
       releaseWorkspace: path => releaseTaskWorkspace(config.warRoot, path),
       answerCommand,
+      bridgeEnabled: config.bridge,
       shutdown: () => { triggerShutdown() },
       // K17 计划判定回推（独立形态替位）：pi 席经 RPC 续跑投 follow_up（与板内答复
       // 同通道）；非 pi/失败 best-effort 跳过——驳回理由已入 fold，重拟工单必带。
@@ -357,11 +360,25 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   let staffSpawning = false
   let staffRetryAfter = 0
   let staffFleet = 'opencode'
+  // D26 舰桥频道运行态：resume 单飞守卫 + 失败退避（chat-only 轮优先续跑既有
+  // 经理人会话，失败/无答复退避 2 分钟后走全新 spawn 携史兜底）。
+  let bridgeResumeBusy = false
+  let bridgeResumeRetryAfter = 0
   async function staffTick(): Promise<void> {
     if (!config.staff) return
     for (const id of dueScheduledDirectives(loadDirectives(stateDir), Date.now())) {
       appendDirectiveEvent(stateDir, { type: 'directive_dispatched', ts: new Date().toISOString(), directiveId: id })
       console.log(`[stardeck] 定时命令到点派发 ${id}`)
+    }
+    // D26 机械战报（五触发，不跑模型）：幂等同步——dedupKey=源事件指纹，
+    // 同源事件永只报一次；入账即 revision 变化，聊天窗/板双双刷新。
+    if (config.bridge) {
+      try {
+        const noticed = syncBridgeNotices(stateDir)
+        if (noticed > 0) console.log(`[stardeck] 舰桥战报入账 ${noticed} 条`)
+      } catch (err) {
+        console.warn(`[stardeck] 舰桥战报同步失败（跳过本轮）：${err instanceof Error ? err.message : String(err)}`)
+      }
     }
     if (staffSession !== undefined) {
       const alive = staffSession.exitCode === null && staffSession.child.exitCode === null
@@ -407,17 +424,80 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
             console.log(`[stardeck] L1 任务书呈批 ${d.id}——等舰长签发`)
           }
         }
+        // D26 舰桥频道收割双写：大副最终答复**全文**入 bridge（chat 窗的经理人
+        // 话轮）；命令结构化块已在上面临账——对话与命令两账并行，同一末答取文
+        // （finalStaffReply 与 harvest 同源，永不漂移）。commandRefs=答复正文中
+        // 点到号的命令；agentId/sessionId 记逻辑常驻会话（下轮 chat-only 可 resume）。
+        if (config.bridge) {
+          const reply = finalStaffReply(stateDir, staffSession.agentId)
+          if (reply !== null) {
+            const entry = readAttachMap(stateDir)[staffSession.agentId]
+            const refs = staffItems.map(i => i.commandId).filter(id => reply.includes(id))
+            appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, ...(refs.length > 0 ? { commandRefs: refs } : {}), agentId: staffSession.agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}) })
+            console.log(`[stardeck] 舰桥经理人回话入账（${reply.length} 字${refs.length > 0 ? `，涉 ${refs.length} 命令` : ''}）`)
+          }
+        }
       } catch (err) {
         console.warn(`[stardeck] 大副产出收割失败（下轮工单重试）：${err instanceof Error ? err.message : String(err)}`)
       }
       // 定向退避：退场/熔断后工单仍未清（这轮没干成活）→ 罚 2 分钟再重开，
       // 防 received-未分诊单引发 15s 重试风暴；干成了活（工单清空）不罚。
-      if (staffWorklist(loadDirectives(stateDir)).length > 0) staffRetryAfter = Date.now() + 120_000
+      // D26：舰桥未答消息同算「没干完的活」（chat 回话失败同样退避防风暴）。
+      const chatStillPending = config.bridge && bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0
+      if (staffWorklist(loadDirectives(stateDir)).length > 0 || chatStillPending) staffRetryAfter = Date.now() + 120_000
       staffSession = undefined
     }
     if (staffSpawning || Date.now() < staffRetryAfter) return
     const items = staffWorklist(loadDirectives(stateDir))
-    if (items.length === 0) return
+    const chatMsgs = config.bridge ? bridgeUnanswered(loadBridgeMessages(stateDir)) : []
+    if (items.length === 0 && chatMsgs.length === 0) return
+    // D26 逻辑常驻（chat-only 轮优先续跑）：无命令工单、纯回话，且上轮经理人
+    // 原生会话在 attach-map 且席别=当前舰队（opencode/pi 有续跑原语）→ 工单全文
+    // resume 投递（会话自带全量记忆）；失败/无答复退避 2 分钟，下轮自然回落
+    // 全新 spawn 携史兜底（全席保底路径，行为不依赖 resume 成活）。
+    if (config.bridge && items.length === 0 && !bridgeResumeBusy && Date.now() >= bridgeResumeRetryAfter) {
+      const messages = loadBridgeMessages(stateDir)
+      const lastAgent = [...messages].reverse().find(m => m.kind === 'agent' && m.agentId !== undefined)
+      if (lastAgent !== undefined && lastAgent.agentId !== undefined) {
+        const entry = readAttachMap(stateDir)[lastAgent.agentId]
+        const fleetNow = staffExecutorFor(activeExecutor)
+        if (entry !== undefined && (entry.executor === 'opencode' || entry.executor === 'pi') && entry.executor === fleetNow && lastAgent.sessionId !== undefined) {
+          bridgeResumeBusy = true
+          const brief = staffOrderFor(items, flags, fleetNow === 'pi' ? 'pi-extension' : 'mcp', {
+            pending: chatMsgs.map(m => ({ text: m.text, ts: m.ts })),
+            history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && chatMsgs.some(c => c.ts === m.ts)))),
+            digest: JSON.stringify(bridgeDigest(stateDir)),
+          })
+          void (async () => {
+            try {
+              const out = entry.executor === 'pi'
+                ? await deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, kind: 'prompt' })
+                : await deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, stateDir })
+              if (!out.ok) {
+                console.warn(`[stardeck] 舰桥续跑投递失败（${out.error ?? '未知'}）——退避后全新回合兜底`)
+                bridgeResumeRetryAfter = Date.now() + 120_000
+                return
+              }
+              await (out.settled ?? Promise.resolve(false))
+              const reply = finalStaffReply(stateDir, lastAgent.agentId!)
+              if (reply === null) {
+                console.warn('[stardeck] 舰桥续跑完成但未取到答复——退避后全新回合兜底')
+                bridgeResumeRetryAfter = Date.now() + 120_000
+                return
+              }
+              appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, agentId: lastAgent.agentId, sessionId: entry.sessionId })
+              console.log(`[stardeck] 舰桥经理人续跑回话入账（${reply.length} 字，resume）`)
+            } catch (err) {
+              console.warn(`[stardeck] 舰桥续跑异常（退避后全新回合兜底）：${err instanceof Error ? err.message : String(err)}`)
+              bridgeResumeRetryAfter = Date.now() + 120_000
+            } finally {
+              bridgeResumeBusy = false
+            }
+          })()
+          return
+        }
+      }
+    }
     staffSpawning = true
     try {
       const agentId = `staff-${Date.now().toString(36)}`
@@ -435,8 +515,18 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendDirectiveEvent(stateDir, { type: 'directive_session_opened', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
         appendDirectiveEvent(stateDir, { type: 'directive_received', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
       }
+      // D26 chat 附页（携史+速览）：舰长发话在场即随工单——命令工单照走，对话
+      // 纪律教大副「答复必伴自然语言」。携史窗口剔除待答新话（它们单列在
+      // 【舰长新话】段，不重复占 token）。
+      const chatOrder = chatMsgs.length > 0
+        ? {
+            pending: chatMsgs.map(m => ({ text: m.text, ts: m.ts })),
+            history: bridgeHistoryWindow(loadBridgeMessages(stateDir).filter(m => !(m.kind === 'user' && chatMsgs.some(c => c.ts === m.ts)))),
+            digest: JSON.stringify(bridgeDigest(stateDir)),
+          }
+        : undefined
       staffSession = await spawnStaffAgent({
-        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' || staffFleet === 'codex' ? 'http' : 'mcp'),
+        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' || staffFleet === 'codex' ? 'http' : 'mcp', chatOrder),
         workspacePath: join(stateDir, 'staff'),
         http: base,
         agentId,
@@ -447,7 +537,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         codexShimBase: config.codexShimBase,
       })
       staffItems = items
-      console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件，日志 ${staffSession.logPath}）`)
+      console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件${chatOrder !== undefined ? '+舰桥发话' : ''}，日志 ${staffSession.logPath}）`)
     } finally {
       staffSpawning = false
     }

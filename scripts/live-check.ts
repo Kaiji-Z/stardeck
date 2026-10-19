@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { loadCampaign } from '../src/events.ts'
 import { seatAgentPrefix } from '../src/executor.ts'
 import { loadDirectives } from '../src/directives.ts'
+import { loadBridgeMessages, bridgeUnanswered } from '../src/bridge.ts'
 import { killCreditAllGreen } from '../src/tools.ts'
 import { jumpArgs, readAttachMap } from '../src/executor.ts'
 import type { SubmissionEvidence } from '../src/types.ts'
@@ -318,7 +319,14 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       const why = Object.entries(amap).filter(([k]) => k.startsWith('staff-')).map(([k, v]) => `${k}→${v.executor}:${v.sessionId}`).join(', ')
       check(`大副随舰队实弹（${staffFleetLive} 席）——原生会话映射入账`, staffHit !== undefined, why || '无 staff- 映射')
     }
-    const staffClosed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskA, verdict: '通过收官——大副链实弹回响属实' }, agentId: 'live-staff' }) as { ok: boolean; result?: { status?: string } }
+    // B3 身份门对位：收官判定只认所属大副会话或 HQ——staff 相位的任务经真大副
+    // 成案（directive 绑定 staff-<id>），关账以该大副会话号记录（舰长决策、大副
+    // 记账的工具语义；旧 'live-staff' 裸名在 B3 落地后会被身份门拒）。
+    const ownerAgent = (taskId: string): string => {
+      const owner = dirState().find(d => d.taskId === taskId)?.staffSessionId
+      return owner !== undefined && owner !== '' ? owner : 'live-staff'
+    }
+    const staffClosed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskA, verdict: '通过收官——大副链实弹回响属实' }, agentId: ownerAgent(taskA) }) as { ok: boolean; result?: { status?: string } }
     check('舰长验收收官（大副相位）', staffClosed.ok === true && staffClosed.result?.status === 'closed', `${taskA}=${loadCampaign(stateDir2, taskA).status}`)
 
     // ── D24 两档制 L1 相位：?? 签发档全链（taskA 收官后单独成轮，防首轮过重）──
@@ -369,8 +377,30 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       if (l1Task.status === 'reported' || l1Task.status === 'failed' || l1Task.status === 'closed') break
       if (Date.now() > endL1) throw new Error('D24 L1 外勤 8 分钟未交卷')
     }
-    const l1Closed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskL1, verdict: '签发档任务收官——签发文本如实落地' }, agentId: 'live-staff' }) as { ok: boolean; result?: { status?: string } }
+    const l1Closed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskL1, verdict: '签发档任务收官——签发文本如实落地' }, agentId: ownerAgent(taskL1) }) as { ok: boolean; result?: { status?: string } }
     check('D24 L1：外勤交卷并收官全链', (l1Task.status === 'reported' || l1Task.status === 'closed') && l1Closed.ok === true && l1Closed.result?.status === 'closed', `${taskL1}=${loadCampaign(stateDir2, taskL1).status}`)
+
+    // ── D26 舰桥频道相位（STARDECK_LIVE_BRIDGE=1）：聊天发话 → chat 工单 →
+    // 大副终答全文入 bridge 账本 → 机械战报在场 → digest 端点全链。回话可能
+    // 走 resume 续跑或全新 spawn 携史兜底两路之一——本相位不区分，只验「回了」。
+    if (process.env.STARDECK_LIVE_BRIDGE === '1') {
+      const boardFace = await fetch(`${base2}/warroom/api/board`).then(r => r.json()) as { bridge?: { enabled?: boolean } }
+      check('D26 舰桥：/board 带 bridge 面（旗 ON 默认）', boardFace.bridge?.enabled === true, JSON.stringify(boardFace.bridge ?? null))
+      const chatAsk = '现在舰队里有几条命令、几个任务？一句话向舰长报个总况。'
+      const sent = await post2('/warroom/api/bridge/messages', { text: chatAsk }) as { ok?: boolean; ts?: string; error?: string }
+      check('D26 舰桥：舰长发话入账（POST /bridge/messages）', sent.ok === true && typeof sent.ts === 'string', sent.ts ?? sent.error ?? '')
+      const reply = await until(8 * 60_000, '舰桥大副回话入账', () => {
+        const hit = loadBridgeMessages(stateDir2).find(m => m.kind === 'agent' && m.ts > (sent.ts ?? ''))
+        return hit !== undefined && hit.text.trim().length > 10 ? hit.text.trim().slice(0, 60) : undefined
+      })
+      check('D26 舰桥：chat 工单→大副终答全文入 bridge（对话范式全链）', true, reply)
+      const afterReply = bridgeUnanswered(loadBridgeMessages(stateDir2))
+      check('D26 舰桥：回话后未答集清空（工单消费闭环）', afterReply.length === 0, `剩 ${afterReply.length} 条未答`)
+      const digestLive = await fetch(`${base2}/warroom/api/bridge/digest`).then(r => r.json()) as { ok?: boolean; digest?: { pendingDecisions?: unknown[]; stats?: { commands?: number } } }
+      check('D26 舰桥：digest 端点全况（待决清单+命令计数）', digestLive.ok === true && Array.isArray(digestLive.digest?.pendingDecisions) && (digestLive.digest?.stats?.commands ?? 0) >= 3, `commands=${digestLive.digest?.stats?.commands ?? '?'} pending=${digestLive.digest?.pendingDecisions?.length ?? '?'}`)
+      const noticeCount = loadBridgeMessages(stateDir2).filter(m => m.kind === 'system').length
+      check('D26 舰桥：机械战报在场（澄清/交证/收官触发过）', noticeCount >= 1, `${noticeCount} 条战报`)
+    }
 
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。
   } catch (err) {
@@ -384,6 +414,7 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     // 静默吞错，directives.jsonl 落盘 0 字节——澄清问→答→成案全链证据丢失）。
     // 收摊后读必然稳；空文件显式告警，不假装证据在场。
     writeFileSync(join(evidenceDir, 'staff-phase-directives.jsonl'), readFileSyncSafely(join(stateDir2, 'directives.jsonl')), 'utf8')
+    writeFileSync(join(evidenceDir, 'staff-phase-bridge.jsonl'), readFileSyncSafely(join(stateDir2, 'bridge.jsonl')), 'utf8')
     try {
       for (const f of readdirSync(join(stateDir2, 'logs'))) {
         if ((f.startsWith('staff-') || f.startsWith('executor-')) && f.endsWith('.log')) copyFileSync(join(stateDir2, 'logs', f), join(evidenceDir, `staff-phase-${f}`))

@@ -228,6 +228,30 @@
 
 ---
 
+## D26 舰桥频道：对话范式回归（2026-10-20，舰长三轮拍板）
+
+**源起**：舰长自诊产品致命弱点——命令模式让 agent 不再回话，用户被换到命令习惯、监督面过宽、决策瓶颈全压在舰长身上。历史脉络定案：当年砍「会话管理」误伤「对话」；新形态把对话范式归还，会话管理仍然不要——**一个经理人一个窗**。
+
+**三次拍板记录**：
+1. （第一轮）经理人=大副正典升格，聊天窗驱动星舰+实时战况+答疑；
+2. （第二轮）**对话框回归为产品本体**：默认脸面=聊天窗+设置入口，心智模型极简；频道为舰队全局（不选会话/不选项目/不建工作区，仪式经理人代走）；
+3. （第三轮）板的地位=**可展开面板**——分屏旁观「看板被聊天驱动」（SSE rev 白得），也可进板亲自下令；聊天为尊的双面并立。
+
+**红线三条（违者返工）**：①验收/签发定夺归舰长——聊天内一键完成，经理人不代签（eval 监督用例一正一负钉死）；②账本为源——聊天窗同板是读投影，写只经命令通道，bridge.jsonl 入 revision 六账本；③大副正典单人格——staffPersonaText 升格（经理人职责+回话纪律），不造第二 agent。
+
+**机制定案**：
+- **逻辑常驻、物理按需**：不做永不退场进程（进程即生命铁律下引入新失联语义不值）；chat 工单（staffOrderFor 第四参 chat 附页）携近 24 条对话史=全席兜底；opencode/pi 席 chat-only 轮优先 resume 续跑（deliverVia* 原语复用，失败退避 2 分钟回落全新 spawn）。
+- **收割双写**：大副终答全文入 bridge（agent_message，含 agentId/sessionId 供 resume）+ 结构化块照旧入 directives——finalStaffReply 单源取文，两账永不漂移。
+- **机械战报五触发**（reported/clarify/retry/terminal/scheduled）：不跑模型，dedupKey=源事件指纹幂等；聊天窗「活着」不靠烧 token。
+- **digest**：collectInbox 服务端化+命令/任务/待决三合一紧凑封顶——经理人报战况的数据底料，工单附页随行。
+- **旗**：`STARDECK_BRIDGE` 默认 ON（=0/false/off 回退看板先行老形态，/board 无 bridge 字节、三端点 404——旗 OFF 面与 0.2.x 等价）。
+
+**边界（不属本轮）**：分级授权档（经理人自决例行运营）未来另案；zcode/claude/dsh/codex 四席进程级续跑留在候选清单（携史兜底保功能完整）。
+
+**实现锚**：账本 `src/bridge.ts`；工单附页 `staffOrderFor(items, flags, face, chat?)`（chat 缺席字节不变）；daemon staffTick 挂 notices sync+chat 出单+收割双写+resume；端点 `GET/POST /warroom/api/bridge/messages`、`GET /bridge/digest`；UI `src/client/bridge.tsx`（消息流+三决策卡坞：澄清药丸/签发五项/验收证据卡）+ `client-standalone.tsx` 三态壳（聊天/分屏/看板）；answer 通道 channel:'bridge' 入账。
+
+---
+
 ### 后续决策（待记）
 
 - npm 发布管线（release.mjs/OIDC 移植）

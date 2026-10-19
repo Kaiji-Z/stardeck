@@ -1146,8 +1146,9 @@ function SessionHistoryModal(props: { kind: 'staff' | 'exec'; hist: SessionHisto
 
 /** V19 战报可读性：markdown-lite 渲染壳（块级 parseMd + 行内 splitInline）——
  *  战报正文与 md 产物预览共用一个渲染语言；路径形 token 链化成可点按钮
- *  （onOpenFile 缺席=纯展示退化，如预览嵌套里不再开预览）。 */
-function reportBody(text: string, onOpenFile?: (name: string) => void): ReactNode {
+ *  （onOpenFile 缺席=纯展示退化，如预览嵌套里不再开预览）。
+ *  D26 导出：舰桥频道消息体同用这一个渲染语言（聊天/板不搞两套 md 方言）。 */
+export function reportBody(text: string, onOpenFile?: (name: string) => void): ReactNode {
   const pathNode = (v: string, key: string): ReactNode =>
     onOpenFile !== undefined
       ? createElement('button', { key, className: 'war-md-path', type: 'button', title: activeCopy().focusPage.lootFileTitle, onClick: () => { onOpenFile(v) } }, v)
@@ -3006,6 +3007,16 @@ export function warView(services: ClientServicesFace): () => ReactNode {
         if (location.hash !== next) history.replaceState(null, '', next || location.pathname + location.search)
       } catch { /* 隐私模式 */ }
     }, [detailCommandId])
+    // D26 舰桥深链：聊天窗「打开聚焦页」经 hash 点穿——WarView 挂载后也听
+    // hashchange（此前只在首帧读一次 hash，聊天切板时聚焦页打不开）。
+    useEffect(() => {
+      const onHash = (): void => {
+        const m = location.hash.match(/^#war-cmd-([\w-]+)$/)?.[1] ?? null
+        setDetailCommandId(prev => (prev === m ? prev : m))
+      }
+      window.addEventListener('hashchange', onHash)
+      return () => { window.removeEventListener('hashchange', onHash) }
+    }, [])
     // V10 续接播种：任务回报卡「下续战令」→ 预填起草器接续目标。
     const [continueSeed, setContinueSeed] = useState<string | null>(null)
     // V19.7-8 打回/重试播种：文本+旧账身份进 composeSeed（提交成功后自动定性收官）。

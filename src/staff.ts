@@ -232,23 +232,35 @@ export function staffHarvestEventsFromText(text: string, knownIds: ReadonlySet<s
 }
 
 /**
+ * 大副回合最终答复全文（D26 舰桥频道收割双写的取文面）：经 attach-map 定位
+ * 本轮原生会话 → 末条 assistant 文本的纯提取。缺席/读取失败/无 assistant →
+ * null（调用方诚实降级）。harvest 与舰桥双写共用一源——命令块解析与对话全文
+ * 取自同一条末答，两账永不漂移。
+ */
+export function finalStaffReply(stateDir: string, agentId: string): string | null {
+  const entry = readAttachMap(stateDir)[agentId]
+  if (entry === undefined) return null
+  let history: ReturnType<typeof readSessionHistory>
+  try {
+    history = readSessionHistory(entry.executor, entry.sessionId, entry.workspacePath)
+  } catch {
+    return null
+  }
+  const last = [...history.messages].reverse().find(m => m.role === 'assistant')
+  if (last === undefined) return null
+  const text = last.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
+  return text.trim() === '' ? null : text
+}
+
+/**
  * 大副退场收割（daemon staffTick 在大副进程退出时调用）：经 attach-map 定位
  * 本轮原生会话 → 读最终答复 → {@link staffHarvestEventsFromText}。attach 映射
  * 缺席/历史读取失败/无块 → 空数组（下轮工单重试语义接管——诚实降级，不硬凑）。
  * knownIds=本轮工单在册命令号；clarifyRoundOf=命令当前澄清轮数（机械闸依据）。
  */
 export function harvestStaffDirectiveEvents(stateDir: string, agentId: string, knownIds: ReadonlySet<string>, clarifyRoundOf: (commandId: string) => number, now = new Date()): StaffHarvest {
-  const entry = readAttachMap(stateDir)[agentId]
-  if (entry === undefined) return { events: [], rejectedClarifications: [] }
-  let history: ReturnType<typeof readSessionHistory>
-  try {
-    history = readSessionHistory(entry.executor, entry.sessionId, entry.workspacePath)
-  } catch {
-    return { events: [], rejectedClarifications: [] }
-  }
-  const last = [...history.messages].reverse().find(m => m.role === 'assistant')
-  if (last === undefined) return { events: [], rejectedClarifications: [] }
-  const text = last.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
+  const text = finalStaffReply(stateDir, agentId)
+  if (text === null) return { events: [], rejectedClarifications: [] }
   return staffHarvestEventsFromText(text, knownIds, clarifyRoundOf, now)
 }
 
@@ -318,12 +330,28 @@ export function briefBlocksOf(text: string): BriefBlock[] {
 }
 
 /**
+ * 舰桥频道工单附页（D26）：舰长在聊天窗发话→大副回话。三件套=未答新话+
+ * 近期对话史（工单携史=全席逻辑常驻兜底）+舰队速览（digest 快照，报战况的
+ * 数据底料）。措辞与结构属快照门管辖（staff-snapshots）。
+ */
+export interface StaffChatOrder {
+  /** 舰长未答新话（时间序，含 ts 仅审计——渲染不进提示词）。 */
+  pending: ReadonlyArray<{ text: string; ts: string }>
+  /** 近期对话史（bridgeHistoryWindow 产物：you=舰长 / manager=你 / system=战报）。 */
+  history: ReadonlyArray<{ role: 'you' | 'manager' | 'system'; text: string }>
+  /** 舰队速览 JSON 快照（bridgeDigest 产物的 stringify）。 */
+  digest: string
+}
+
+/**
  * 外聘大副征召令（纯；措辞改动必须过 tests/staff.test.ts 快照门——
  * `WARROOM_UPDATE_SNAPSHOTS=1 node --import tsx --test tests/staff.test.ts`）。
  * 接令工单内嵌 relayPromptFor 正典（分诊纪律+起草法全文随旗面），续办
  * 工单只给增量指引——不改正典措辞。
+ * D26：chat 附页在场时头部多一段「舰桥频道·舰长发话」（对话纪律+携史+速览）；
+ * chat 缺席（=0.2.x 旧行为）字节不变——旗 OFF 面快照不受波及。
  */
-export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' | 'http' = 'mcp'): string {
+export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' | 'http' = 'mcp', chat?: StaffChatOrder): string {
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】你是 stardeck 舰的外聘大副——本进程已通过 MCP 桥（server 名 stardeck）直连舰桥，war_* 工具全量可用。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
     : face === 'http'
@@ -334,8 +362,24 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
     '',
     surface,
     '',
-    `【本轮工单】共 ${items.length} 件，逐件办结（顺序处理，不挑单）：`,
+    `【本轮工单】${items.length > 0 ? `共 ${items.length} 件，逐件办结（顺序处理，不挑单）：` : '无命令工单——本轮只回舰长的话。'}`,
   ]
+  if (chat !== undefined) {
+    const roleWord = (r: 'you' | 'manager' | 'system'): string => (r === 'you' ? '舰长' : r === 'manager' ? '你' : '战报')
+    const historyLines = chat.history.length > 0
+      ? chat.history.map(h => `${roleWord(h.role)}：${h.text.replaceAll('\n', ' ')}`).join('\n')
+      : '（此前无对话——舰长第一次发话，自我介绍一句再答。）'
+    sections.push([
+      '',
+      `── 舰桥频道（舰长发话）──`,
+      '你是舰上唯一的对话者（经理人）：舰长不进看板，只在这个频道和你说话——下令、问战况、问概念、闲聊都在这里。',
+      '【对话纪律】本轮最终答复必须以自然语言直接回应舰长（结论先行、说人话，几句话讲清）；若本轮工单另有任务书/澄清块，块照常输出，块外必须有给舰长的话。没有命令工单时，答复就是纯对话，不要硬凑结构化块。',
+      `【近期对话】（延续上下文，不要失忆）\n${historyLines}`,
+      `【舰长新话（待答）】\n${chat.pending.map((m, i) => `${i + 1}. ${m.text.replaceAll('\n', ' ')}`).join('\n')}`,
+      `【舰队速览】（系统快照，报战况以此为准——数据不编造）\n${chat.digest}`,
+      '【处理】问战况→按速览讲，点出 pendingDecisions 里等你定夺的事项；要下令→按下方命令工单纪律办（成案走结构化块）；问舰队/星舰概念→直接解释；纯闲聊→自然回应。只有命令工单才动 war_* 工具。',
+    ].join('\n'))
+  }
   let n = 0
   for (const item of items) {
     if (item.kind !== 'intake') continue
