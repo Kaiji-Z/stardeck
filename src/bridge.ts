@@ -159,7 +159,7 @@ export function collectBridgeNoticeEvents(stateDir: string, now = new Date()): B
       out.push({ type: 'bridge_system_notice', ts, noticeKind: 'retry', dedupKey: `failed:${id}:${t.attempts}`, text: `任务失败待你定夺：「${clip(title)}」——${clip(t.lastError ?? '无败因记录')}（第 ${t.attempts} 次尝试）。`, refs: { taskId: id } })
     }
     if (t.status === 'closed') {
-      out.push({ type: 'bridge_system_notice', ts, noticeKind: 'terminal', dedupKey: `closed:${id}`, text: `任务收官：「${clip(title)}」${t.closedVerdict !== undefined ? `——${clip(t.closedVerdict)}` : ''}。`, refs: { taskId: id } })
+      out.push({ type: 'bridge_system_notice', ts, noticeKind: 'terminal', dedupKey: `closed:${id}`, text: `收官：「${clip(title)}」${t.closedVerdict !== undefined ? `，判定：${clip(t.closedVerdict)}` : ''}。`, refs: { taskId: id } })
     }
   }
   return out

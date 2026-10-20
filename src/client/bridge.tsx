@@ -114,18 +114,35 @@ function cardHead(label: string, title: string, refId: string): ReactNode {
     createElement('span', { className: 'war-bcard-id' }, refId))
 }
 
+/** D29 critique P1：跨挂载草稿仓——chat/split/看板三态切换会重挂 BridgePane，
+ *  在途输入/签发五项/澄清答复/打回理由若无仓则静默归零（决策面数据丢失：
+ *  舰长签任务书切去分屏核对一眼，切回来五项全变回原稿且无提示）。模块级
+ *  对象跨挂载存活；页面刷新即失（会话级草稿，不入账不越红线）。 */
+const draftStore: {
+  input: string
+  cards: Record<string, { five?: Record<string, string>; note?: string; text?: string }>
+} = { input: '', cards: {} }
+
 /** 澄清答复卡：选择题药丸（1A;2B 拼装与板会议室同款）+ 自由输入兜底。 */
 function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
   const { item, cmd, busy, act } = props
   const bc = activeCopy().bridge
   const fp = activeCopy().focusPage
   const clar = cmd.clarification
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => draftStore.cards[item.refId]?.text ?? '')
+  const setTextBoth = (v: string): void => {
+    setText(v)
+    const slot = draftStore.cards[item.refId] ?? {}
+    slot.text = v
+    draftStore.cards[item.refId] = slot
+  }
   const pick = (qi: number, letter: string): void => {
     setText(t => {
       const cleaned = t.replace(new RegExp(`(?:^|\\s)${qi + 1}[A-Z];?`, 'g'), '').trim()
       const addition = `${qi + 1}${letter};`
-      return cleaned === '' ? addition : `${cleaned} ${addition}`
+      const next = cleaned === '' ? addition : `${cleaned} ${addition}`
+      setTextBoth(next)
+      return next
     })
   }
   const sendAnswer = (): void => {
@@ -151,7 +168,7 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
       })),
     createElement('textarea', {
       className: 'war-cd-answer war-bcard-input', rows: 2, placeholder: fp.answerPh, value: text,
-      onChange: e => { setText(String(e.target.value ?? '')) },
+      onChange: e => { setTextBoth(String(e.target.value ?? '')) },
       onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
     }),
     createElement('div', { className: 'war-bcard-actions' },
@@ -165,8 +182,23 @@ function SignCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
   const bc = activeCopy().bridge
   const fp = activeCopy().focusPage
   const src = cmd.brief ?? { goal: '', background: '', acceptance: '', nonGoals: '', deliverables: '' }
-  const [five, setFive] = useState({ goal: src.goal, background: src.background, acceptance: src.acceptance, nonGoals: src.nonGoals, deliverables: src.deliverables })
-  const [note, setNote] = useState('')
+  const saved = draftStore.cards[item.refId]
+  const [five, setFive] = useState(() => saved?.five !== undefined
+    ? { goal: saved.five.goal ?? src.goal, background: saved.five.background ?? src.background, acceptance: saved.five.acceptance ?? src.acceptance, nonGoals: saved.five.nonGoals ?? src.nonGoals, deliverables: saved.five.deliverables ?? src.deliverables }
+    : { goal: src.goal, background: src.background, acceptance: src.acceptance, nonGoals: src.nonGoals, deliverables: src.deliverables })
+  const [note, setNote] = useState(() => saved?.note ?? '')
+  const setFiveBoth = (next: typeof five): void => {
+    setFive(next)
+    const slot = draftStore.cards[item.refId] ?? {}
+    slot.five = { ...next }
+    draftStore.cards[item.refId] = slot
+  }
+  const setNoteBoth = (v: string): void => {
+    setNote(v)
+    const slot = draftStore.cards[item.refId] ?? {}
+    slot.note = v
+    draftStore.cards[item.refId] = slot
+  }
   const complete = five.goal.trim() !== '' && five.background.trim() !== '' && five.acceptance.trim() !== '' && five.nonGoals.trim() !== '' && five.deliverables.trim() !== ''
   const decide = (decision: 'approve' | 'reject'): void => {
     if (busy) return
@@ -182,16 +214,18 @@ function SignCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
       createElement('span', { className: 'war-bcard-flabel' }, label),
       createElement('textarea', {
         className: 'war-bcard-input', rows: k === 'goal' || k === 'acceptance' ? 2 : 3, value: five[k],
-        onChange: e => { setFive({ ...five, [k]: String(e.target.value ?? '') }) },
+        onChange: e => { setFiveBoth({ ...five, [k]: String(e.target.value ?? '') }) },
       }))),
-    createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: fp.signNotePh, value: note, onChange: e => { setNote(String(e.target.value ?? '')) } }),
+    createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: fp.signNotePh, value: note, onChange: e => { setNoteBoth(String(e.target.value ?? '')) } }),
     createElement('div', { className: 'war-bcard-actions' },
       createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || !complete, 'data-bridge-act': 'sign', title: fp.signEditableNote, onClick: () => { decide('approve') } }, busy ? bc.actionBusy : fp.signBtn),
       createElement('button', { className: 'war-btn war-btn-warn', type: 'button', disabled: busy || note.trim() === '', 'data-bridge-act': 'redraft', onClick: () => { decide('reject') } }, fp.redraftBtn)),
   )
 }
 
-/** 验收卡：证据摘要（战报节选+机械核对）+ 验收/打回——定夺归舰长（红线①）。 */
+/** 验收卡：证据摘要（战报节选+机械核对）+ 验收/打回——定夺归舰长（红线①）。
+ *  D29 critique P1：打回必附言（与签发卡驳回纪律对齐）——空理由的打回令会让
+ *  外勤小队拿着一句悬空冒号重做同样的错。 */
 function ReviewCard(props: CardProps & { task: BoardTask }): ReactNode {
   const { item, task, busy, act } = props
   const bc = activeCopy().bridge
@@ -200,14 +234,36 @@ function ReviewCard(props: CardProps & { task: BoardTask }): ReactNode {
   const ev = last?.evidence ?? null
   const checks = ev?.checks ?? []
   const passed = checks.filter(c => c.passed).length
+  const [knockNote, setKnockNote] = useState(() => draftStore.cards[item.refId]?.note ?? '')
+  const [confirming, setConfirming] = useState(false)
+  const setKnockNoteBoth = (v: string): void => {
+    setKnockNote(v)
+    const slot = draftStore.cards[item.refId] ?? {}
+    slot.note = v
+    draftStore.cards[item.refId] = slot
+  }
+  // D29 critique：全站权限最高的按钮（终局定夺不可逆）不再裸单击——两步确认，
+  // 5s 不续击自动回落；两击间隔 <800ms 视为手抖连击不认（防误触双击直达终局）。
+  const confirmTimer = useRef<number | null>(null)
+  const armedAt = useRef(0)
+  useEffect(() => () => { if (confirmTimer.current !== null) clearTimeout(confirmTimer.current) }, [])
   const accept = (): void => {
     if (busy) return
-    act(item.refId, () => closeTask(item.refId, '通过收官——舰桥频道一键验收'))
+    if (!confirming) {
+      setConfirming(true)
+      armedAt.current = Date.now()
+      confirmTimer.current = window.setTimeout(() => { setConfirming(false); confirmTimer.current = null }, 5000)
+      return
+    }
+    if (Date.now() - armedAt.current < 800) return
+    if (confirmTimer.current !== null) { clearTimeout(confirmTimer.current); confirmTimer.current = null }
+    act(item.refId, () => closeTask(item.refId, '通过（舰桥频道一键验收）'))
   }
   const knock = (): void => {
-    if (busy) return
+    const reason = knockNote.trim()
+    if (busy || reason === '') return
     act(item.refId, async () => {
-      const out = await createCommand(activeCopy().taskCard.rejectTemplate(item.refId))
+      const out = await createCommand(`${activeCopy().taskCard.rejectTemplate(item.refId)}${reason}`)
       const cmdId = out.ok === true && out.commandId !== undefined ? out.commandId : null
       return closeTask(item.refId, cmdId !== null ? `打回——续接令 ${cmdId}` : '打回——舰桥频道')
     })
@@ -219,9 +275,10 @@ function ReviewCard(props: CardProps & { task: BoardTask }): ReactNode {
       : createElement('p', { className: 'war-bcard-hint' }, fp.historyEmpty),
     createElement('div', { className: 'war-bcard-evi' },
       `${checks.length > 0 ? `${passed}/${checks.length} 项验收核对通过` : '无机械核对项'}${ev?.tests !== undefined ? ` · 测试退出码 ${ev.tests.exitCode}` : ''}${task.deliverables.length > 0 ? ` · 交付物 ${task.deliverables.length} 件` : ''}`),
+    createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: bc.knockNotePh, value: knockNote, 'data-bridge-knock-note': '1', onChange: e => { setKnockNoteBoth(String(e.target.value ?? '')) } }),
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy, 'data-bridge-act': 'accept', title: fp.acceptTitle, onClick: accept }, busy ? bc.actionBusy : fp.acceptBtn),
-      createElement('button', { className: 'war-btn war-btn-warn', type: 'button', disabled: busy, 'data-bridge-act': 'knock', onClick: knock }, bc.knockBtn)),
+      createElement('button', { className: `war-btn${confirming ? ' war-btn-warn' : ' primary'}`, type: 'button', disabled: busy, 'data-bridge-act': 'accept', title: confirming ? fp.acceptConfirm : fp.acceptTitle, onClick: accept }, busy ? bc.actionBusy : confirming ? fp.acceptConfirm : fp.acceptBtn),
+      createElement('button', { className: 'war-btn war-btn-warn', type: 'button', disabled: busy || knockNote.trim() === '', 'data-bridge-act': 'knock', onClick: knock }, bc.knockBtn)),
   )
 }
 
@@ -265,26 +322,32 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   // 任务 → 源命令（战报/验收卡点穿聚焦页用）。
   const lineageOf = (taskId: string): BoardCommand | null => commands.find(c => c.taskId === taskId) ?? null
   const inbox = collectInbox(commands, tasks).slice(0, 4)
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(() => draftStore.input)
   const [sending, setSending] = useState(false)
   const [sendNote, setSendNote] = useState('')
   const [busyRef, setBusyRef] = useState<string | null>(null)
   const [actionNote, setActionNote] = useState<string | null>(null)
   const msgsRef = useRef<HTMLDivElement | null>(null)
+  // D29 critique P1：阅读位置保护——只在已近底时跟随新消息；往上翻历史不再被
+  // 15s 轮询拽回底部。发送后强制回底（自己的消息自己看得见）。
+  const nearBottomRef = useRef(true)
   useEffect(() => {
     const el = msgsRef.current
-    if (el !== null) el.scrollTop = el.scrollHeight
+    if (el !== null && nearBottomRef.current) el.scrollTop = el.scrollHeight
   }, [messages])
+  // D29 critique：成功提示照旧自清；**失败提示常驻**——「操作失败」与「已发送」
+  // 同寿 6 秒的话，慢读者看到的是「什么都没发生」。失败只在下一次动作时清。
   useEffect(() => {
-    if (sendNote === '' && actionNote === null) return
-    const t = setTimeout(() => { setSendNote(''); setActionNote(null) }, 6000)
+    if (sendNote === '') return
+    const t = setTimeout(() => { setSendNote('') }, 6000)
     return () => { clearTimeout(t) }
-  }, [sendNote, actionNote])
+  }, [sendNote])
 
-  /** 卡内动作统一出口：忙碌守卫+失败出声+双 store 刷新。 */
+  /** 卡内动作统一出口：忙碌守卫+失败出声（常驻至下次动作）+双 store 刷新。 */
   const act = (refId: string, fn: () => Promise<{ ok: boolean }>): void => {
     if (busyRef !== null) return
     setBusyRef(refId)
+    setActionNote(null)
     void fn().then(ok => {
       setBusyRef(null)
       setActionNote(ok ? null : bc.actionFail)
@@ -297,10 +360,16 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     if (text === '' || sending) return
     setSending(true)
     setSendNote('')
+    setActionNote(null)
     const out = await sendBridgeMessage(text)
     setSending(false)
-    if (out.ok) { setInput(''); setSendNote(bc.sentNote); bridgeStore.refresh() }
-    else setActionNote(out.error ?? bc.actionFail)
+    if (out.ok) {
+      draftStore.input = ''
+      setInput('')
+      nearBottomRef.current = true
+      setSendNote(bc.sentNote)
+      bridgeStore.refresh()
+    } else setActionNote(out.error ?? bc.actionFail)
   }
 
   const openFocusBtn = (commandId: string, key: string): ReactNode =>
@@ -364,11 +433,43 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     createElement('div', { className: 'war-bridge-head' },
       createElement('span', { className: 'war-bridge-title' }, bc.title),
       createElement('span', { className: 'war-bridge-motto' }, bc.motto),
+      // D29 critique：加速器不可见等于不存在——聊天头常驻一行键位提示。
+      createElement('span', { className: 'war-bridge-kbd' }, bc.kbdHint),
     ),
-    createElement('div', { className: 'war-bridge-msgs', ref: msgsRef, 'data-bridge-msgs': '1' },
+    createElement('div', {
+      className: 'war-bridge-msgs', ref: msgsRef, 'data-bridge-msgs': '1', 'aria-live': 'polite',
+      onScroll: () => {
+        const el = msgsRef.current
+        if (el !== null) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+      },
+    },
       error !== null && messages === null ? createElement('p', { className: 'war-bridge-err' }, bc.loadFail) : null,
       messages !== null && messages.length === 0 ? createElement('p', { className: 'war-bridge-welcome' }, bc.welcome) : null,
-      ...(messages ?? []).map(msgRow),
+      // D29 语调刀：跨日分隔条——HH:MM 时间戳不孤读，隔天回看有锚。
+      ...(() => {
+        const out: ReactNode[] = []
+        let lastDay = ''
+        let i = 0
+        for (const m of messages ?? []) {
+          const day = m.ts.slice(0, 10)
+          if (day !== '' && day !== lastDay) {
+            const d = Date.parse(m.ts)
+            const dt = Number.isFinite(d) ? new Date(d) : null
+            out.push(createElement('div', { key: `day-${m.ts}`, className: 'war-bmsg-day' }, dt !== null ? `${dt.getMonth() + 1}月${dt.getDate()}日` : day))
+            lastDay = day
+          }
+          out.push(msgRow(m, i))
+          i++
+        }
+        return out
+      })(),
+      // D29 critique P1：等待死区治理——末条是舰长话轮=代理舰长在途，常驻
+      // 处理中指示（回话即被消息流顶走）。15s 轮询+SSE 双路驱动，无需额外状态。
+      messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
+        ? createElement('div', { className: 'war-bmsg war-bmsg-typing', 'data-bridge-typing': '1' },
+            createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, '●●●'),
+            createElement('span', { className: 'war-typing-label' }, bc.processing))
+        : null,
     ),
     createElement('div', { className: 'war-bridge-dock', 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty' },
       createElement('div', { className: 'war-bridge-dockhead' }, bc.dockTitle),
@@ -383,7 +484,11 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       createElement('textarea', {
         className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
         disabled: proxyAway,
-        onChange: e => { setInput(String(e.target.value ?? '')) },
+        onChange: e => {
+          const v = String(e.target.value ?? '')
+          draftStore.input = v
+          setInput(v)
+        },
         onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void send() } },
       }),
       createElement('div', { className: 'war-bridge-sendrow' },

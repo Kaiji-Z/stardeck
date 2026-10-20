@@ -264,7 +264,7 @@ body[data-ds-dark-theme] .war-root{
 .war-dockpill{display:inline-flex;align-items:center;gap:6px}
 .war-dockseg{font-size:calc(12px*var(--war-fs))}
 .war-err{font-size:calc(12px*var(--war-fs));color:var(--war-fail)}
-.war-empty{color:var(--war-text-2);font-size:calc(12px*var(--war-fs));padding:12px 4px;text-align:center;border:1px dashed var(--war-border);border-radius:var(--war-r-md);margin:6px 0}
+.war-empty{color:var(--war-text-2);font-size:calc(12px*var(--war-fs));padding:12px 8px;text-align:center;border:1px dashed var(--war-border);border-radius:var(--war-r-md);margin:6px 0}
 
 /* --- V9 局势墙三列（任务/星球/任务回报）+ 底部命令调度条 ------------------------- */
 /* 板体 = 纵向 flex：.war-ops 三列网格占满余高，.war-dispatch 全宽横条贴底。
@@ -292,6 +292,11 @@ body[data-ds-dark-theme] .war-root{
  * V24.1 补：定高随 --war-fs 走（1.35 字号实弹：五行行高涨 35%，固定 218px
  * 把卡底动作行裁掉——布局定高乘字号系数，1.0 时数值不变）。 */
 .war-dispatch{flex:0 0 auto;display:flex;gap:10px;align-items:stretch;height:calc(218px*var(--war-fs));margin:0 10px 10px;padding:10px;border:1px solid var(--war-border);border-radius:var(--war-r-lg);background:var(--war-dock-bg);box-shadow:var(--war-dock-inset)}
+/* D29 critique：空板比例倒挂治理——当前页签无卡时坞塌缩成细条（＋+页签一行）。 */
+.war-dispatch-empty{height:auto;min-height:0;padding:6px 10px}
+.war-dispatch-empty .war-dispatch-track{display:none}
+/* D29 批三：塌缩态页签名不再藏（塌缩条放得下）；空板下一步提示。 */
+.war-dispatch-empty-hint{font-size:calc(12px*var(--war-fs));color:var(--war-text-3);align-self:center;white-space:nowrap}
 .war-dispatch-track{flex:1 1 auto;min-width:0;display:flex;gap:10px;align-items:flex-start;padding:10px 2px 12px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin}
 .war-dispatch-track.can-scroll{mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.35));-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.35))}
 .war-dispatch .war-command-card{flex:0 0 320px;min-width:0}
@@ -1112,18 +1117,21 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-wz-legend .lg-front{background:linear-gradient(90deg,var(--war-run-strong),var(--war-done))}
 .war-wz-tip .dot.chain{background:var(--chain-hue,#888)}
 /* ═══ D26 舰桥频道（v0.3.0 对话范式默认脸面）════════════════════════════════ */
-.war-bridge{display:flex;flex-direction:column;min-height:0;flex:1;background:var(--war-canvas);font-family:var(--war-font)}
+/* min-width:0：flex 项默认 min-width:auto 会被 head 里 nowrap 的键位提示撑出
+ * min-content——分屏 38% 列缩不进去，舰长气泡右侧被板列盖住（critique6 P1 实测
+ * .war-bridge 658 > 列宽 548）。 */
+.war-bridge{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:var(--war-canvas);font-family:var(--war-font)}
 .war-bridge-head{display:flex;align-items:baseline;gap:10px;padding:12px 16px 8px;border-bottom:1px solid var(--war-border-soft)}
 .war-bridge-title{font-size:calc(16px*var(--war-fs));font-weight:600;color:var(--war-text-1)}
 .war-bridge-motto{font-size:calc(12px*var(--war-fs));color:var(--war-text-2)}
 .war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .war-bridge-welcome{color:var(--war-text-2);font-size:calc(13px*var(--war-fs));padding:8px 2px}
 .war-bridge-err{color:var(--war-fail,var(--war-text-2));font-size:calc(12px*var(--war-fs));margin:0}
-.war-bmsg{max-width:86%;display:flex;flex-direction:column;gap:3px;padding:8px 11px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-card-bg);font-size:calc(13px*var(--war-fs))}
-.war-bmsg-user{align-self:flex-end;background:color-mix(in srgb,var(--war-run-strong) 8%,var(--war-card-bg))}
-.war-bmsg-agent{align-self:flex-start}
+.war-bmsg{max-width:72%;display:flex;flex-direction:column;gap:3px;padding:8px 11px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-card-bg);font-size:calc(13.5px*var(--war-fs))}
+.war-bmsg-user{align-self:flex-end;background:color-mix(in srgb,var(--war-run-strong) 14%,var(--war-card-bg));border-right:3px solid color-mix(in srgb,var(--war-run-strong) 55%,var(--war-border))}
+.war-bmsg-agent{align-self:flex-start;border-left:3px solid var(--war-border-hover)}
 .war-bmsg-system{align-self:center;max-width:96%;background:var(--war-well-bg);border-style:dashed;font-size:calc(12px*var(--war-fs))}
-.war-bmsg-meta{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bmsg-meta{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
 .war-bmsg-body{color:var(--war-text-1);line-height:1.55;overflow-wrap:anywhere}
 .war-bmsg-plain{white-space:pre-wrap}
 .war-bmsg-refs{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
@@ -1155,11 +1163,42 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bridge-ta{width:100%;resize:vertical;font-family:var(--war-font);font-size:calc(13px*var(--war-fs));color:var(--war-text-1);background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 10px;outline:none;box-sizing:border-box}
 .war-bridge-ta:focus{border-color:var(--war-run-border,var(--war-run-strong))}
 .war-bridge-sendrow{display:flex;justify-content:flex-end}
-.war-bridge-switch{position:fixed;top:12px;right:14px;z-index:40;display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--war-card-bg);border:1px solid var(--war-border);box-shadow:var(--war-shadow-1)}
+.war-bridge-switch{min-height:32px}.war-bridge-switch .war-btn{min-height:32px}.war-bridge-switch [data-bridge-settings]{min-width:38px}/* 挂 war-root 后须反制其布局属性（flex-direction:column+height:100% 会把
+ * 横排胶囊变成满高竖柱压住消息流——2026-10-20 语调刀截图实证） */
+.war-bridge-switch{position:fixed;top:12px;right:14px;z-index:40;display:flex;flex-direction:row;height:auto;gap:4px;padding:4px;border-radius:999px;background:var(--war-card-bg);border:1px solid var(--war-border);box-shadow:var(--war-shadow-1)}
 .war-bridge-switch .war-btn{font-size:calc(12px*var(--war-fs));padding:3px 10px;border-radius:999px}
 .war-bridge-settings{width:min(420px,92vw)}
 .war-bridge-settings-body{padding:12px 16px;display:flex;flex-direction:column;gap:6px}
 .war-bridge-settings-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px}
+/* D29 critique：固定 chrome 让位——聊天头与板内容给顶右胶囊簇留出宽度。
+ * 336=胶囊簇实宽 324（critique6-B 实测）+ 边距；kbd 再给 ellipsis——高字号
+ * 缩放（--war-fs 1.25+）下簇随字变宽，提示优雅截短而非滑进簇底。 */
+.war-standalone-chat .war-bridge-head{padding-right:336px}
+/* 分屏窄列：键位提示整条让路（nowrap 是分屏撑破列宽的共犯；快捷键功能在，
+ * 教学文案只留给宽屏），motto/title 已有 ellipsis。 */
+.war-standalone-split-chat .war-bridge-kbd{display:none}
+/* critique6 P2：板右让位区露 body 白底读作「死区」——画布底色铺满，让位区
+ * 读作构图的呼吸边而非断口。 */
+.war-standalone-board,.war-standalone-split-board{background:var(--war-canvas)}
+.war-bridge-head .war-bridge-title,.war-bridge-head .war-bridge-motto{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body[data-stardeck-standalone] .war-standalone-board{padding-right:272px}
+body[data-stardeck-standalone] .war-standalone-split-board{padding-right:200px}
+/* 板根在 flex 包装内 shrink-to-fit——卡少时整板收窄留右侧死白（终版截图实证
+ * 1440 宽下内容止于 963）；根容器吃满让位后的可用宽。 */
+body[data-stardeck-standalone] .war-standalone-board>div,body[data-stardeck-standalone] .war-standalone-split-board>div{flex:1 1 auto;min-width:0;width:100%}
+.war-bridge-kbd{margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:calc(12px*var(--war-fs));color:var(--war-text-3);white-space:nowrap}
+/* D29 语调刀：【块】标记 chip（账本原文不动，呈现层给视觉身份）+跨日分隔条。 */
+.war-md-token{display:inline-block;padding:0 5px;border:1px solid var(--war-border-soft);border-radius:5px;background:var(--war-well-bg);color:var(--war-text-2);font-family:var(--war-font-code);font-size:.92em;line-height:1.5}
+.war-bmsg-day{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-3);padding:2px 10px;margin:4px 0;border-bottom:1px dashed var(--war-border-soft)}
+.war-cmdtab-name{font-size:calc(12px*var(--war-fs));color:var(--war-text-1)}
+/* D29 critique：代理舰长在途指示——呼吸点+诚实标签（收到回话即被顶走）。 */
+.war-bmsg-typing{display:flex;align-items:center;gap:8px;background:transparent;border:1px dashed var(--war-border-soft);color:var(--war-text-2)}
+.war-typing-dots{font-size:8px;letter-spacing:3px;color:var(--war-text-3);animation:war-typing 1.4s ease-in-out infinite}
+.war-typing-label{font-size:calc(12px*var(--war-fs))}
+@keyframes war-typing{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.war-typing-dots{animation:none;opacity:.7}}
+
+
 `
 
 

@@ -7,7 +7,7 @@
  * 门体在 client/fleet-gate.tsx；到访 lastSeen 离页落。
  * @module stardeck/client-standalone
  */
-import { createElement, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ensureWarStyles } from './client/styles.ts'
 import { warView, type ClientServicesFace } from './client/views.tsx'
@@ -23,6 +23,8 @@ ensureWarStyles()
 try {
   if (localStorage.getItem('warroom-standalone-theme') === 'dark') document.body.setAttribute('data-ds-dark-theme', 'true')
 } catch { /* storage unavailable */ }
+// D29 critique：standalone 标记——固定 chrome 让位的 CSS 钩子（板/聊天头让出顶右胶囊簇宽度）。
+document.body.setAttribute('data-stardeck-standalone', '1')
 
 // 独立形态没有宿主会话面——sessions 缺席逐点降级；standaloneChrome=true
 // 供给宿主才有的铬层控件（设置抽屉的明暗开关）。
@@ -62,20 +64,42 @@ function BridgeSettings(props: { onClose: () => void }): ReturnType<typeof creat
       else setAuthNote(out.error ?? b.authOff)
     })
   }
-  const dark = document.body.getAttribute('data-ds-dark-theme') === 'true'
+  // critique6 P2：开关只改 body 属性不 setState——页面立暗、旋钮停旧态到下一轮
+  // 轮询才自愈。DOM 仍是事实源，state 只做乐观重渲染引信。
+  const [dark, setDark] = useState(() => document.body.getAttribute('data-ds-dark-theme') === 'true')
   const toggleDark = (): void => {
     const next = !dark
     try { localStorage.setItem('warroom-standalone-theme', next ? 'dark' : 'light') } catch { /* 隐私模式 */ }
     if (next) document.body.setAttribute('data-ds-dark-theme', 'true')
     else document.body.removeAttribute('data-ds-dark-theme')
+    setDark(next)
   }
   const skinRow = (id: SkinId, label: string): ReturnType<typeof createElement> =>
     createElement('button', { key: id, className: `war-btn${skinId() === id ? ' primary' : ''}`, type: 'button', onClick: () => { setSkin(id) } }, label)
-  return createElement('div', { className: 'war-settings-backdrop', onClick: props.onClose },
-    createElement('div', { className: 'war-modal war-bridge-settings', role: 'dialog', 'aria-label': s.title, onClick: e => { e.stopPropagation() } },
+  // D29 critique P1：本弹层曾复用看板抽屉的 .war-settings-backdrop（无居中）
+  // 且整树不在 .war-root 令牌作用域——弹层透明钉左上角，聊天文字从底下透出
+  // （fleet-gate 同款已知坑的回归）。正名：war-modal-backdrop（居中+遮罩）
+  // + war-root 令牌作用域 + Esc 关闭 + 关闭钮 autoFocus。
+  // 字号滑杆与看板抽屉同源同存储（warroom-cfg-zoom）——默认脸面也调得了字号。
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+  const [fontScale, setFontScale] = useState(() => {
+    try { const v = parseFloat(localStorage.getItem('warroom-cfg-zoom') ?? '1'); return Number.isFinite(v) ? v : 1 } catch { return 1 }
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') props.onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [props])
+  const applyFont = (v: number): void => {
+    setFontScale(v)
+    try { localStorage.setItem('warroom-cfg-zoom', String(v)) } catch { /* 隐私模式 */ }
+    document.querySelectorAll<HTMLElement>('.war-root').forEach(el => { el.style.setProperty('--war-fs', String(v)) })
+  }
+  return createElement('div', { className: 'war-root war-modal-backdrop', onClick: props.onClose },
+    createElement('div', { className: 'war-modal war-bridge-settings', role: 'dialog', 'aria-modal': 'true', 'aria-label': s.title, onClick: e => { e.stopPropagation() } },
       createElement('div', { className: 'war-session-head' },
         createElement('div', { className: 'war-modal-title' }, s.title),
-        createElement('button', { type: 'button', className: 'war-hq-picker-x', 'aria-label': s.close, onClick: props.onClose }, '✕'),
+        createElement('button', { ref: closeRef, autoFocus: true, type: 'button', className: 'war-hq-picker-x', 'aria-label': s.close, onClick: props.onClose }, '✕'),
       ),
       createElement('div', { className: 'war-bridge-settings-body' },
         createElement('div', { className: 'war-settings-section' }, s.skinSection),
@@ -86,14 +110,32 @@ function BridgeSettings(props: { onClose: () => void }): ReturnType<typeof creat
           createElement('button', { className: `war-btn${langId() === 'zh' ? ' primary' : ''}`, type: 'button', onClick: () => { setLang('zh') } }, s.langZh),
           createElement('button', { className: `war-btn${langId() === 'en' ? ' primary' : ''}`, type: 'button', onClick: () => { setLang('en') } }, s.langEn)),
         createElement('div', { className: 'war-settings-section' }, s.themeSection),
-        createElement('div', { className: 'war-bridge-settings-row' },
-          createElement('button', { className: `war-btn${dark ? ' primary' : ''}`, type: 'button', onClick: toggleDark }, s.themeDark)),
+        // D29 critique：态/动作混淆治理——深色改开关件（与看板抽屉同款 .war-switch，
+        // role=switch+aria-checked），标签说功能、旋钮说状态。
+        createElement('div', { className: 'war-set-toggle' },
+          createElement('div', { className: 'war-set-toggle-text' },
+            createElement('span', { className: 'war-set-toggle-label' }, s.themeDark)),
+          createElement('button', { type: 'button', className: `war-switch${dark ? ' on' : ''}`, role: 'switch', 'aria-checked': dark, 'aria-label': s.themeDark, onClick: toggleDark },
+            createElement('span', { className: 'war-switch-knob' }))),
+        // D29 critique：字号与看板抽屉对齐（默认脸面此前调不了字号——双设置面不一致）。
+        createElement('div', { className: 'war-settings-section' }, s.fontSection),
+        createElement('div', { className: 'war-font-row' },
+          createElement('input', { key: 'font-range', type: 'range', min: 0.85, max: 1.35, step: 0.05, value: fontScale, 'aria-label': s.fontSection,
+            onInput: e => { applyFont(parseFloat((e.target as HTMLInputElement).value)) },
+            onChange: e => { applyFont(parseFloat((e.target as HTMLInputElement).value)) } }),
+          createElement('span', { key: 'font-val', className: 'war-font-val' }, `×${fontScale.toFixed(2)}`),
+          createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { applyFont(1) } }, s.fontReset)),
         // D27 定夺授权（proxy 在役才有意义；降级态藏钮不误导演长）。
         !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, b.authSection) : null,
+        // critique6/critique7：授权对钮不设 primary——实心钮落在任一侧都会被
+        // 误读成「当前选中态」（第七轮 P1：实心 CTA 旁挂「未授权」状态句互相
+        // 矛盾；第六轮反向同样误读）。等权描边对：禁用侧=当前态，状态句点名。
         !proxyAway ? createElement('div', { className: 'war-bridge-settings-row' },
-          createElement('button', { className: `war-btn${authorized ? ' primary' : ''}`, type: 'button', disabled: authBusy || authorized, 'data-bridge-auth-grant': '1', onClick: () => { flipAuth(true) } }, b.authGrant),
-          createElement('button', { className: `war-btn${!authorized ? ' primary' : ''}`, type: 'button', disabled: authBusy || !authorized, 'data-bridge-auth-revoke': '1', onClick: () => { flipAuth(false) } }, b.authRevoke),
+          createElement('button', { className: 'war-btn', type: 'button', disabled: authBusy || authorized, 'data-bridge-auth-grant': '1', onClick: () => { flipAuth(true) } }, b.authGrant),
+          createElement('button', { className: 'war-btn', type: 'button', disabled: authBusy || !authorized, 'data-bridge-auth-revoke': '1', onClick: () => { flipAuth(false) } }, b.authRevoke),
         ) : null,
+        // D29 critique：disabled=当前态是推理题——当前态直接说出来。
+        !proxyAway ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-auth-state': '1', role: 'status' }, authorized ? b.authOn : b.authOff) : null,
         authNote !== null ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, authNote) : null,
       ),
     ),
@@ -127,6 +169,23 @@ function App(): ReturnType<typeof createElement> {
     setView(v)
     try { localStorage.setItem(VIEW_KEY, v) } catch { /* 隐私模式 */ }
   }, [])
+  // D29 critique（Riley 红旗）：存了 chat 视图后 daemon 重启旗 OFF——chrome 不渲染
+  // 但 body 仍出聊天面=锁死页无出口。桥关即强制回看板（0.2.x 老形态语义）。
+  useEffect(() => {
+    if (data !== null && !bridgeOn && view === 'chat') setView('board')
+  }, [data, bridgeOn, view])
+  // D29 critique（Alex 红旗）：Alt+1/2/3 切视图——键盘加速器（桥开才生效）。
+  useEffect(() => {
+    if (!bridgeOn) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.altKey) return
+      const map: Record<string, ShellView> = { '1': 'chat', '2': 'split', '3': 'board' }
+      const target = map[e.key]
+      if (target !== undefined) { e.preventDefault(); switchView(target) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [bridgeOn, switchView])
   const openBoard = useCallback((commandId?: string): void => {
     if (commandId !== undefined && commandId !== '') {
       try { location.hash = `#war-cmd-${commandId}` } catch { /* 隐私模式 */ }
@@ -174,7 +233,7 @@ function App(): ReturnType<typeof createElement> {
       }, activeCopy().head.fleetPill(fleet.active.executor).replace(' ⇄', ''))
     : null
   const chrome = bridgeOn
-    ? createElement('div', { className: 'war-bridge-switch', 'data-bridge-switch': view ?? '' },
+    ? createElement('div', { className: 'war-root war-bridge-switch', 'data-bridge-switch': view ?? '' },
         settingsOpen ? createElement(BridgeSettings, { onClose: () => { setSettingsOpen(false) } }) : null,
         fleetPillBtn,
         createElement('button', { className: `war-btn${view === 'chat' ? ' primary' : ''}`, type: 'button', 'data-bridge-view': 'chat', onClick: () => { switchView('chat') } }, bc.viewChat),
@@ -207,13 +266,15 @@ function App(): ReturnType<typeof createElement> {
   // 三态布局：聊天=聊天面全屏；分屏=聊天 38% + 看板 62%（SSE 驱动旁观）；
   // 看板=原 warView 整页（老形态原样）。
   const body = view === 'chat'
-    ? createElement(BridgePane, { onOpenBoard: openBoard })
+    ? // D29 批五：让位补偿只陪聊天全屏态（分屏 38% 列被 280px 压成竖排单字——P0 回归即修）。
+      createElement('div', { className: 'war-standalone-chat', style: { flex: 1, display: 'flex', minHeight: 0 } }, createElement(BridgePane, { onOpenBoard: openBoard }))
     : view === 'split'
       ? createElement('div', { style: { flex: 1, display: 'flex', minHeight: 0, flexDirection: 'row' } },
-          createElement('div', { style: { flexBasis: '38%', flexShrink: 0, minWidth: 320, display: 'flex', minHeight: 0, borderRight: '1px solid var(--war-border, #ddd)' } }, createElement(BridgePane, { onOpenBoard: openBoard })),
-          createElement('div', { style: { flex: 1, display: 'flex', minHeight: 0, overflow: 'auto' } }, createElement(Board)),
+          createElement('div', { className: 'war-standalone-split-chat', style: { flexBasis: '38%', flexShrink: 0, minWidth: 320, display: 'flex', minHeight: 0, borderRight: '1px solid var(--war-border, #ddd)' } }, createElement(BridgePane, { onOpenBoard: openBoard })),
+          // D29 critique：固定 chrome（顶右胶囊簇）压内容治理——板列让出其宽度。
+          createElement('div', { className: 'war-standalone-split-board', style: { flex: 1, display: 'flex', minHeight: 0, overflow: 'auto' } }, createElement(Board)),
         )
-      : createElement(Board)
+      : createElement('div', { className: 'war-standalone-board', style: { flex: 1, display: 'flex', minHeight: 0, overflow: 'auto' } }, createElement(Board))
   // 满高挂载：宿主 shell 给 .war-root 一满高容器（height:100% 才有锚），
   // 独立形态在此自供——否则板塌到内容高，星域/三列被压扁。
   return createElement('div', { style: { height: '100vh', display: 'flex', flexDirection: 'column', minHeight: 0 } }, body, chrome, pill)

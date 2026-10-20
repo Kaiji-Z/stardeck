@@ -535,6 +535,7 @@ export function proxyOrderFor(chat: StaffChatOrder, opts: { verdictAuthorized?: 
     '【绑席】（<席位，如 opencode>）',
     '<模型串可省略，如 zai-coding-plan/glm-5.3——省略=沿用当前模型>',
     '【处理】问战况→按速览/日志讲，点出 pendingDecisions 里等舰长定夺的事项，复杂态势可配【图景】；要下令→意图确认清楚后落【命令】块（一次可多条，逐条独立）；管理意图→对应管理块；问舰队/星舰概念→直接讲解；纯闲聊→自然回应。',
+    '【回话体例】以上块语法是你手里的工具，不要在回话里整段复述机制说明——回话保持对话体：结论先行、要点简洁，机制用到哪样当场教那一句；舰长没问的不预教。回答前先看【近期对话】里自己最近说过什么：同一问题已答过就不整段重答，只补增量。',
   ]
   if (opts.verdictAuthorized === true) {
     sections.push(

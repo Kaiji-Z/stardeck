@@ -220,3 +220,69 @@ test('BridgePane 图景附件：agent 话轮带 artifact → 沙箱 iframe（san
     assert.ok(link !== null, '新窗看全图链接在场')
   } finally { r.unmount() }
 })
+
+// ── D29 critique 修复锁：打回理由纪律 / 在途指示 / 草稿跨挂载 ──
+
+test('D29 打回纪律：理由空=打回钮禁用；填了才启用（不再发悬空冒号令）', async () => {
+  bridgeFixture = { ok: true, revision: 'r1', messages: [] }
+  boardFixture = {
+    ...boardFixture,
+    commands: [],
+    tasks: [{
+      taskId: 't-k', title: '打回考题', status: 'reported', priority: 'normal', quality: 'common',
+      rounds: 1, attempts: 1, deps: [], lastError: null, workspacePath: null, workspaceKind: null,
+      claimedBy: null, executorSeat: null, startedAt: '2026-10-21T09:00:00Z', brief: 'b', acceptance: 'a',
+      schedule: null, queueAhead: 0, quotaPaused: false,
+      attemptLog: [], troops: [], deliverables: [],
+      reports: [{ ts: '2026-10-21T09:30:00Z', from: 'e1', text: '做完了个大概。', evidence: { checks: [{ item: 'x', passed: false }] }, testsTrail: null }],
+      comments: [], closedVerdict: null,
+    }],
+  } as never
+  const r = await render({}, '打回考题')
+  try {
+    const knock = r.buttons().find(b => b.getAttribute('data-bridge-act') === 'knock')!
+    assert.equal(knock.disabled, true, '空理由=打回禁用')
+    const note = r.textareaAt('data-bridge-knock-note')!
+    assert.ok(note !== null, '打回理由输入面在场')
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(note, '验收第 2 项没过，测试是假绿')
+    note.dispatchEvent(new win.Event('input', { bubbles: true }))
+    await new Promise(res => setTimeout(res, 30))
+    assert.equal(knock.disabled, false, '填了理由=打回启用')
+  } finally { r.unmount() }
+})
+
+test('D29 在途指示：末条是舰长话轮=处理中胶囊在场；回话后消失', async () => {
+  bridgeFixture = { ok: true, revision: 'r1', messages: [{ kind: 'user', ts: '2026-10-21T10:00:00.000Z', text: '现在舰队什么情况？' }] }
+  boardFixture = { ...boardFixture, commands: [], tasks: [] } as never
+  const r = await render({}, '处理中')
+  try {
+    assert.ok(document.querySelector('[data-bridge-typing]') !== null, '在途指示在场')
+    assert.ok(document.querySelector('.war-bridge-msgs')?.getAttribute('aria-live') === 'polite', '消息流 aria-live 在场')
+  } finally { r.unmount() }
+  bridgeFixture = { ok: true, revision: 'r2', messages: [
+    { kind: 'user', ts: '2026-10-21T10:00:00.000Z', text: '现在舰队什么情况？' },
+    { kind: 'agent', ts: '2026-10-21T10:01:00.000Z', text: '三条线并进，一条待你验收。', agentId: 'proxy-x' },
+  ] }
+  const r2 = await render({}, '三条线并进')
+  try {
+    assert.equal(document.querySelector('[data-bridge-typing]'), null, '回话后指示消失')
+  } finally { r2.unmount() }
+})
+
+test('D29 草稿跨挂载：输入→卸载→重挂，输入不丢（切视图不再焚稿）', async () => {
+  bridgeFixture = { ok: true, revision: 'r1', messages: [] }
+  boardFixture = { ...boardFixture, commands: [], tasks: [] } as never
+  const r1 = await render({}, '想做什么直接说')
+  const ta1 = r1.textareaAt('data-bridge-input')!
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+  setter?.call(ta1, '这道命令要跨视图活下去')
+  ta1.dispatchEvent(new win.Event('input', { bubbles: true }))
+  await new Promise(res => setTimeout(res, 30))
+  r1.unmount()
+  const r2 = await render({}, '想做什么直接说')
+  try {
+    const ta2 = r2.textareaAt('data-bridge-input')!
+    assert.equal(ta2.value, '这道命令要跨视图活下去', '重挂后草稿原样回来')
+  } finally { r2.unmount() }
+})

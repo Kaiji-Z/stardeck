@@ -25,6 +25,7 @@ Object.assign(globalThis, {
   requestAnimationFrame: (cb: FrameRequestCallback): number => setTimeout(() => cb(Date.now()), 0) as unknown as number,
   cancelAnimationFrame: (h: number): void => clearTimeout(h as unknown as ReturnType<typeof setTimeout>),
   IntersectionObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} takeRecords(): Array<never> { return [] } },
+  ResizeObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} },
 })
 // navigator 在 Node 24 是 getter-only——defineProperty 兜底（client 面不直接用，防御性补齐）。
 try { Object.defineProperty(globalThis, 'navigator', { value: win.navigator, configurable: true }) } catch { /* 已有可用值 */ }
@@ -753,5 +754,30 @@ test('V24.1 大副会话投影过滤：本命令任务书高亮、他命令块�
     r.unmount()
   } finally {
     historyFixture = { ok: false, error: '测试桩：无此会话' }
+  }
+})
+
+test('D29 回归：非空板 pipe-hint 分支可渲染（tabCounts 自由变量雷疫苗——分屏/看板白屏）', async () => {
+  boardFixture = {
+    ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r-hint',
+    commands: [mkCmd({ commandId: 'cmd-hint', text: '生成周报', status: 'talking' })],
+    tasks: [], threads: [], roster: [], rosterErrors: [],
+  }
+  try {
+    localStorage.removeItem('warroom-pipe-hint-seen')
+    const errs: string[] = []
+    const onErr = (e: Event): void => { errs.push(String((e as ErrorEvent).message ?? e)) }
+    window.addEventListener('error', onErr)
+    const r = await render(createElement(views.warView(services)))
+    await new Promise(resolve => setTimeout(resolve, 300))
+    if (process.env.HINT_DEBUG === '1') console.log('HOSTTEXT:', (document.body.textContent ?? '').replace(/\s+/g, ' ').slice(0, 400), 'ERRS:', errs.slice(0, 3))
+    await new Promise(resolve => setTimeout(resolve, 300))
+    if (process.env.HINT_DEBUG === '1') console.log('HOSTTEXT:', (document.body.textContent ?? '').replace(/\s+/g, ' ').slice(0, 400))
+    assert.ok(document.querySelector('.war-pipe-hint') !== null, '管线指路 toast 在场（有命令时）')
+    r.unmount()
+    window.removeEventListener('error', onErr)
+  } finally {
+    localStorage.removeItem('warroom-pipe-hint-seen')
+    boardFixture = { ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r0', commands: [], tasks: [], threads: [], roster: [], rosterErrors: [] }
   }
 })

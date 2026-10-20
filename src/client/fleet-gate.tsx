@@ -6,7 +6,7 @@
  * seatStatusOf 是纯函数供 tests/fleet.test.ts 锁三分语义。
  * @module stardeck/client/fleet-gate
  */
-import { createElement, useState, useSyncExternalStore } from 'react'
+import { Fragment, createElement, useState, useSyncExternalStore } from 'react'
 import { langId, subscribeLang } from './copy.ts'
 
 export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
@@ -45,6 +45,8 @@ interface GateCopy {
   absentTitle: string
   /** critique 复检 P1：缺席席折叠行（+N 即将支持——未检出不再占半屏）。 */
   absentFold: (n: number) => string
+  /** D29 critique：席位注解技术细节折叠标签（第一屏只说人话）。 */
+  techDetails: string
 }
 
 const GATE: Record<'zh' | 'en', GateCopy> = {
@@ -54,7 +56,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     brand: 'STARDECK · 星舰甲板',
     title: '选择舰队',
     lead: 'stardeck：你下一句大白话命令，AI 大副把它变成任务书，AI 外勤在隔离工作区执行并交证据，你只管验收。',
-    sub: '选定本次出勤的舰队——之后新任务都交它执行（在役任务不受影响，右下角可随时换）。',
+    sub: '选定本次出勤的舰队——之后新任务都交它执行（在役任务不受影响，顶右胶囊可随时换）。',
     modelLabel: '模型（可选，按舰队语义）',
     modelDefault: '留空 = 沿用该舰队自身默认模型',
     modelPh: {
@@ -71,6 +73,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     enter: '开始调度',
     absentTitle: '该舰队本机未检出——先安装或检查入口路径',
     absentFold: n => `+${n} 即将支持`,
+    techDetails: '技术细节',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -95,6 +98,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     enter: 'Start dispatching',
     absentTitle: 'Fleet not found on this machine — install it or check the entry path',
     absentFold: n => `+${n} coming soon`,
+    techDetails: 'Technical details',
   },
 }
 
@@ -136,33 +140,48 @@ export function fleetGate(props: {
       },
     },
       createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-        createElement('strong', { style: { color: 'var(--war-text-1)', fontFamily: 'var(--war-font-code)', fontSize: 15 } }, seat.label),
+        createElement('strong', { style: { color: 'var(--war-text-1)', fontFamily: 'var(--war-font-code)', fontSize: 'calc(15px*var(--war-fs))' } }, seat.label),
         createElement('span', {
           style: {
-            fontSize: 11, borderRadius: 6, padding: '1px 8px',
+            fontSize: 'calc(11px*var(--war-fs))', borderRadius: 6, padding: '1px 8px',
             color: status === 'ready' ? 'var(--war-done)' : status === 'limited' ? 'var(--war-wait)' : 'var(--war-text-3)',
             border: `1px solid ${status === 'ready' ? 'var(--war-done-border)' : status === 'limited' ? 'var(--war-wait-border)' : 'var(--war-border-soft)'}`,
           },
         }, t.statusLabel[status]),
       ),
-      createElement('div', { style: { marginTop: 6, fontSize: 13, color: 'var(--war-text-2)', lineHeight: 1.5 } },
-        `${noteOf(seat)}${status === 'absent' && seat.adapter !== false ? `${t.probePrefix}${seat.bin}）` : ''}`),
+      // D29 critique：注解两层制——第一句人话常驻，其余收进「技术细节」折叠
+      //（「垫片/上游 exec 路径」是 release note 语言，不该在第一屏筛选用户）。
+      createElement('div', { style: { marginTop: 6, fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.5 } },
+        (() => {
+          const full = `${noteOf(seat)}${status === 'absent' && seat.adapter !== false ? `${t.probePrefix}${seat.bin}）` : ''}`
+          const cut = full.search(/[。；]/)
+          if (cut < 0 || cut >= full.length - 1) return full
+          return createElement(Fragment, null,
+            full.slice(0, cut + 1),
+            createElement('details', { style: { marginTop: 2 } },
+              createElement('summary', { style: { cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-3)' } }, t.techDetails),
+              createElement('span', null, full.slice(cut + 1).trim())),
+          )
+        })()),
       // 模型输入跟随所选席位——选中即在卡内展开（2026-09-03 定案：输入控件
       // 贴着选择走，不再独立成行；zcode 给锁死说明不给输入）。
       isPick && status !== 'absent'
         ? createElement('div', { style: { marginTop: 10 }, onClick: e => { e.stopPropagation() } },
             seat.id === 'zcode'
-              ? createElement('div', { style: { fontSize: 12, color: 'var(--war-text-3)', lineHeight: 1.6 } }, t.modelLockedNote)
+              ? createElement('div', { style: { fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-3)', lineHeight: 1.6 } }, t.modelLockedNote)
               : createElement('div', null,
-                  createElement('label', { style: { display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--war-text-3)' } }, t.modelLabel),
+                  createElement('label', { style: { display: 'block', marginBottom: 4, fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-3)' } }, t.modelLabel),
                   createElement('input', {
                     value: model,
                     onChange: (e: { target: { value: string } }) => { setModel(e.target.value) },
-                    placeholder: t.modelPh[seat.id] ?? t.modelDefault,
+                    // D29 critique：占位符不当说明书（长句被裁成「provider/mc…」且
+                    // 聚焦即失）——恒用一句短话，provider/model 语义看席位注解的
+                    // 「技术细节」折叠。
+                    placeholder: t.modelDefault,
                     style: {
                       width: 'calc(100% - 20px)', padding: '8px 10px', borderRadius: 8,
                       background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)',
-                      color: 'var(--war-text-1)', fontFamily: 'var(--war-font-code)', fontSize: 13,
+                      color: 'var(--war-text-1)', fontFamily: 'var(--war-font-code)', fontSize: 'calc(13px*var(--war-fs))',
                     },
                   }),
                 ),
@@ -183,12 +202,12 @@ export function fleetGate(props: {
         display: 'flex', flexDirection: 'column',
       },
     },
-      createElement('div', { style: { fontSize: 13, letterSpacing: 1, color: 'var(--war-text-3)' } }, t.brand),
-      createElement('h1', { style: { margin: '6px 0 4px', color: 'var(--war-text-1)', fontSize: 22 } }, t.title),
-      createElement('p', { style: { margin: '0 0 6px', color: 'var(--war-text-2)', fontSize: 13 } }, t.lead),
+      createElement('div', { style: { fontSize: 'calc(13px*var(--war-fs))', letterSpacing: 1, color: 'var(--war-text-3)' } }, t.brand),
+      createElement('h1', { style: { margin: '6px 0 4px', color: 'var(--war-text-1)', fontSize: 'calc(22px*var(--war-fs))' } }, t.title),
+      createElement('p', { style: { margin: '0 0 6px', color: 'var(--war-text-2)', fontSize: 'calc(13px*var(--war-fs))' } }, t.lead),
       // critique 复检 P1（B 实证 3.7:1）：副标题从 text-3 升 text-2——第一屏
       // 说明文字不再贴着对比度下限。
-      createElement('p', { style: { margin: '0 0 14px', color: 'var(--war-text-2)', fontSize: 13 } }, t.sub),
+      createElement('p', { style: { margin: '0 0 14px', color: 'var(--war-text-2)', fontSize: 'calc(13px*var(--war-fs))' } }, t.sub),
       // 席位清单独立滚动容器（2026-09-03 定案：十一席不撑爆门面；底部操作钮
       // 在容器外常驻，不随席列滚动）。
       createElement('div', { className: 'war-gate-scroll', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'grid', gap: 8, alignContent: 'start', paddingBottom: 4 } },
@@ -201,17 +220,17 @@ export function fleetGate(props: {
               style: {
                 textAlign: 'left', cursor: 'pointer', padding: '8px 12px', borderRadius: 'var(--war-r-md, 10px)',
                 background: 'transparent', border: '1px dashed var(--war-border-soft)',
-                color: 'var(--war-text-3)', fontSize: 12,
+                color: 'var(--war-text-3)', fontSize: 'calc(12px*var(--war-fs))',
               },
             }, `${showAbsent ? '▾ ' : '▸ '}${t.absentFold(absentSeats.length)}`)
           : null,
         showAbsent ? absentSeats.map(card) : null),
       props.error !== undefined && props.error !== ''
-        ? createElement('div', { role: 'alert', style: { marginTop: 10, fontSize: 13, color: 'var(--war-fail)', background: 'var(--war-fail-tint)', border: '1px solid var(--war-fail-border)', borderRadius: 8, padding: '8px 10px', flex: '0 0 auto' } }, props.error)
+        ? createElement('div', { role: 'alert', style: { marginTop: 10, fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-fail)', background: 'var(--war-fail-tint)', border: '1px solid var(--war-fail-border)', borderRadius: 8, padding: '8px 10px', flex: '0 0 auto' } }, props.error)
         : null,
       createElement('div', { className: 'war-gate-actions', style: { display: 'flex', gap: 8, marginTop: 18, flex: '0 0 auto' } },
         props.dismissible
-          ? createElement('button', { onClick: props.onDismiss, style: { padding: '9px 14px', borderRadius: 8, border: '1px solid var(--war-border)', background: 'transparent', color: 'var(--war-text-2)', cursor: 'pointer', fontSize: 13 } }, t.back)
+          ? createElement('button', { onClick: props.onDismiss, style: { padding: '9px 14px', borderRadius: 8, border: '1px solid var(--war-border)', background: 'transparent', color: 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(13px*var(--war-fs))' } }, t.back)
           : null,
         createElement('button', {
           disabled: picked !== undefined && seatStatusOf(picked) === 'absent',
@@ -221,7 +240,7 @@ export function fleetGate(props: {
             marginLeft: 'auto', padding: '9px 22px', borderRadius: 8,
             cursor: picked !== undefined && seatStatusOf(picked) === 'absent' ? 'not-allowed' : 'pointer',
             background: 'var(--war-action-bg)', color: 'var(--war-action-fg)',
-            border: '1px solid var(--war-border-hover)', fontWeight: 600, fontSize: 13,
+            border: '1px solid var(--war-border-hover)', fontWeight: 600, fontSize: 'calc(13px*var(--war-fs))',
           },
         }, t.enter),
       ),

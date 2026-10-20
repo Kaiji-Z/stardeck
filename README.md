@@ -163,6 +163,18 @@ src/ 其余 = 账本内核：append-only JSONL + fold（永不过写，只派生
 
 边界如实声明：验收/签发的**定夺权结构性归人类**——外部调用者可以下令与问询，不能替你验收（唯一例外是你显式打开的代理舰长定夺授权，运行态开关）。完整的调用者身份/鉴权模型（principal）是另案——当前形态仅限本机互信环境。
 
+## 代理舰长是开放职位（v0.6.0）
+
+v0.6.0 起「代理舰长」不是一个进程，是一个**席位契约**：喂什么（携史+账本切片+digest+块文法教学）、吐什么（【命令】【图景】【撤令】等结构化块，收割与审计全在 daemon）、一轮怎么算完（末条消息）。三个实现同权同约束：
+
+| 实现 | 大脑在哪 | 怎么接入 |
+|---|---|---|
+| 舰队 CLI 席（缺省） | 你绑定的 CLI（opencode/pi/…无头 spawn） | 开板选舰队即用 |
+| 外接席位（v0.6.0） | **你自己的 agent** | `POST /warroom/api/proxy/seats` 签座席拿 token → agent 经 HTTP 三端点或 `mcp-bridge.mjs --face proxy`（MCP 座席面：get_order/submit_reply/read_board/read_digest/read_ledger 五件，执行者 war_* 一件不出）坐进来 |
+| 内置 loop（v0.6.0） | daemon 内置 ai SDK 循环（BYOK 直连 z.ai 等 OpenAI 兼容面） | `STARDECK_PROXY_LOOP=1` + `Z_AI_BASE_URL`/`Z_AI_API_KEY` env；默认关，失败诚实降级回舰队席 |
+
+外接席位三端点：`POST /warroom/api/proxy/seats`（签发 seatId+token，token 只此一面）→ `GET /warroom/api/proxy/order?token=`（当轮工作令全文+账面快照）→ `POST /warroom/api/proxy/reply {token,text}`（交终答，块自动收割入账）。块文法教学就在 order 正文里——agent 不需要预先了解 stardeck，坐下来读一遍就会。
+
 ## 安全模型
 
 stardeck 的威胁模型是**本机互信**：

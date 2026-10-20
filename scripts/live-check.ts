@@ -17,6 +17,7 @@ import { seatAgentPrefix } from '../src/executor.ts'
 import { loadDirectives } from '../src/directives.ts'
 import { loadBridgeMessages, bridgeUnanswered } from '../src/bridge.ts'
 import { killCreditAllGreen } from '../src/tools.ts'
+import { proxyLoopEnvOf } from '../src/proxy-loop.ts'
 import { jumpArgs, readAttachMap } from '../src/executor.ts'
 import type { SubmissionEvidence } from '../src/types.ts'
 
@@ -195,7 +196,8 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
         // codex 席入口按席给定（STARDECK_EXECUTOR_BIN 是全局逃生阀——会误伤
         // 主环 opencode，故走独立变量只在本相位 daemon 生效）。
         ...(staffFleetLive === 'codex' && process.env.STARDECK_LIVE_CODEX_BIN ? { STARDECK_EXECUTOR_BIN: process.env.STARDECK_LIVE_CODEX_BIN } : {}),
-        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.2' : 'zai-coding-plan/glm-5.3' }),
+        ...(process.env.STARDECK_LIVE_PROXYLOOP === '1' ? { STARDECK_PROXY_LOOP: '1' } : {}),
+        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.3' : 'zai-coding-plan/glm-5.3' }),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -474,6 +476,83 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       })
       const fleetAfter = await fetch(`${base2}/warroom/api/fleet`).then(r => r.json()) as { active?: { executor?: string } }
       check('D28 百事通：绑席全链（口头→【绑席】块→切席+战报确认）', fleetNotice.includes('opencode') && fleetAfter.active?.executor === 'opencode', fleetNotice)
+    }
+
+    // ── D29 内置 loop 相位（STARDECK_LIVE_PROXYLOOP=1）：聊天发话 → ai SDK loop
+    // 应答（agentId=proxy-loop，零 spawn 零 CLI）→【命令】块成卡。loop 失手会诚实
+    // 降级舰队席（战报 notice）——本相位只锁 loop 正路成活。──
+    if (process.env.STARDECK_LIVE_PROXYLOOP === '1') {
+      const loopSay = '内置 loop 考题：帮我立一道命令——在任务工作区根创建 loop-live.txt（内容含字符串 stardeck-loop-live）。落【命令】块。'
+      const loopSaid = await post2('/warroom/api/bridge/messages', { text: loopSay }) as { ok?: boolean; ts?: string }
+      check('D29 内置 loop：舰长发话入账', loopSaid.ok === true && typeof loopSaid.ts === 'string', loopSaid.ts ?? '')
+      const loopReply = await until(5 * 60_000, 'loop 回话入账', () => {
+        const hit = [...loadBridgeMessages(stateDir2)].reverse().find(m => m.kind === 'agent' && m.ts > (loopSaid.ts ?? '') && m.agentId === 'proxy-loop')
+        return hit !== undefined && hit.text.trim().length > 10 ? hit.text.trim().slice(0, 60) : undefined
+      })
+      check('D29 内置 loop：聊天→ai SDK loop 终答入账（agentId=proxy-loop）', true, loopReply)
+      const loopCmd = await until(5 * 60_000, 'loop 拟令成卡', () => {
+        const line = readFileSyncSafely(join(stateDir2, 'directives.jsonl')).split(/\r?\n/).filter(l => l.includes('"issuedBy":"proxy-loop"')).pop()
+        return line !== undefined && line !== '' ? (JSON.parse(line) as { directiveId?: string }).directiveId : undefined
+      })
+      check('D29 内置 loop：【命令】块成卡（issuedBy=proxy-loop）', typeof loopCmd === 'string', String(loopCmd))
+    }
+
+    // ── D29 外接坐席相位（STARDECK_LIVE_PROXYSEAT=1）：live-check 亲自扮外挂
+    // agent——直连 GLM API（非 spawn、非内置 loop），签席→order→下令→大副接管
+    // →问况（真实数字）→撤令。开放职位「用户自己的 agent 坐进来」的实弹铁证。──
+    if (process.env.STARDECK_LIVE_PROXYSEAT === '1') {
+      const externEnv = proxyLoopEnvOf(process.env)
+      check('D29 外接席：GLM 直连前提（Z_AI_* env 在场）', externEnv.apiKey !== '' && externEnv.baseUrl !== '', externEnv.baseUrl !== '' ? 'base 已配' : '缺 Z_AI_BASE_URL——先 source LookatStudy/.env')
+      const externSeat = await post2('/warroom/api/proxy/seats', {}) as { ok?: boolean; seatId?: string; token?: string }
+      check('D29 外接席：签发座席（seatId=proxyx-…+token 一次面）', externSeat.ok === true && (externSeat.seatId ?? '').startsWith('proxyx-') && (externSeat.token ?? '').length >= 32, externSeat.seatId ?? '')
+      const externToken = externSeat.token ?? ''
+      const externOrderFetch = async (): Promise<{ order: string; payload: { ok?: boolean; order?: string; ledger?: string; digest?: string; base?: string } }> => {
+        const payload = await fetch(`${base2}/warroom/api/proxy/order?token=${encodeURIComponent(externToken)}`).then(r => r.json()) as { ok?: boolean; order?: string; ledger?: string; digest?: string; base?: string }
+        return { order: payload.order ?? '', payload }
+      }
+      const externOrder0 = await externOrderFetch()
+      check('D29 外接席：order 载荷（块文法教学+账本切片+digest；永不教出口协议）', externOrder0.payload.ok === true && externOrder0.order.includes('【命令】') && !externOrder0.order.includes('war_claim') && typeof externOrder0.payload.ledger === 'string', `ledger ${externOrder0.payload.ledger?.length ?? 0} 字`)
+      const glmSay = async (orderText: string, ask: string): Promise<string> => {
+        const res = await fetch(`${externEnv.baseUrl}/chat/completions`, {
+          method: 'POST', headers: { authorization: `Bearer ${externEnv.apiKey}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ model: externEnv.model, messages: [{ role: 'user', content: `${orderText}\n\n【舰长新话】${ask}` }] }),
+        }).then(r => r.json()) as { choices?: Array<{ message?: { content?: string } }>; error?: unknown }
+        return res.choices?.[0]?.message?.content ?? ''
+      }
+      // ① 下令：外挂 agent 依块文法出【命令】块 → reply → 成卡（issuedBy=proxyx-…）。
+      const externReply1 = await glmSay(externOrder0.order, '帮我立一道命令：在任务工作区根创建 extern-seat.txt（内容含字符串 stardeck-extern-live），并写一个 check_ext.js 校验内容真实在盘（node 跑它退出码 0）。按块文法落命令块。')
+      const externOut1 = await post2('/warroom/api/proxy/reply', { token: externToken, text: externReply1 }) as { ok?: boolean; harvested?: { commands?: number } }
+      check('D29 外接席：GLM 终答经 reply 收割（命令块成卡）', externOut1.ok === true && (externOut1.harvested?.commands ?? 0) >= 1, `harvested.commands=${externOut1.harvested?.commands ?? 0}`)
+      const externCmdLine = await until(8 * 60_000, '外接令成卡（issuedBy=proxyx-）', () => {
+        const line = readFileSyncSafely(join(stateDir2, 'directives.jsonl')).split(/\r?\n/).filter(l => l.includes('"issuedBy":"proxyx-')).pop()
+        return line !== undefined && line !== '' ? line : undefined
+      })
+      const externCmdId = (JSON.parse(externCmdLine) as { directiveId?: string }).directiveId
+      check('D29 外接席：命令卡 issuedBy=proxyx-…（开放职位实弹铁证）', typeof externCmdId === 'string', externCmdId ?? '')
+      // ② 大副接管（分诊/发布→外勤交证，10 分钟窗）。
+      const externTask = await until(10 * 60_000, '外接令被大副接管（approved+taskId→交证）', () => {
+        const d = loadDirectives(stateDir2).find(x => x.id === externCmdId)
+        if (d === undefined || d.taskId === undefined) return undefined
+        const t = loadCampaign(stateDir2, d.taskId)
+        return t.status === 'reported' || t.status === 'closed' ? `${d.taskId}=${t.status}` : undefined
+      })
+      check('D29 外接席：大副接管全链（分诊→发布→外勤交证）', typeof externTask === 'string' && externTask.includes('='), externTask ?? '')
+      // ③ 问况：真实数字——现捞 order 快照（含新命令），账面条数必须答对。
+      const boardNow = await fetch(`${base2}/warroom/api/board`).then(r => r.json()) as { commands?: unknown[] }
+      const expectCount = boardNow.commands?.length ?? 0
+      const externOrder3 = await externOrderFetch()
+      const externReply2 = await glmSay(externOrder3.order, '当前账上共有几条命令？只回一个数字，不要别的。')
+      const externOut2 = await post2('/warroom/api/proxy/reply', { token: externToken, text: externReply2 }) as { ok?: boolean }
+      check('D29 外接席：问况答真实数字（知识面全链）', externOut2.ok === true && externReply2.includes(String(expectCount)), `账面 ${expectCount} 条，外挂答「${externReply2.trim().slice(0, 20)}」`)
+      // ④ 撤令：立 ??先看方案 靶（永不自发 approved）→ 口头撤 →【撤令】块→入账。
+      const externSeed = await post2('/warroom/api/commands', { text: '??先看方案：外接席撤令考题靶（别真做，等舰长下一步指示）' }) as { commandId?: string }
+      const externReply3 = await glmSay(externOrder3.order, `把命令 ${externSeed.commandId} 撤了——按块文法落撤令块。`)
+      await post2('/warroom/api/proxy/reply', { token: externToken, text: externReply3 })
+      const externCancelled = await until(5 * 60_000, '外接撤令入账', () => {
+        const line = readFileSyncSafely(join(stateDir2, 'directives.jsonl')).split(/\r?\n/).filter(l => l.includes('"directive_cancelled"') && l.includes(String(externSeed.commandId))).pop()
+        return line !== undefined && line !== '' ? line : undefined
+      })
+      check('D29 外接席：撤令全链（口头→【撤令】块→directive_cancelled 入账）', externCancelled.includes(String(externSeed.commandId)), String(externSeed.commandId))
     }
 
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。

@@ -301,3 +301,19 @@
 **红线核对**：出口协议不裁剪（只教 GET）；澄清代答不做；验收通过语义仍走 STARDECK_PROXY_VERDICT；L1 签发权不动；不新增旗；账本为源（图景/管理全经块收割+账本事件）；板=读投影（artifact 也是账本消息）。
 
 **坑录（实弹预埋）**：glm-5.3 粗体风格→新解析器强调包裹容忍（stripEmphasisLine/stripEmphasis 双处）；POST /fleet 空模型语义=覆写（applyFleetBinding 忠实旧约，绑席块调用侧补当前模型）；styles.ts 禁裸 hex（war-tokens 令牌纯度）。
+
+## D29 代理舰长「开放职位」双形态：外接席位 + 内置 loop（2026-10-21，舰长三拍板，v0.6.0）
+
+**背景**：D28 收官后舰长判「聊天窗的代理舰长要成为项目最重要的一环」，回顾两形态设想——用户自带 agent（插件形）vs 自带 agent loop（BYOK 直聊）。评估结论：不是二选一，是「一个席位契约、三个实现」（舰队 CLI 席/外接席/内置 loop），宪法级约束（审计/澄清代答禁令/出口协议）全住 daemon 收割管线，谁坐进来同权同约束。拍板：双形态都做；内置 loop 用 ai SDK（破运行时零依赖=已批准例外）；前端用 impeccable 技能修。
+
+**定案**：
+1. **外接席位=HTTP 单一真相源 + MCP 同源转发**。契约三端点（签席/order 载荷/reply 收割），收割复用 applyProxyReply（与内置 spawn 席同一条管线——块文法/图景对账/管理块直落全继承）。MCP 桥加 --face proxy（缺省 war 字节不变），座席工具恰五件（get_order/submit_reply/read_board/read_digest/read_ledger），执行者 war_* 一件不出——出口协议红线在新形态下的具体形状。
+2. **身份门=在册∧在途（祝福制）**。seatId 随 issuedBy 入账本即公开——只查「在册」可被伪造 agentId 直打 /tools/call 冒用（goal Stop-if 那根刺）。修法：managementProxyGate/verdictProxyGate 叠 proxyGateBless（仅 daemon 收割路径 applyProxyReply 放行的 callTool 在途祝福）；攻击负向测试用真种子任务钉死（伪造收官被拒、blessed 重派真收官）。
+3. **内置 loop=「只读三件+终答出块」的最小循环**。ai SDK streamText+tool+stepCountIs(6)；tools=board/digest/ledger 进程内闭包（与 MCP 座席面同名同义，一份心智两处用）；终答交同一收割管线；看门狗 AbortSignal.timeout。旗 STARDECK_PROXY_LOOP 默认 OFF（舰队席字节不变），失手/空答诚实降级+战报交代，行为永不依赖 loop 成活。历史预算承 bridgeHistoryWindow（携史已在 order 正文——与 spawn 席同一预算纪律，不另造裁剪）。
+4. **前端批评轮方法论**：impeccable critique 双隔离子代理（A 设计评审/B 检测器+浏览器证据），修复→确认的有界节奏。五轮轨迹 24→26→28→27→27/40 后平台期，判定剩余扣分=账本内容层（读投影红线禁藏改）——舰长 continuation 令走**语调刀**（提示词资产治理而非 UI 藏改：persona 开场轻/不重播+【回话体例】+收官/撤令战报叙述化+呈现层【块】chip 化与跨日分隔条，快照诚实 diff+eval 复跑）；第六轮修清终版截图链暴露的布局回归（chrome 竖排=war-root 布局反制缺、分屏白屏=pipe-hint 分支自由变量雷+非空板回归测试、板体 shrink-to-fit 死白、分屏气泡裁断=flex min-width:auto 被 nowrap kbd 撑破 38% 列——实测 658>548），第七轮独立终审 **36/40 过线**、P0=0、B 检测器七项计算样式断言全 PASS；终审唯一 P1（授权钮实心态与状态句信号冲突）以**等权对钮**收口——对钮+状态句语义里实心落在任一侧都会被读成「当前选中态」，禁用侧才是状态载体。教训：让位/缩宽/换肤三类修法都可能互相打架，终版必须整版走查（五视图×两字号）而非逐点验证。
+
+**理由**：席位契约使「代理舰长」从我们 spawn 的角色升格为开放职位——接入即百事通（喂什么/吐什么/一轮怎么算完三条全在 daemon 侧）；三实现同权同约束让「跨厂商中立」从舰队层长进对话层。ai SDK 选择换掉运行时零依赖，换来循环细节（工具调度/流式/重试）不自己养；compatible 钉 1.0.58 是 spec v2 配 ai 5 的实证配对（v3=spec v4 不兼容，实测 AI_UnsupportedModelVersionError）。
+
+**红线核对**：出口协议不裁剪（座席面/loop 教学永不出现 war_claim/war_submit，测试锁）；澄清代答不做（收割管线强制）；L1 签发权不动；通过语义仍走 STARDECK_PROXY_VERDICT 默认 OFF；默认面纪律（旗 OFF 舰队席字节不变，矩阵锁）；key 只走 env；账本为源（loop/外接席的「写」只有终答里的块）。
+
+**坑录（实弹/实测预埋）**：@ai-sdk/openai-compatible v3=spec v4 与 ai 5 不兼容（钉 ^1.0.48 实取 1.0.58）；mcp-bridge 双脸替换文本自匹配（锚点须不含自身）；指令种子 received 必须先于 approved（approved 是终态，fold 吞后到事件→staffSessionId 绑不上→身份门整段跳过，考题失效）；styles.ts 是模板字符串——追加 CSS 必须进字面量内（出界=esbuild transform 炸整文件）；createElement.Fragment 不存在（须 import Fragment——React #130 静默白屏）；.war-dispatch 拆行插规则会把规则劈成未闭合；让位补偿（chrome padding）必须分视图作用域（全局面一刀切→分屏 38% 列被压成竖排单字 P0）。

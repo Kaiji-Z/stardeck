@@ -107,7 +107,7 @@ export interface WarCopy {
   }
   /** V13 战线头（任务列分组/航迹语义）：代数与聚合态措辞。 */
   front: { genN: (n: number) => string; taskN: (n: number) => string; stateLive: string; stateWaiting: string; stateFailed: string; stateSettled: string; originChip: (bf: string | null, title: string) => string }
-  dispatch: { label: string; addTitle: string; viewMapHint: string; viewBackHint: string; segActive: string; segSettled: string }
+  dispatch: { label: string; addTitle: string; viewMapHint: string; viewBackHint: string; segActive: string; segSettled: string; emptyHint: string }
   /** V9.2 设置抽屉（岛 ⚙）：皮肤 / 图例 / 看板行为开关 / 连接状态。 */
   settings: {
     title: string
@@ -437,6 +437,8 @@ export interface WarCopy {
     acceptDone: string
     acceptFail: string
     acceptTitle: string
+    /** 验收两步确认的第二击文案。 */
+    acceptConfirm: string
     /** V19 战报可读性：产物板内预览（腿2）+ 会话历史最终汇报置顶（腿3）。 */
     previewTitle: (name: string) => string
     previewOpen: string
@@ -606,6 +608,12 @@ export interface WarCopy {
     cardRetry: string
     openFocus: string
     knockBtn: string
+    /** 打回理由占位（验收卡——打回必附言，与签发卡驳回纪律对齐）。 */
+    knockNotePh: string
+    /** 发送后等待期常驻指示（代理舰长在途）。 */
+    processing: string
+    /** 键盘加速器可见暗示（聊天头）。 */
+    kbdHint: string
     retryBtn: string
     actionBusy: string
     actionFail: string
@@ -652,7 +660,7 @@ export const warCopy: WarCopy = {
     tasks: { title: '任务', note: '等·指挥官 · 进行 · 待翻阅——未终局任务' },
     report: { title: '战报', note: '收官与折戟 · 点卡回源命令' },
   },
-  dispatch: { label: '命令调度条（滚轮横移）', addTitle: '下达新命令（定时可选）· 快捷键 n', viewMapHint: '切到战区——每片战场一颗星，战线环串起世代', viewBackHint: '回列表视图（三列局势墙）', segActive: '进行中', segSettled: '已收官' },
+  dispatch: { emptyHint: '空板——回舰桥频道说一句话，或按 n 下令', label: '命令调度条（滚轮横移）', addTitle: '下达新命令（定时可选）· 快捷键 n', viewMapHint: '切到战区——每片战场一颗星，战线环串起世代', viewBackHint: '回列表视图（三列局势墙）', segActive: '进行中', segSettled: '已收官' },
   pipeHint: '悬停命令卡可显示族系管线——链色即战线色',
   cmdTabsArchivedEmpty: '归档后命令落在这里。归档入口在命令聚焦页——全线终局后可归档',
   commandBand: {
@@ -1042,6 +1050,7 @@ export const warCopy: WarCopy = {
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
     acceptFail: '收官失败：',
     acceptTitle: '通过验收并收官本任务（war_close_task——结论入账本）',
+    acceptConfirm: '再点一次确认收官（终局不可逆）',
     previewTitle: (name: string) => `产物预览 · ${name}`,
     previewOpen: '打开所在文件夹',
     previewOpenDone: '已在资源管理器中打开。',
@@ -1210,6 +1219,9 @@ export const warCopy: WarCopy = {
     cardRetry: '等你定夺重试',
     openFocus: '打开聚焦页',
     knockBtn: '打回',
+    knockNotePh: '打回理由（必填——外勤小队按这个改）',
+    processing: '代理舰长处理中…',
+    kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
     actionBusy: '处理中…',
     actionFail: '操作失败——稍后重试或进看板处置。',
@@ -1256,7 +1268,7 @@ export const plainCopy: WarCopy = {
     tasks: { title: '任务', note: '未完成的任务' },
     report: { title: '结果', note: '完成与失败 · 点卡回源命令' },
   },
-  dispatch: { label: '命令调度条（滚轮横移）', addTitle: '下新命令（可定时）· 快捷键 n', viewMapHint: '切到项目全景图', viewBackHint: '回列表视图', segActive: '进行中', segSettled: '已完成' },
+  dispatch: { emptyHint: '空板——回聊天频道说一句话，或按 n 下令', label: '命令调度条（滚轮横移）', addTitle: '下新命令（可定时）· 快捷键 n', viewMapHint: '切到项目全景图', viewBackHint: '回列表视图', segActive: '进行中', segSettled: '已完成' },
   pipeHint: '悬停事项卡可显示同线连线——颜色即同一条线',
   cmdTabsArchivedEmpty: '归档后的事项落在这里。归档入口在事项聚焦页——全部结束后可归档',
   commandBand: {
@@ -1646,6 +1658,7 @@ export const plainCopy: WarCopy = {
     acceptDone: '已通过收官——证据核验在案，全线转绿。',
     acceptFail: '收官失败：',
     acceptTitle: '通过验收并收官本任务（war_close_task——结论入账本）',
+    acceptConfirm: '再点一次确认收官（终局不可逆）',
     previewTitle: (name: string) => `产物预览 · ${name}`,
     previewOpen: '打开所在文件夹',
     previewOpenDone: '已在资源管理器中打开。',
@@ -1808,6 +1821,9 @@ export const plainCopy: WarCopy = {
     cardRetry: '等你定夺重试',
     openFocus: '打开详情页',
     knockBtn: '打回',
+    knockNotePh: '打回理由（必填——执行方按这个改）',
+    processing: '代理管家处理中…',
+    kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',
     actionBusy: '处理中…',
     actionFail: '操作失败——稍后重试或进看板处置。',

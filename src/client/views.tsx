@@ -1162,6 +1162,16 @@ export function reportBody(text: string, onOpenFile?: (name: string) => void): R
     if (t.t === 'code') return looksLikeFilePath(t.v) ? pathNode(t.v, key) : createElement('code', { key }, t.v)
     if (t.t === 'bold') return createElement('strong', { key }, t.v)
     if (t.t === 'path') return pathNode(t.v, key)
+    // D29 语调刀：【块】标记 chip 化——账本原文不动（读投影），呈现层给结构化
+    // 标记一个视觉身份，舰长不再裸读标点语法。
+    if (t.v.includes('【') && t.v.includes('】')) {
+      const parts = t.v.split(/(【[^】]{1,16}】)/g)
+      if (parts.length > 1) {
+        return parts.map((seg, j) => /^【[^】]{1,16}】$/.test(seg)
+          ? createElement('span', { key: `${key}-tk${j}`, className: 'war-md-token', title: '结构化块标记——系统据此收割执行' }, seg)
+          : seg)
+      }
+    }
     return t.v
   })
   return createElement('div', { className: 'war-md' },
@@ -2784,6 +2794,9 @@ const CMD_TAB_ICONS: Record<CmdTab, string> = { active: '▶', settled: '✓', a
 function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: CmdTab) => void; tabCounts: Record<CmdTab, number>; children: ReactNode[] }): ReactNode {
   const { onCompose, tab, onTab, tabCounts, children } = props
   const ref = useRef<HTMLDivElement | null>(null)
+  // D29 critique：空板比例倒挂治理——当前页签无卡时坞塌缩成细条（＋+页签一行），
+  // 不再让 218px 的空架子占半屏空看板的底部；有卡恢复全高。
+  const empty = children.length === 0
   useEffect(() => {
     const el = ref.current
     if (el === null) return
@@ -2837,7 +2850,7 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
     cards.forEach((c, i) => { c.tabIndex = i === next ? 0 : -1 })
     cards[next]!.focus()
   }
-  return createElement('div', { className: 'war-dispatch', role: 'region', 'aria-label': activeCopy().dispatch.label },
+  return createElement('div', { className: `war-dispatch${empty ? ' war-dispatch-empty' : ''}`, role: 'region', 'aria-label': activeCopy().dispatch.label },
     createElement('button', {
       className: 'war-dispatch-add',
       type: 'button',
@@ -2857,8 +2870,13 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
         onClick: () => { onTab(t) },
       },
         createElement('span', { className: 'war-cmdtab-ico', 'aria-hidden': 'true' }, CMD_TAB_ICONS[t]),
+        // D29 critique：hover 独占治理——**在选页签**显全名（V17.8 不显计数的
+        // 定案不动；未选页签仍图标，减视觉噪声的同时给当前位置一个名字）。
+        tab === t ? createElement('span', { className: 'war-cmdtab-name' }, activeCopy().cmdTabs[t]) : null,
       ))),
     createElement('div', { className: 'war-dispatch-track', ref, onKeyDown: onTrackKey }, ...children),
+    // D29 critique：空板不再是无名图标哑谜——塌缩条上常驻一句下一步。
+    empty ? createElement('span', { className: 'war-dispatch-empty-hint' }, activeCopy().dispatch.emptyHint) : null,
   )
 }
 
@@ -3403,14 +3421,17 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       if (mapView) return
       try {
         if (localStorage.getItem('warroom-pipe-hint-seen') !== null) return
+        // D29 critique：教「悬停命令卡」的前提是屏上真有卡——当前页签空卡不出。
         if (commands.length > 0) setPipeHint(true)
       } catch { /* 隐私模式 */ }
     }, [mapView, commands.length >= 1])
-    useEffect(() => {
-      if (!pipeHint) return
-      const t = window.setTimeout(() => { setPipeHint(false); try { localStorage.setItem('warroom-pipe-hint-seen', String(Date.now())) } catch { /* noop */ } }, 12000)
-      return () => { window.clearTimeout(t) }
-    }, [pipeHint])
+    // D29 critique：12s 自动退场撤销——计时器与「忽略」共用永久 stamp，慢读者
+    // 错过「链色」唯一一次教学就永不再见。现改为常驻至用户亲点（主按钮或 ✕）。
+    const boardTabCounts = {
+      active: commands.filter(c => tabOf(c) === 'active').length,
+      settled: commands.filter(c => tabOf(c) === 'settled').length,
+      archived: commands.filter(c => tabOf(c) === 'archived').length,
+    }
     // critique P1-2：星域空场指路——编队在外而星球零注册时，一次性 toast 引导
     // HQ 注册（15s 自动退场 + 7 天冷却，机制照抄 mapHint）。编队本体已挂 HQ
     // 近地轨道（诚实降级），这里补的是「星域里怎么没有它们的星球」的解释与出口。
@@ -3901,7 +3922,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
                 }, activeCopy().starfield.mapHintDismiss),
               )
             : null,
-          pipeHint && !mapView && winW >= 900
+          pipeHint && !mapView && winW >= 900 && boardTabCounts.active > 0
             ? createElement('div', { key: 'pipe-hint', className: 'war-map-hint war-pipe-hint', role: 'status' },
                 createElement('button', {
                   type: 'button', className: 'war-map-hint-main',
@@ -3930,11 +3951,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
             onCompose: () => { setComposerOpen(true) },
             tab: cmdTab,
             onTab: setCmdTab,
-            tabCounts: {
-              active: commands.filter(c => tabOf(c) === 'active').length,
-              settled: commands.filter(c => tabOf(c) === 'settled').length,
-              archived: commands.filter(c => tabOf(c) === 'archived').length,
-            },
+            tabCounts: boardTabCounts,
           },
             // 调度轨道：活跃优先+新→旧原样排序；铭牌路标已退役（V17.6 定案）。
             (() => {

@@ -23,6 +23,23 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
+### Added（D29 代理舰长「开放职位」双形态——外接席位 + 内置 loop + impeccable 前端轮）
+- **外接席位（用户自己的 agent 坐进来）**：`proxy-seats.ts` 座席签发（seatId `proxyx-<ts36>` + token 只在签发响应出现一次、落盘只存 sha256）；契约端点 `POST /warroom/api/proxy/seats`、`GET /proxy/order`（携史+账本切片+digest+块文法教学）、`POST /proxy/reply`（与内置席同一条收割管线，块直落/审计/issuedBy 全继承）；**身份门在途祝福**——seatId 随 issuedBy 入账本属公开信息，门=在册∧在途（仅 daemon 收割路径放行的 callTool 过门），伪造 agentId 直打 /tools/call 被拒（攻击负向测试钉死）。
+- **MCP 座席限定面**：`mcp-bridge.mjs --face proxy`（缺省 war 面字节不变）——座席工具恰五件（get_order/submit_reply/read_board/read_digest/read_ledger），执行者 war_* 一件不出；真 stdio e2e 锁（工具清单+转发往返+缺 token -32002 教学）。
+- **内置 agent loop**：`proxy-loop.ts`（ai SDK streamText+tool+stepCountIs，参考 lookatstudy agent-engine 形态）——system=proxyOrderFor 载荷复用、tools=只读三件（board/digest/ledger 进程内闭包）、终答交共用收割管线、历史预算承 bridgeHistoryWindow、整轮看门狗；`STARDECK_PROXY_LOOP=1` 显式开启（默认 OFF 舰队席路径字节不变），无 key/失败诚实降级回舰队席+战报交代；供给 z.ai OpenAI 兼容面（Z_AI_* env）。ai SDK 入 dependencies=运行时零依赖血统的**已批准例外**（@ai-sdk/openai-compatible 钉 1.0.58=spec v2 配 ai 5）。
+- **live 两新相位**：`STARDECK_LIVE_PROXYSEAT`（live-check 亲自扮外挂客户端：直连 GLM 签席→拉 order→下令成卡 issuedBy=proxyx→大副接管全链→问况答真实数字→撤令入账）+ `STARDECK_LIVE_PROXYLOOP`（聊天→loop 终答入账→【命令】块成卡 issuedBy=proxy-loop）。
+- **eval +4（共 20 例）**：外接座席契约正例/伪造数据负例、内置 loop 行为面正例/越界宣称执行负例（一票否决）；判官升 glm-5.3（glm-5.2 撤型后别名是不可依赖的临时宽限）。
+- **impeccable critique 七轮 UI 轮**（双子代理 A 设计/B 检测器，A 轨迹 24→26→28→27→27→**33.5→36/40 过线**）：前五轮代码层 P1 全清（设置弹层令牌作用域回归修复（透明钉左上角→居中 modal+Esc+autoFocus）、打回必附言（悬空冒号令根治）、草稿跨挂载仓（切视图不再焚签发五项/澄清答复）、验收两步确认（5s 回落+<800ms 连击不认）、Alt+1/2/3 键盘切视图+聊天头键位常驻、发送后在途指示（末条用户话轮推导）、近底才跟随滚动、失败提示常驻、门注解两层制（人话+技术细节折叠）、常驻导航簇令牌作用域补齐、固定 chrome 让位、空坞塌缩+空板下一步提示、页签选中显名、管线教练贴常驻至亲点、门字号全过 --war-fs）；**语调刀收口判据④**（舰长 continuation 令）：persona「开场轻/不重播」纪律+proxyOrderFor【回话体例】（机制不复述、用到哪样教一句）+收官/撤令战报叙述化（`收官：「…」，判定：…。`）+呈现层【块】标记 chip 化（账本原文不动）+跨日分隔条——快照 3 fixtures 诚实 diff 重生成+eval 20/20 复跑；第六轮修清 chrome 竖排回归（.war-root 布局反制）、分屏白屏（pipe-hint 分支 tabCounts 自由变量雷+非空板回归测试+happy-dom ResizeObserver 桩）、板体 shrink-to-fit 死白、分屏气泡裁断（flex min-width:auto 被 nowrap kbd 撑破 38% 列，实测 658>548→min-width:0+分屏藏 kbd）；第七轮修 kbd 让位 336px+ellipsis 降级、深色开关乐观渲染、授权对钮等权化。B 检测器七项计算样式断言全 PASS（errors=0）。
+
+### Changed
+- 澄清/签发/验收/打回卡编辑态跨视图存活（draftStore 模块级仓——会话级，不入账不越读投影红线）。
+- 舰队门占位符不再当说明书（provider/model 语义入「技术细节」折叠）；live 门 pi 相位残留 glm-5.2 模型串清除。
+
+### 判据④收口（原「诚实记账」分歧，已闭合）
+- 前五轮评分平台期 27/40 的归因=账本内容层（读投影红线禁 UI 藏改）+评委方差；舰长 continuation 令走**语调刀**（提示词资产治理，非 UI 藏改）：persona「开场轻/不重播」+【回话体例】+收官/撤令叙述化+【块】chip 化+跨日分隔条。第六轮 A 组 33.5/40（暴露终版截图链自身的三个布局回归+一个自由变量白屏 P0，全部修清），第七轮独立终审 **36/40（判据线 35 过）**、P0=0、B 检测器七项全 PASS；终审唯一 P1（授权钮「实心=选中」与状态句互斥信号）已以等权对钮修复（禁用侧=当前态，状态句点名）。剩余 P2 全部裁定在案：图标页签 title/aria 在场（V17.8 定案）、「星你亲手」系评审员 13px 误读（源码 trek/war 双典皆「呈」）、绑定门术语注（「技术细节」两层制在场）、卡状态字阶与分屏双头为接受的设计取舍。
+
 ## [0.5.0] - 2026-10-20
 
 ### Added（D28 百事通席——代理舰长全知+图景+全能管理，三层模型正名）

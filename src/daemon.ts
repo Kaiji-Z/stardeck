@@ -25,10 +25,12 @@ import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
 import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, proxySceneBlocksOf, proxyManagementBlocksOf, type StaffWorkItem } from './staff.ts'
 import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, type BridgeArtifact } from './bridge.ts'
-import { bridgeDigest, ledgerSlice } from './dashboard.ts'
+import { boardProjection, bridgeDigest, directiveProjection, ledgerSlice } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
+import { issueProxySeat, seatByToken, loadProxySeats } from './proxy-seats.ts'
+import { runProxyLoop, proxyLoopEnvOf } from './proxy-loop.ts'
 import { renderScene, type SceneContext } from './scene.ts'
 import type { CampaignState } from './types.ts'
 
@@ -219,7 +221,14 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // D27 定夺授权运行态：代理舰长会话在册表 + 舰长授权开关（启动取
   // config.proxyVerdict；POST /bridge/settings 运行时可翻，重启回落默认 OFF——
   // 授权是舰长的动作，不落盘=重启不继承授权，安全缺省）。
+  // D29 外接席：proxyx-<ts36> 在册表（启动自 proxy-seats.json 装载，签发即加）
+  // ——与内置 proxy- 同权同约束（定夺门仍叠授权旗；管理块作废语义同直落）。
+  // 身份门防冒用：seatId 会随 issuedBy 入账本（公开），只查「在册」可被伪造
+  // agentId 直打 /tools/call 冒用——门必须叠「在途祝福」：只有 daemon 自己的
+  // 收割路径（applyProxyReply）放行的 callTool 才过门（Stop-if 那根刺的正解）。
   const proxyAgentIds = new Set<string>()
+  const proxySeatIds = new Set<string>(loadProxySeats(stateDir).map(s => s.seatId))
+  const proxyGateBless = new Set<string>()
   let proxyVerdictRuntime = config.proxyVerdict
   const tools = warTools({
     store,
@@ -233,8 +242,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     warRoot: config.warRoot,
     workspaceRoot: resolveWorkspaceRoot('', config.warRoot),
     flags,
-    verdictProxyGate: (agentId: string) => proxyVerdictRuntime && proxyAgentIds.has(agentId),
-    managementProxyGate: (agentId: string) => proxyAgentIds.has(agentId), // D28③：管理块作废语义直落（无旗拍板）；通过语义仍走上行授权旗
+    verdictProxyGate: (agentId: string) => proxyVerdictRuntime && (proxyAgentIds.has(agentId) || proxySeatIds.has(agentId)) && proxyGateBless.has(agentId),
+    managementProxyGate: (agentId: string) => (proxyAgentIds.has(agentId) || proxySeatIds.has(agentId)) && proxyGateBless.has(agentId), // D28③：管理块作废语义直落（无旗拍板）；通过语义仍走上行授权旗。D29：外接在册席同权+在途祝福防冒用
   }) as Record<string, { name: string; description: string; parameters: Record<string, unknown>; execute(args: Record<string, unknown>, exec: unknown): Promise<unknown> }>
   const toolList = Object.values(tools)
   const byName = new Map(toolList.map(t => [t.name, t]))
@@ -527,14 +536,23 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     if (!persist.ok) console.warn(`[stardeck] 舰队绑定未落盘：${persist.error}`)
     return { ok: true, note: bindNoteFor(activeExecutor, activeModel), persisted: persist.ok }
   }
-  const harvestProxyReply = async (agentId: string): Promise<void> => {
-    const reply = finalStaffReply(stateDir, agentId)
-    if (reply === null) return
-    const entry = readAttachMap(stateDir)[agentId]
+  /** D29 抽取：代理舰长终答的共用收割面（块文法→账本）。内置 spawn 席（退场
+   *  收割）与外接席（POST /proxy/reply）同吃一条管线——图景对账/命令卡/定夺/
+   *  管理块直落全继承，账本为源不变。返回收割摘要供 reply 回执诚实交代。 */
+  type ProxyHarvest = { commands: number; commandDropped: number; sceneArtifact: string | null; sceneRejected: string | null; management: number; managementDropped: number; verdicts: number; verdictsRejected: number }
+  /** 对外入口：在途祝福包裹——本函数是代理身份 callTool 的唯一合法通道，
+   *  伪造 agentId 直打 /tools/call 因无祝福过不了门。 */
+  const applyProxyReply = async (agentId: string, reply: string, sessionId?: string): Promise<ProxyHarvest> => {
+    proxyGateBless.add(agentId)
+    try { return await applyProxyReplyBlessed(agentId, reply, sessionId) } finally { proxyGateBless.delete(agentId) }
+  }
+  const applyProxyReplyBlessed = async (agentId: string, reply: string, sessionId?: string): Promise<ProxyHarvest> => {
     const ts = new Date().toISOString()
     // D28② 图景：先渲染（草稿对账过才随话轮带 artifact 入账；失败落 scene 战报
     // 诚实告知——下轮可重出，不硬凑半图）。
     let artifact: BridgeArtifact | undefined
+    let sceneArtifact: string | null = null
+    let sceneRejected: string | null = null
     const { scene, dropped: sceneDropped } = proxySceneBlocksOf(reply)
     if (sceneDropped > 0) console.warn(`[stardeck] 代理舰长【图景】块弃收 ${sceneDropped} 份（空块/超 6000 字/单轮限 1 份）`)
     if (scene !== null) {
@@ -548,40 +566,48 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         mkdirSync(join(stateDir, 'artifacts'), { recursive: true })
         writeFileSync(join(stateDir, 'artifacts', `${id}.html`), rendered.html, 'utf8')
         artifact = { id, title: rendered.title }
+        sceneArtifact = id
         console.log(`[stardeck] 代理舰长图景落盘 ${id}（${rendered.title}）`)
       } else {
         appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts, noticeKind: 'scene', dedupKey: `scene:${agentId}:${ts}`, text: `图景渲染未过对账：${rendered.reason}` })
+        sceneRejected = rendered.reason
         console.warn(`[stardeck] 代理舰长图景拒收：${rendered.reason}`)
       }
     }
-    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts, text: reply, agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}), ...(artifact !== undefined ? { artifact } : {}) })
-    const { commands, dropped } = proxyCommandBlocksOf(reply)
-    for (const text of commands) {
+    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts, text: reply, agentId, ...(sessionId !== undefined ? { sessionId } : {}), ...(artifact !== undefined ? { artifact } : {}) })
+    let commands = 0
+    const { commands: commandTexts, dropped } = proxyCommandBlocksOf(reply)
+    for (const text of commandTexts) {
+      commands++
       const directiveId = newDirectiveId()
       appendDirectiveEvent(stateDir, { type: 'directive_created', ts: new Date().toISOString(), directiveId, text, issuedBy: agentId })
       console.log(`[stardeck] 代理舰长拟令入账 ${directiveId}（${text.length} 字）——大副下轮分诊`)
     }
     if (dropped > 0) console.warn(`[stardeck] 代理舰长【命令】块弃收 ${dropped} 条（空块/超 2000 字/超单轮上限）`)
+    let verdicts = 0
+    let verdictsRejected = 0
     for (const v of proxyVerdictBlocksOf(reply)) {
       if (!proxyVerdictRuntime) {
+        verdictsRejected++
         console.warn(`[stardeck] 代理舰长【定夺】块拒收（授权 OFF）：任务 ${v.taskId}——仍呈舰长定夺`)
         continue
       }
       const verdict = v.pass ? `通过（代理舰长代定夺：${v.reason === '' ? '证据与理由未附——呈舰长复核' : v.reason}）` : `打回（代理舰长代定夺：${v.reason}）`
       const out = await callTool('war_close_task', { task_id: v.taskId, verdict }, agentId)
-      if (out.ok) console.log(`[stardeck] 代理舰长代定夺入账：任务 ${v.taskId} ${v.pass ? '通过' : '打回'}（授权在册）`)
-      else console.warn(`[stardeck] 代理舰长代定夺被拒：任务 ${v.taskId}——${out.error}`)
+      if (out.ok) { verdicts++; console.log(`[stardeck] 代理舰长代定夺入账：任务 ${v.taskId} ${v.pass ? '通过' : '打回'}（授权在册）`) }
+      else { verdictsRejected++; console.warn(`[stardeck] 代理舰长代定夺被拒：任务 ${v.taskId}——${out.error}`) }
     }
     // D28③ 管理块（全部直落拍板——无旗，全审计）：撤令/停定时令→war_abandon_command；
     // 重派→续接令建卡+作废收官（B3 门 managementProxyGate 支线=作废语义放行）；
     // 绑席→applyFleetBinding+战报确认。
+    let management = 0
     const { blocks: mgmt, dropped: mgmtDropped } = proxyManagementBlocksOf(reply)
     if (mgmtDropped > 0) console.warn(`[stardeck] 代理舰长管理块弃收 ${mgmtDropped} 条（理由超 300 字/超单轮 3 条）`)
     for (const b of mgmt) {
       if (b.kind === '撤令' || b.kind === '定时令停') {
         const reason = `${b.kind === '撤令' ? '代理舰长代撤（舰长口谕）' : '代理舰长代停定时令（舰长口谕）'}：${b.reason === '' ? '（未附理由）' : b.reason}`
         const out = await callTool('war_abandon_command', { command_id: b.id, reason }, agentId)
-        if (out.ok) console.log(`[stardeck] 代理舰长${b.kind}入账：命令 ${b.id}`)
+        if (out.ok) { management++; console.log(`[stardeck] 代理舰长${b.kind}入账：命令 ${b.id}`) }
         else console.warn(`[stardeck] 代理舰长${b.kind}被拒：命令 ${b.id}——${out.error}`)
         continue
       }
@@ -589,7 +615,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         const directiveId = newDirectiveId()
         appendDirectiveEvent(stateDir, { type: 'directive_created', ts: new Date().toISOString(), directiveId, text: `!!直接做：重派失败任务 ${b.id}——按原任务书与验收标准重跑一遍（原任务作废收官，本令是其续接）。代理舰长代落（舰长口谕）：${b.reason}`, issuedBy: agentId })
         const out = await callTool('war_close_task', { task_id: b.id, verdict: `作废收官——重派续接令 ${directiveId}（代理舰长代行，舰长口谕：${b.reason === '' ? '未附理由' : b.reason}）` }, agentId)
-        if (out.ok) console.log(`[stardeck] 代理舰长重派入账：任务 ${b.id} 作废，续接令 ${directiveId} 已建——大副下轮分诊`)
+        if (out.ok) { management++; console.log(`[stardeck] 代理舰长重派入账：任务 ${b.id} 作废，续接令 ${directiveId} 已建——大副下轮分诊`) }
         else console.warn(`[stardeck] 代理舰长重派被拒：任务 ${b.id}——${out.error}（续接令 ${directiveId} 已建，舰长可在板上处置）`)
         continue
       }
@@ -603,10 +629,35 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         continue
       }
       const applied = applyFleetBinding(b.id, b.reason !== '' ? b.reason : activeModel) // 块省略模型=沿用当前（POST 语义是覆写，调用侧补齐）
-      if (applied.ok) seatNote(true, `舰队绑定 → ${b.id}${b.reason !== '' ? ` @ ${b.reason}` : ''}（代理舰长代行；只影响后续征召${applied.persisted ? '' : '；⚠ 未落盘' }）。`)
+      if (applied.ok) { management++; seatNote(true, `舰队绑定 → ${b.id}${b.reason !== '' ? ` @ ${b.reason}` : ''}（代理舰长代行；只影响后续征召${applied.persisted ? '' : '；⚠ 未落盘' }）。`) }
       else seatNote(false, `绑席被拒：${applied.error}`)
     }
+    return { commands, commandDropped: dropped, sceneArtifact, sceneRejected, management, managementDropped: mgmtDropped, verdicts, verdictsRejected }
   }
+  const harvestProxyReply = async (agentId: string): Promise<void> => {
+    const reply = finalStaffReply(stateDir, agentId)
+    if (reply === null) return
+    const entry = readAttachMap(stateDir)[agentId]
+    await applyProxyReply(agentId, reply, entry?.sessionId)
+  }
+  // ---------- D29 外接席契约面共用助手（HTTP 路由与 MCP proxy face 同源）----------
+  const proxyOrderPayload = (seatId: string): Record<string, unknown> => {
+    const chat = proxyChatOrder()
+    return { seatId, base, order: proxyOrderFor(chat, { verdictAuthorized: proxyVerdictRuntime }), pending: chat.pending, history: chat.history, digest: chat.digest, ledger: chat.ledger }
+  }
+  const proxyReplyAccepted = async (seatId: string, text: string, via: string): Promise<{ seatId: string; harvested: ProxyHarvest }> => {
+    const harvested = await applyProxyReply(seatId, text)
+    console.log(`[stardeck] 外接席回话收割 ${seatId}（${via}：命令 ${harvested.commands}·管理 ${harvested.management}·定夺 ${harvested.verdicts}）`)
+    return { seatId, harvested }
+  }
+  /** 座席面工具清单：只读四件+交答一件——执行者 war_* 一件不出（出口协议红线）。 */
+  const proxyFaceTools = [
+    { name: 'get_order', description: '拉取代理舰长座席载荷：order 正文是当轮工作令（含【命令】【图景】等块文法教学），history/ledger/digest 为当前快照。每轮开工先调它。', inputSchema: { type: 'object', properties: {} as Record<string, unknown>, required: [] } },
+    { name: 'submit_reply', description: '交终答全文（含结构化块）。系统收割入账并回执收割摘要。', inputSchema: { type: 'object', properties: { text: { type: 'string', description: '终答全文' } }, required: ['text'] } },
+    { name: 'read_board', description: '读板投影（只读）：命令与任务清单。', inputSchema: { type: 'object', properties: {} as Record<string, unknown>, required: [] } },
+    { name: 'read_digest', description: '读待决摘要（只读）：待签/待验收/待答复等。', inputSchema: { type: 'object', properties: {} as Record<string, unknown>, required: [] } },
+    { name: 'read_ledger', description: '读近期账本切片（只读）：命令尾 N+任务尾 N，按时间升序。', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: '每类条数上限 1-200，缺省 30' } }, required: [] } },
+  ]
   async function proxyTick(): Promise<void> {
     if (!config.bridge || !config.proxy) return
     if (proxySession !== undefined) {
@@ -679,6 +730,32 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           })()
           return
         }
+      }
+    }
+    // D29 内置 loop 支线（resume 让路——CLI 会话还热就先续跑）：旗开且 key 齐
+    // 则本轮由 loop 应答（零 spawn、秒级）；失手/空答诚实降级——落一条战报后
+    // 继续走舰队席 spawn 兜底，行为永不依赖 loop 成活；下轮 tick 照常重试 loop。
+    if (proxyLoopEnvOf(process.env).enabled) {
+      const loopEnv = proxyLoopEnvOf(process.env)
+      proxySpawning = true
+      try {
+        const order = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
+        const out = await runProxyLoop(order, loopEnv, {
+          reads: {
+            board: async () => ({ commands: directiveProjection(stateDir), tasks: boardProjection(stateDir) }),
+            digest: () => bridgeDigest(stateDir),
+            ledger: () => ledgerSlice(stateDir),
+          },
+        })
+        if (out.text === '') throw new Error('本轮无终答文本')
+        await applyProxyReply('proxy-loop', out.text)
+        console.log(`[stardeck] 代理舰长 loop 回话入账（${out.text.length} 字，${out.steps} 步/工具 ${out.toolCalls} 次）`)
+        return
+      } catch (err) {
+        console.warn(`[stardeck] 代理舰长 loop 失手——本轮降级舰队席：${err instanceof Error ? err.message : String(err)}`)
+        appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts: new Date().toISOString(), noticeKind: 'retry', dedupKey: `proxyloop:${Date.now().toString(36)}`, text: '内置 loop 本轮失手（详见作战日志）——改由舰队席应答。' })
+      } finally {
+        proxySpawning = false
       }
     }
     proxySpawning = true
@@ -796,6 +873,56 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           }
           // P0-2 落盘：重启不丢绑定（env 优先级不变；坏 JSON 拒绝覆盖——回执警示）。
           return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, note: applied.note, ...(applied.persisted ? {} : { warning: '绑定已生效但未落盘（重启后将回落启动配置）。' }) })
+        }
+        // ---------- D29 外接代理舰长席（HTTP 为单一真相源；MCP proxy face 同源转发）----------
+        if ((key.startsWith('GET /warroom/api/proxy/') || key.startsWith('POST /warroom/api/proxy/')) && (!config.bridge || !config.proxy)) {
+          return sendJson(res, 404, { ok: false, error: '代理舰长席未开（STARDECK_PROXY/BRIDGE 关）——外接席随之停用。' })
+        }
+        if (key === 'POST /warroom/api/proxy/seats') {
+          const { seatId, token } = issueProxySeat(stateDir)
+          proxySeatIds.add(seatId)
+          console.log(`[stardeck] 外接代理舰长席签发 ${seatId}`)
+          return sendJson(res, 200, { ok: true, seatId, token, note: 'token 只此一次出现（落盘只存哈希）。用法：GET /warroom/api/proxy/order?token= 拉座席载荷（order 正文含块文法教学）；POST /warroom/api/proxy/reply {token,text} 交终答。' })
+        }
+        if (key === 'GET /warroom/api/proxy/order') {
+          const seat = seatByToken(stateDir, url.searchParams.get('token') ?? '')
+          if (seat === null) return sendJson(res, 403, { ok: false, error: '座席 token 无效——先 POST /warroom/api/proxy/seats 签发。' })
+          return sendJson(res, 200, { ok: true, ...proxyOrderPayload(seat.seatId) })
+        }
+        if (key === 'POST /warroom/api/proxy/reply') {
+          const body = JSON.parse(await readBody(req)) as { token?: unknown; text?: unknown }
+          if (typeof body.token !== 'string' || body.token === '') return sendJson(res, 400, { ok: false, error: 'token 必填。' })
+          const seat = seatByToken(stateDir, body.token)
+          if (seat === null) return sendJson(res, 403, { ok: false, error: '座席 token 无效——先 POST /warroom/api/proxy/seats 签发。' })
+          const text = typeof body.text === 'string' ? body.text : ''
+          if (text.trim() === '') return sendJson(res, 400, { ok: false, error: 'text 必填（终答全文——块文法写在 order 正文里）。' })
+          return sendJson(res, 200, { ok: true, ...(await proxyReplyAccepted(seat.seatId, text, 'HTTP')) })
+        }
+        // MCP proxy face（同源转发终点——mcp-bridge.mjs --face proxy 消费）：
+        if (key === 'GET /warroom/api/proxy/mcp/tools') {
+          const seat = seatByToken(stateDir, url.searchParams.get('token') ?? '')
+          if (seat === null) return sendJson(res, 403, { ok: false, error: '座席 token 无效。' })
+          return sendJson(res, 200, proxyFaceTools)
+        }
+        if (key === 'POST /warroom/api/proxy/mcp/call') {
+          const body = JSON.parse(await readBody(req)) as { token?: unknown; name?: unknown; arguments?: Record<string, unknown> }
+          const seat = seatByToken(stateDir, typeof body.token === 'string' ? body.token : '')
+          if (seat === null) return sendJson(res, 403, { ok: false, error: '座席 token 无效——先 POST /warroom/api/proxy/seats 签发。' })
+          const name = typeof body.name === 'string' ? body.name : ''
+          const args = body.arguments ?? {}
+          if (name === 'get_order') return sendJson(res, 200, { ok: true, result: proxyOrderPayload(seat.seatId) })
+          if (name === 'submit_reply') {
+            const text = typeof args.text === 'string' ? args.text : ''
+            if (text.trim() === '') return sendJson(res, 200, { ok: false, error: 'text 必填（终答全文——块文法写在 order 正文里）。' })
+            return sendJson(res, 200, { ok: true, result: await proxyReplyAccepted(seat.seatId, text, 'MCP') })
+          }
+          if (name === 'read_board') return sendJson(res, 200, { ok: true, result: { commands: directiveProjection(stateDir), tasks: boardProjection(stateDir) } })
+          if (name === 'read_digest') return sendJson(res, 200, { ok: true, result: bridgeDigest(stateDir) })
+          if (name === 'read_ledger') {
+            const limit = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.min(Math.max(Math.trunc(args.limit), 1), 200) : 30
+            return sendJson(res, 200, { ok: true, result: { entries: ledgerSlice(stateDir, limit, limit) } })
+          }
+          return sendJson(res, 200, { ok: false, error: `未知座席工具：${name}（座席面只有 get_order/submit_reply/read_board/read_digest/read_ledger——执行者 war_* 不在此面）。` })
         }
         if (key.startsWith('GET /warroom/api/artifact/')) {
           // D28② 图景出线：artifacts/ 下已对账图页（零脚本、CSP 全关——沙箱
