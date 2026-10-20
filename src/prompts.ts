@@ -18,7 +18,7 @@ import { bountyDraftingSkillContent } from './skill.ts'
 import { commanderPersonaText, conscriptBriefing } from './persona.ts'
 import type { TaskStatus } from './types.ts'
 
-export { staffPersonaText, commanderPersonaText, conscriptBriefing, troopReportDiscipline, troopBriefing, mailboxDiscipline, schedulerDiscipline, warKickoffPrompt, wakeCommanderPrompt, commanderReportHint, planApprovedNotice, planRejectedNotice } from './persona.ts'
+export { staffPersonaText, proxyCaptainPersonaText, commanderPersonaText, conscriptBriefing, troopReportDiscipline, troopBriefing, mailboxDiscipline, schedulerDiscipline, warKickoffPrompt, wakeCommanderPrompt, commanderReportHint, planApprovedNotice, planRejectedNotice } from './persona.ts'
 export { bountyDraftingSkillContent, bountyDraftingSkill, BOUNTY_DRAFTING_SKILL_NAME } from './skill.ts'
 export { buildChainNote, buildCommanderChainBrief, pivotChainSlice } from './chain-note.ts'
 

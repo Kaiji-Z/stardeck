@@ -248,6 +248,33 @@
 
 **边界（不属本轮）**：分级授权档（经理人自决例行运营）未来另案；zcode/claude/dsh/codex 四席进程级续跑留在候选清单（携史兜底保功能完整）。
 
+## D27 代理舰长席：对话者与舰务分离 + 外部调用面正名（2026-10-20，舰长拍板四项）
+
+**源起**：舰长自省 D26 的拧巴处——聊天窗里的大副被迫一边办工单一边陪聊，但聊天里说的目标又无权成单（无造单工具，红线卡着）；且「未来被其他 agent 调用（插件/MCP/CLI）」的愿景与聊天窗应该是同一套架构。定案：**对话者另立一席**。
+
+**四项拍板（口谕在案）**：
+1. **术语**：人类=**舰长**不变（零迁移）；AI 对话者=**代理舰长**（proxy captain）——「因为命令卡片还是可以手动操作的」。三皮：代理舰长/代理管家/Acting Captain。
+2. **大副**：聊天职责彻底移交（D26 经理人 persona 段+chat 附页回滚），回归 0.2.x 纯舰务；人类直通面原样（composer 直令/聚焦页答复/签发卡）。
+3. **定夺权**：默认一切定夺呈舰长过目；「舰长可以授权一切由代理舰长定夺」落成显式开关 `STARDECK_PROXY_VERDICT`（默认 OFF，运行态经 POST /bridge/settings 翻转、不落盘、重启回落——授权本身是舰长的动作，安全缺省）。自然语言授权=未来另刀。
+4. **范围**：完整闭环一次到位（v0.4.0）。
+
+**机制定案**：
+- **拟令闭环**：代理舰长终答携【命令】块（一令一块，可多块，单轮上限 5 防幻觉风暴）→ daemon 收割建 draft 命令卡（`issuedBy: proxy-…` 入账审计，引信/折叠全继承）→ 大副下轮分诊照旧——「说了就成单」，D26 的下单缺口从根上治。
+- **【定夺】块**：授权 ON 时对 review 态任务可代验收——格式 `【定夺】（taskId）通过|打回`+理由；走 war_close_task 原路，B3 门经 flag-gated `verdictProxyGate`（在册 proxy 会话+授权运行态双条件）放行；授权 OFF 时收割层拒收仍呈舰长。
+- **B3 潜伏缺陷修复（test-first 坐实）**：板面验收 agentId `captain-board` 对 staff-owned 任务自 B3 落地起实为被拒（hqSessionId 独立形态从不设置）——修=门显式放行 `captain-board`（板面舰长亲手验收的固定 principal，本地面板仅绑 127.0.0.1；principal 模型另案）。
+- **席位 spawn**：spawnStaffAgent 参数化 role:'proxy'（title/日志前缀/PROXY_PROMPT 换面）；executor 四席注入守卫——proxy 席不注 MCP/扩展（无工具面是机制不是纪律）。
+- **对话史承运层不动**：bridge.jsonl/未答判定/携史/digest/resume 优先+2min 退避全部平移换席（D26 投资全额保值）；大副 staffTick 的 chat 段退役、D26 双写退役。
+- **审计正名**：directive_created 增 issuedBy（'human' 缺省/proxy-…/外部自报 body 字段）；directive_answered 修 channel 被续跑通道名覆盖的分叉（channel=来源面 + via=续跑通道双字段）。
+- **旗**：STARDECK_PROXY 默认 ON（=0 聊天降级态：战报+决策卡在场、输入停用+诚实文案）；矩阵增舰桥/代理 OFF 面双跑。
+
+**红线（继承+新增）**：定夺权结构性归舰长（授权=显式动作+flag 默认 OFF+重启回落三重安全缺省）；账本为源（代理舰长无工具，写全经块收割入账）；出口协议不可裁剪（代理舰长同禁 war_claim/war_submit）；授权 OFF 面字节级不变（矩阵锁）。
+
+**同构声明（外部调用面）**：内置代理舰长=stardeck 外部调用接口的第一个客户端（POST /commands+digest+board+answer 同一组端点）——代理舰长是**席位不是进程**，未来任何 agent 经同一 API 都能坐进调用者位。完整 principal/鉴权模型另案（README「外部调用面」章如实声明）。
+
+**代价（如实）**：对话式下单三段 LLM 轮（代理舰长+大副+外勤）；双人格资产并行维护；授权门是宪法级变更（flag-gated+eval 正负例+矩阵双面锁死）。
+
+**实现锚**：persona `proxyCaptainPersonaText`；征召令 `proxyOrderFor`+块解析 `proxyCommandBlocksOf`/`proxyVerdictBlocksOf`（staff.ts）；daemon proxyTick（15s 并列哨位：未答驱动/resume 优先/收割三写=对话+命令卡+定夺）；B3 扩 `verdictProxyGate`+`captain-board` 放行（tools.ts）；端点 POST /bridge/settings；UI=bridge.tsx 降级态+设置弹层授权钮+命令卡「代理舰长令」徽标；copy 四典 6 新键。
+
 **实现锚**：账本 `src/bridge.ts`；工单附页 `staffOrderFor(items, flags, face, chat?)`（chat 缺席字节不变）；daemon staffTick 挂 notices sync+chat 出单+收割双写+resume；端点 `GET/POST /warroom/api/bridge/messages`、`GET /bridge/digest`；UI `src/client/bridge.tsx`（消息流+三决策卡坞：澄清药丸/签发五项/验收证据卡）+ `client-standalone.tsx` 三态壳（聊天/分屏/看板）；answer 通道 channel:'bridge' 入账。
 
 ---

@@ -83,6 +83,8 @@ export interface BoardCommand {
   briefSigned?: { goal: string; background: string; acceptance: string; nonGoals: string; deliverables: string } | null
   /** D24 待签态（投影派生）：L1 呈批件来自任务书且 plan pending——会议室渲染可编辑五项卡。 */
   awaitingSign?: boolean | null
+  /** D27 下令来源（旧命令 null=舰长亲手语义；proxy-…=代理舰长席拟令——卡面徽标）。 */
+  issuedBy?: string | null
 }
 
 export interface BoardTask {
@@ -131,8 +133,10 @@ export interface BoardData {
   warRoot: string
   hqSessionId: string | null
   revision?: string
-  /** D26 舰桥频道面（旗 ON 时服务端才带）：客户端据此决定默认脸面=聊天窗。 */
-  bridge?: { enabled: boolean }
+  /** D26 舰桥频道面（旗 ON 时服务端才带）：客户端据此决定默认脸面=聊天窗。
+   *  D27：proxy=代理舰长席在役（false=聊天降级态）；verdictAuthorized=舰长已
+   *  授权代定夺（授权钮的数据面）。 */
+  bridge?: { enabled: boolean; proxy?: boolean; verdictAuthorized?: boolean }
   commands: BoardCommand[]
   tasks: BoardTask[]
   threads: BoardThread[]
@@ -296,6 +300,21 @@ export async function sendBridgeMessage(text: string): Promise<{ ok: boolean; ts
       body: JSON.stringify({ text }),
     })
     return await res.json() as { ok: boolean; ts?: string; error?: string }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** D27 定夺授权开关（舰长显式动作）：运行态翻转代理舰长代定夺——不落盘，
+ *  重启回落未授权。回执 note 由板面直显。 */
+export async function setBridgeProxyVerdict(granted: boolean): Promise<{ ok: boolean; verdictAuthorized?: boolean; note?: string; error?: string }> {
+  try {
+    const res = await fetch('/warroom/api/bridge/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ proxyVerdict: granted }),
+    })
+    return await res.json() as { ok: boolean; verdictAuthorized?: boolean; note?: string; error?: string }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

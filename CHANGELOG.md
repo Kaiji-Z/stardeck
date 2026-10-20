@@ -23,6 +23,25 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-20
+
+### Added（D27 代理舰长席——对话者与舰务分离 + 外部调用面正名）
+- **代理舰长席（proxy captain）**：聊天窗对话者从大副换为独立席位——把舰长自然语言拟成【命令】块，daemon 收割成 draft 命令卡（issuedBy 审计）交大副分诊，「说了就成单」闭环（D26 下单缺口根治）；对话史承运层（bridge 账本/携史/digest/resume 优先+退避）全额复用换席。
+- **定夺授权（flag-gated）**：`STARDECK_PROXY_VERDICT` 默认 OFF；舰长可经设置弹层/POST /bridge/settings 运行态授权代理舰长代行验收（【定夺】块走 war_close_task 原路，B3 门=在册 proxy 会话+授权双条件；重启回落 OFF 三重安全缺省）。
+- **外部调用面（同构声明）**：内置代理舰长=外部调用接口第一客户端（POST /commands+digest+board+answer 同组端点，issuedBy 自报字段）；完整 principal/鉴权另案（README 新章）。
+- **命令卡「代理舰长令」徽标** + 聊天降级态（STARDECK_PROXY=0：战报+决策卡在场、输入停用诚实文案）+ 设置弹层授权钮。
+- 验证矩阵增舰桥/代理 OFF 面双跑；live 门增 STARDECK_LIVE_PROXY=1 相位（聊天下单→拟令成卡→分诊→外勤→收官全链）；监督层 +3 例（拟令正/授权代定夺正/未授权代签负例一票否决，共 13 例）。
+
+### Fixed
+- **B3 潜伏缺陷（test-first 坐实）**：板面舰长亲手验收（agentId=captain-board）对 staff-owned 任务自 2026-09-23 B3 落地起实为被拒（独立形态 hqSessionId 从不设置）——身份门显式放行 captain-board 固定 principal。
+- **审计分叉**：directive_answered 的 channel 曾被续跑通道名（pi-rpc/opencode-run）覆盖、对话面来源丢失——改为 channel（来源面）+via（续跑通道）双字段。
+- **z.ai 撤型适配（2026-10-20 实弹三连抓）**：网关当日撤 glm-5.2 换 glm-5.3 家族——live 门 opencode 面默认切 5.3、舰队回切显式带模型（空串=执行者不带 -m，踩 opencode 默认模型解析死模型）；briefBlocksOf 增粗体强调容忍（glm-5.3 终答五项标签常写 `- **目标**：`，旧解析五项全 miss 整块被弃——实弹抓获+回归测试钉死）。
+
+### Changed
+- **大副回滚纯舰务**（D26 经理人 persona 段+chat 附页退役）：聊天窗只认代理舰长一个声音；人类直通面（composer 直令/聚焦页答复/签发卡）原样保留。
+- 术语：AI 对话者=代理舰长（war）/代理管家（plain）/Acting Captain（EN）；人类=舰长不变（零迁移）。
+
+
 ### Fixed（对抗审查回流批，2026-09-23 自插件仓 4cd746b）
 
 - **P0 war_fail 重派死锁（本仓形态）**：war_fail 重派路径的补征恒被 spawn-once 守卫挡回（调用 war_fail 的执行者进程自身还在役，`registry.liveFor()` 判活）而回执无视征召结果虚报「已派遣新外勤小队」；恢复只能靠巡检②「起跑即夭折」误标分支（错因入账+延迟）。修=CommanderOps 增 `releaseSpawned?`（daemon 实现=`registry.forgetTask`），war_fail 先释放守卫再补征并**消费征召结果**（未成如实回执「巡检会自动补征」）；巡检①判死回栏点同款先遗忘（原本已 forget，补注释正名）。

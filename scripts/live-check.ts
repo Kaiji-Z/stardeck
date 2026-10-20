@@ -69,7 +69,7 @@ try {
     cwd: repoRoot,
     // 主环 STARDECK_STAFF=0：本相位由脚本直呼 war_publish（确定性执行者链）——
     // 大副若同时在线会对同一 draft 命令二次发布。大副链走可选相位（下方）。
-    env: { ...process.env, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STATE_DIR: stateDir, STARDECK_WAR_ROOT: warRoot, STARDECK_PORT: String(PORT), STARDECK_STAFF: '0', ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: 'zai-coding-plan/glm-5.2' }) },
+    env: { ...process.env, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STATE_DIR: stateDir, STARDECK_WAR_ROOT: warRoot, STARDECK_PORT: String(PORT), STARDECK_STAFF: '0', ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: 'zai-coding-plan/glm-5.3' }) },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
@@ -85,7 +85,7 @@ try {
   const fleetSeats = fleetGet.seats as Array<{ id: string; ok: boolean; adapter?: boolean; staffReady?: boolean }>
   check('舰队兵种面（GET /fleet 十二席：六双席可选 + 二半证 + 四契约）', fleetGet.ok === true && fleetGet.active.executor === 'opencode' && Array.isArray(fleetGet.seats) && fleetGet.seats.length === 12 && fleetSeats.filter(s => s.adapter === false).length === 4 && fleetSeats.filter(s => s.adapter !== false && s.staffReady === false).map(s => s.id).join() === 'gemini,qwen' && ['opencode', 'pi', 'codex', 'zcode', 'claude', 'dsh'].every((id: string) => { const s = fleetSeats.find(x => x.id === id); return s !== undefined && s.staffReady === true }), `active=${fleetGet.active.executor} 席位=${fleetSeats.map(s => `${s.id}${s.ok ? '✓' : '✗'}${s.staffReady === false ? '(双席未通)' : ''}`).join('/')}`)
   const fleetPost = await apiJson('/warroom/api/fleet', { method: 'POST', body: JSON.stringify({ executor: 'pi', model: 'zai/glm-5.2' }) })
-  const fleetBack = await apiJson('/warroom/api/fleet', { method: 'POST', body: JSON.stringify({ executor: 'opencode', model: '' }) })
+  const fleetBack = await apiJson('/warroom/api/fleet', { method: 'POST', body: JSON.stringify({ executor: 'opencode', model: 'zai-coding-plan/glm-5.3' }) }) // 回切显式带模型：空串=执行者不带 -m，opencode 默认模型解析会踩死模型（2026-10-20 glm-5.2 撤型实抓）
   check('舰队兵种绑定往返（POST /fleet 切 pi 再切回）', fleetPost.ok === true && fleetPost.active.executor === 'pi' && fleetBack.ok === true && fleetBack.active.executor === 'opencode', `主环执行者已复位 opencode`)
 
   const cmd = await apiJson('/warroom/api/commands', { method: 'POST', body: JSON.stringify({ text: 'live 实弹：stardeck 独立形态第一响' }) })
@@ -195,7 +195,7 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
         // codex 席入口按席给定（STARDECK_EXECUTOR_BIN 是全局逃生阀——会误伤
         // 主环 opencode，故走独立变量只在本相位 daemon 生效）。
         ...(staffFleetLive === 'codex' && process.env.STARDECK_LIVE_CODEX_BIN ? { STARDECK_EXECUTOR_BIN: process.env.STARDECK_LIVE_CODEX_BIN } : {}),
-        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.2' : 'zai-coding-plan/glm-5.2' }),
+        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.2' : 'zai-coding-plan/glm-5.3' }),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -380,26 +380,66 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
     const l1Closed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: taskL1, verdict: '签发档任务收官——签发文本如实落地' }, agentId: ownerAgent(taskL1) }) as { ok: boolean; result?: { status?: string } }
     check('D24 L1：外勤交卷并收官全链', (l1Task.status === 'reported' || l1Task.status === 'closed') && l1Closed.ok === true && l1Closed.result?.status === 'closed', `${taskL1}=${loadCampaign(stateDir2, taskL1).status}`)
 
-    // ── D26 舰桥频道相位（STARDECK_LIVE_BRIDGE=1）：聊天发话 → chat 工单 →
-    // 大副终答全文入 bridge 账本 → 机械战报在场 → digest 端点全链。回话可能
-    // 走 resume 续跑或全新 spawn 携史兜底两路之一——本相位不区分，只验「回了」。
+    // ── D26 舰桥频道相位（STARDECK_LIVE_BRIDGE=1）：聊天发话 → 代理舰长回话
+    // （D27 起对话者=代理舰长席；回话可能走 resume 续跑或全新 spawn 携史兜底
+    // 两路之一——本相位不区分，只验「回了」且署名是代理舰长）→ 机械战报在场
+    // → digest 端点全链。
     if (process.env.STARDECK_LIVE_BRIDGE === '1') {
-      const boardFace = await fetch(`${base2}/warroom/api/board`).then(r => r.json()) as { bridge?: { enabled?: boolean } }
-      check('D26 舰桥：/board 带 bridge 面（旗 ON 默认）', boardFace.bridge?.enabled === true, JSON.stringify(boardFace.bridge ?? null))
+      const boardFace = await fetch(`${base2}/warroom/api/board`).then(r => r.json()) as { bridge?: { enabled?: boolean; proxy?: boolean } }
+      check('D26 舰桥：/board 带 bridge 面（旗 ON 默认）+ 代理舰长在役', boardFace.bridge?.enabled === true && boardFace.bridge?.proxy !== false, JSON.stringify(boardFace.bridge ?? null))
       const chatAsk = '现在舰队里有几条命令、几个任务？一句话向舰长报个总况。'
       const sent = await post2('/warroom/api/bridge/messages', { text: chatAsk }) as { ok?: boolean; ts?: string; error?: string }
       check('D26 舰桥：舰长发话入账（POST /bridge/messages）', sent.ok === true && typeof sent.ts === 'string', sent.ts ?? sent.error ?? '')
-      const reply = await until(8 * 60_000, '舰桥大副回话入账', () => {
+      const reply = await until(8 * 60_000, '代理舰长回话入账', () => {
         const hit = loadBridgeMessages(stateDir2).find(m => m.kind === 'agent' && m.ts > (sent.ts ?? ''))
-        return hit !== undefined && hit.text.trim().length > 10 ? hit.text.trim().slice(0, 60) : undefined
+        return hit !== undefined && hit.text.trim().length > 10 && (hit.agentId ?? '').startsWith('proxy-') ? hit.text.trim().slice(0, 60) : undefined
       })
-      check('D26 舰桥：chat 工单→大副终答全文入 bridge（对话范式全链）', true, reply)
+      check('D26 舰桥：chat 工单→代理舰长终答全文入 bridge（署名 proxy-，对话范式全链）', true, reply)
       const afterReply = bridgeUnanswered(loadBridgeMessages(stateDir2))
       check('D26 舰桥：回话后未答集清空（工单消费闭环）', afterReply.length === 0, `剩 ${afterReply.length} 条未答`)
       const digestLive = await fetch(`${base2}/warroom/api/bridge/digest`).then(r => r.json()) as { ok?: boolean; digest?: { pendingDecisions?: unknown[]; stats?: { commands?: number } } }
       check('D26 舰桥：digest 端点全况（待决清单+命令计数）', digestLive.ok === true && Array.isArray(digestLive.digest?.pendingDecisions) && (digestLive.digest?.stats?.commands ?? 0) >= 3, `commands=${digestLive.digest?.stats?.commands ?? '?'} pending=${digestLive.digest?.pendingDecisions?.length ?? '?'}`)
       const noticeCount = loadBridgeMessages(stateDir2).filter(m => m.kind === 'system').length
       check('D26 舰桥：机械战报在场（澄清/交证/收官触发过）', noticeCount >= 1, `${noticeCount} 条战报`)
+    }
+
+    // ── D27 代理舰长拟令相位（STARDECK_LIVE_PROXY=1）：聊天里说目标 → 代理
+    // 舰长【命令】块收割成命令卡（issuedBy=proxy-…）→ 大副分诊/发布 → 外勤
+    // 执行交证 → 舰长收官——「说了就成单」全链（对话者与舰务分离的实弹铁证）。
+    if (process.env.STARDECK_LIVE_PROXY === '1') {
+      const goalSay = '帮我立一道命令：在任务工作区根创建 proxy-live.txt（内容含字符串 stardeck-proxy-live），并写一个 check.js 校验内容真实在盘（node 跑它退出码 0）。立好了告诉我命令号。'
+      const said = await post2('/warroom/api/bridge/messages', { text: goalSay }) as { ok?: boolean; ts?: string; error?: string }
+      check('D27 代理舰长：舰长在聊天里说目标（发话入账）', said.ok === true && typeof said.ts === 'string', said.ts ?? said.error ?? '')
+      // ① 代理舰长回话（对话面）——与拟令同一条末答。
+      const proxyReply = await until(8 * 60_000, '代理舰长拟令回话', () => {
+        const hit = loadBridgeMessages(stateDir2).find(m => m.kind === 'agent' && m.ts > (said.ts ?? '') && (m.agentId ?? '').startsWith('proxy-'))
+        return hit !== undefined && hit.text.trim().length > 10 ? hit.text.trim().slice(0, 60) : undefined
+      })
+      check('D27 代理舰长：回话入 bridge（对话者署名 proxy-）', true, proxyReply)
+      // ② 【命令】块收割成命令卡（issuedBy=proxy-…）——拟令闭环的机械面。
+      const proxyCommand = await until(8 * 60_000, '拟令成卡（directive_created issuedBy=proxy-）', () => {
+        const line = readFileSyncSafely(join(stateDir2, 'directives.jsonl')).split(/\r?\n/).filter(l => l.includes('"issuedBy":"proxy-')).pop()
+        return line !== undefined && line !== '' ? line : undefined
+      })
+      const issuedCmd = JSON.parse(proxyCommand) as { directiveId?: string; issuedBy?: string }
+      check('D27 代理舰长：【命令】块→draft 命令卡（issuedBy=proxy-…，拟令闭环）', typeof issuedCmd.directiveId === 'string' && (issuedCmd.issuedBy ?? '').startsWith('proxy-'), `${issuedCmd.directiveId} by ${issuedCmd.issuedBy}`)
+      // ③ 大副分诊/发布 → 外勤执行交证（既有机器接管，计时放宽到 10 分钟）。
+      const proxyTaskId = await until(10 * 60_000, '代理拟令被大副分诊发布（approved+taskId）', () => {
+        const d = loadDirectives(stateDir2).find(x => x.id === issuedCmd.directiveId)
+        return d !== undefined && d.status === 'approved' && d.taskId !== undefined ? d.taskId : undefined
+      })
+      const proxyTaskReported = await until(10 * 60_000, '外勤执行交证（reported）', () => {
+        const t = loadCampaign(stateDir2, proxyTaskId)
+        return t.status === 'reported' || t.status === 'closed' ? t.status : undefined
+      })
+      check('D27 代理舰长：大副接管全链（分诊→发布→外勤交证）', proxyTaskReported === 'reported' || proxyTaskReported === 'closed', `${proxyTaskId}=${proxyTaskReported}`)
+      // ④ 舰长收官（B3 门：所属大副会话经 ownerAgent 代行——live 家法）。
+      const proxyClosed = await post2('/warroom/api/tools/call', { name: 'war_close_task', arguments: { task_id: proxyTaskId, verdict: '通过收官——代理舰长拟令全链实弹回响属实' }, agentId: ownerAgent(proxyTaskId) }) as { ok: boolean; result?: { status?: string } }
+      check('D27 代理舰长：舰长验收收官（聊天下令的完整一生）', proxyClosed.ok === true && proxyClosed.result?.status === 'closed', `${proxyTaskId}=${loadCampaign(stateDir2, proxyTaskId).status}`)
+      // ⑤ 授权开关路由（运行态翻转，不落盘）。
+      const grantOn = await post2('/warroom/api/bridge/settings', { proxyVerdict: true }) as { ok?: boolean; verdictAuthorized?: boolean }
+      const grantOff = await post2('/warroom/api/bridge/settings', { proxyVerdict: false }) as { ok?: boolean; verdictAuthorized?: boolean }
+      check('D27 代理舰长：定夺授权开关往返（授予→收回，运行态）', grantOn.ok === true && grantOn.verdictAuthorized === true && grantOff.ok === true && grantOff.verdictAuthorized === false, `${grantOn.verdictAuthorized}→${grantOff.verdictAuthorized}`)
     }
 
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。

@@ -259,6 +259,9 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const bc = activeCopy().bridge
   const commands = data?.commands ?? []
   const tasks = data?.tasks ?? []
+  // D27 代理舰长席在役判定：bridge 面缺席（旗 OFF 面）不出现在本组件；显式
+  // proxy:false=降级态（输入停用+诚实文案——战报与决策卡照常，只没了对话者）。
+  const proxyAway = data?.bridge?.enabled === true && data.bridge.proxy === false
   // 任务 → 源命令（战报/验收卡点穿聚焦页用）。
   const lineageOf = (taskId: string): BoardCommand | null => commands.find(c => c.taskId === taskId) ?? null
   const inbox = collectInbox(commands, tasks).slice(0, 4)
@@ -364,13 +367,15 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     createElement('div', { className: 'war-bridge-input' },
       actionNote !== null ? createElement('p', { className: 'war-bridge-err', role: 'alert' }, actionNote) : null,
       sendNote !== '' ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, sendNote) : null,
+      proxyAway ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-proxy-away': '1' }, bc.proxyAway) : null,
       createElement('textarea', {
-        className: 'war-bridge-ta', rows: 2, placeholder: bc.inputPh, value: input, 'data-bridge-input': '1',
+        className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
+        disabled: proxyAway,
         onChange: e => { setInput(String(e.target.value ?? '')) },
         onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void send() } },
       }),
       createElement('div', { className: 'war-bridge-sendrow' },
-        createElement('button', { className: 'war-btn primary', type: 'button', disabled: sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),
+        createElement('button', { className: 'war-btn primary', type: 'button', disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),
     ),
   )
 }

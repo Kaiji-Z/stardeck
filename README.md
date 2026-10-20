@@ -4,7 +4,7 @@
 
 **agent 舰队的作战看板与守护进程。**
 
-你下一句大白话命令，AI 大副把它变成任务书，AI 外勤在隔离工作区执行并交证据，你只管验收。
+你在聊天窗里说目标，AI 代理舰长把它拟成命令卡，AI 大副分诊成任务书，AI 外勤在隔离工作区执行并交证据，你只管验收。
 deck 一词双关：星舰飞行甲板（agent 在这里起降调度）+ deck of cards（一副任务卡——看板）。
 
 [English](#english) · [中文](#中文) · [License](#license-mit)
@@ -23,15 +23,15 @@ deck 一词双关：星舰飞行甲板（agent 在这里起降调度）+ deck of
 
 stardeck 是一个**本地优先**的多 agent 编排器：它不替 agent 干活，而是管住「下令 → 成案 → 执行 → 交证 → 验收」的完整环流。任意 CLI coding agent（opencode / pi / zcode / Claude Code / …）经注入的 MCP 桥或扩展领令出勤；**账本、令牌、证据核验由系统机械核对，不靠 agent 自报**。
 
-- **一个聊天窗（舰桥频道，默认脸面）**：你只和一位经理人（大副）对话——说目标他驱动舰队、问战况他实时报、不懂概念他现场讲；他的追问、任务书签发、验收请示都以决策卡推到聊天里，一键定夺。不需要选会话、选项目、建工作区。
+- **一个聊天窗（舰桥频道，默认脸面）**：你只和一位**代理舰长**对话——说目标他拟令成卡、问战况他实时报、不懂概念他现场讲；任务书签发、验收请示以决策卡推到聊天里一键定夺（也可显式授权他代行验收，默认不开）。不需要选会话、选项目、建工作区。
 - **看板可展开旁观**：分屏看着看板被聊天驱动，或进板亲自下令——3D 星域、三列作战看板原样保留。
 - **会话外归系统，会话内归 agent**：工作区物化、征召、巡检、验收定夺归 stardeck；读写文件、跑命令由 agent 自带工具完成——边界清晰，互不越权。
 - **出口协议不可裁剪**：`war_claim` 令牌制领取、`war_submit` 证据核验（checks 全过 + 测试退出码 0 + 无越界文件，即 KillCredit）、`war_close_task` 人工验收收官——验收与签发的定夺永远归你，经理人不代签。
 
 ## 核心特性
 
-**💬 舰桥频道（v0.3.0 对话范式，默认视图）**
-打开就是聊天窗：下令、问战况、问概念、闲聊都在这里；机械战报（交证待验收/澄清挂起/失败重试/收官/定时派发）自动推进频道；经理人的请示出决策卡——澄清选择题药丸点选即答（`1A;2B`）、任务书五项卡可逐项修改后签发、验收卡带证据摘要一键定夺。不习惯对话模式？右上角一键切回看板（`STARDECK_BRIDGE=0` 可永久回退老形态）。
+**💬 舰桥频道（v0.3.0 对话范式，默认视图；v0.4.0 对话者=代理舰长）**
+打开就是聊天窗：说目标、问战况、问概念、闲聊都在这里。**代理舰长**（v0.4.0）是你在频道里的代理人——把你的自然语言拟成【命令】块，系统收割成命令卡交大副分诊（说了就成单）；机械战报（交证待验收/澄清挂起/失败重试/收官/定时派发）自动推进频道；请示出决策卡——澄清选择题药丸点选即答（`1A;2B`）、任务书五项卡可逐项修改后签发、验收卡带证据摘要一键定夺。不习惯对话模式？右上角一键切回看板（`STARDECK_BRIDGE=0` 可永久回退老形态；`STARDECK_PROXY=0` 只关对话者保留战报与决策卡）。
 
 **🌊 3D 星域（看板视图）**
 每条战线是一颗行星：执行中=推进行星轨迹，已收官=占领态，战线环分段=任务数。暗色模式一键切换，悬停高亮关联卡族，滚轮缩放、中键旋转。
@@ -40,10 +40,10 @@ stardeck 是一个**本地优先**的多 agent 编排器：它不替 agent 干�
 任务列（执行动向）· 任务回报列（证据与收官）· 底部调度坞（命令卡生命周期）。板是读投影：你在板上定夺（批计划/验收/撤令），agent 在工作区里干活。
 
 **🎯 聚焦页：一条命令的一生**
-点任意命令卡展开全生命周期：命令原文 → 大副计划（待批可带意见驳回）→ 执行会话 → 任务回报与证据，全程可溯源。聊天里的战报与命令引用一点即达。
+点任意命令卡展开全生命周期：命令原文（聊天拟令的卡带「代理舰长令」徽标）→ 大副计划（待批可带意见驳回）→ 执行会话 → 任务回报与证据，全程可溯源。聊天里的战报与命令引用一点即达。
 
 **🤖 大副 + 外勤双层编制**
-AI 大副分诊你的命令（L0 直发 / L1 签任务书），起草任务书呈你签发；签发后自动物化隔离工作区并征召外勤执行。**舰队绑定跟随你选的 CLI——大副和外勤都跑在你选的 agent 上**；只有双席都接通的 CLI 才会出现在绑定门里（当前六席）。经理人的对话记忆跨轮连续（账本携史全席兜底，opencode/pi 席优先原生会话续跑）。
+AI 大副分诊你的命令（L0 直发 / L1 签任务书），起草任务书呈你签发；签发后自动物化隔离工作区并征召外勤执行。**舰队绑定跟随你选的 CLI——代理舰长、大副和外勤都跑在你选的 agent 上**；只有双席都接通的 CLI 才会出现在绑定门里（当前六席）。代理舰长的对话记忆跨轮连续（账本携史全席兜底，opencode/pi 席优先原生会话续跑）。
 
 **🔒 证据核验（KillCredit）**
 外勤交证不是打个「完成」：checks 逐项过、测试真实跑、无越界文件改动——机械判据全绿才算交付，最后由你翻阅收官。
@@ -74,7 +74,7 @@ pnpm install && pnpm build
 node bin/stardeck.mjs          # 起守护进程 + 打开浏览器
 ```
 
-浏览器会先经过**舰队选择门**——选一个已安装的 CLI（模型留空即沿用其自身默认），点「开始调度」，然后进入**舰桥频道**（聊天窗），跟大副说你的第一句话，例如：
+浏览器会先经过**舰队选择门**——选一个已安装的 CLI（模型留空即沿用其自身默认），点「开始调度」，然后进入**舰桥频道**（聊天窗），跟代理舰长说你的第一句话，例如：
 
 ```
 !!直接做：在工作区根创建 hello.txt，内容为当前时刻
@@ -82,7 +82,7 @@ node bin/stardeck.mjs          # 起守护进程 + 打开浏览器
 现在舰队什么情况？简单报个总况
 ```
 
-`!!` 强制直发（跳过签发），`??` 强制先看方案。默认档位由大副自动分诊；不喊 `!!`/`??` 也可以纯聊天（问战况、问用法）。右上角可随时切到分屏/看板视图。
+`!!` 强制直发（跳过签发），`??` 强制先看方案（看板 composer 直令照旧——聊天里说目标则由代理舰长拟令成卡）。不喊 `!!`/`??` 也可以纯聊天（问战况、问用法）。右上角可随时切到分屏/看板视图。
 
 ### 常用命令
 
@@ -108,6 +108,8 @@ pnpm live                      # 端到端实机门：真 CLI 外勤全链（需
 | `STARDECK_MODEL` | 预设模型 | 空（各 CLI 自身默认） |
 | `STARDECK_STAFF` | AI 大副自动分诊 | 开 |
 | `STARDECK_BRIDGE` | 舰桥频道（聊天窗默认脸面） | 开（`=0` 回退看板先行老形态） |
+| `STARDECK_PROXY` | 代理舰长席（聊天对话者/拟令成卡） | 开（`=0` 聊天降级：战报+决策卡在场、输入停用） |
+| `STARDECK_PROXY_VERDICT` | 舰长显式授权代理舰长代行验收定夺 | 关（也可经设置弹层运行态翻转，重启回落） |
 
 舰队绑定写在配置文件里，重启保持；板面随时可换绑（在役任务不受影响）。
 
@@ -147,6 +149,20 @@ src/ 其余 = 账本内核：append-only JSONL + fold（永不过写，只派生
 - **attemptId 即令牌**：外勤凭征召令牌领取任务并交证，无令牌的提交一律拒绝。
 - **进程即生命**：执行者进程失联由巡检回收（记败+重派），daemon 重启不残留僵尸会话。
 
+## 外部调用面（v0.4.0）
+
+**内置的代理舰长，就是 stardeck 对外调用接口的第一个客户端**——他没有任何私有通道：拟令走 `POST /commands`、看全局走 `GET /bridge/digest` 与 `GET /board`、答问走 `POST /commands/answer`。任何外部 agent（你 IDE 里的会话、一个机器人、一个脚本）经同一组本地端点都能坐进「调用者」席位驱动 stardeck：
+
+| 端点 | 用途 |
+|---|---|
+| `POST /warroom/api/commands` | 下令（可选 body 字段 `issuedBy` 自报来源，入账审计） |
+| `GET /warroom/api/bridge/digest` | 舰队全况速览（待决清单+命令/任务摘要，紧凑封顶） |
+| `GET /warroom/api/board` | 全量看板投影（命令/任务/线程/名册） |
+| `POST /warroom/api/commands/answer` | 澄清答复（`channel` 标来源面） |
+| `GET /warroom/api/mcp/tools` | war_* 工具清单（机器可读自描述） |
+
+边界如实声明：验收/签发的**定夺权结构性归人类**——外部调用者可以下令与问询，不能替你验收（唯一例外是你显式打开的代理舰长定夺授权，运行态开关）。完整的调用者身份/鉴权模型（principal）是另案——当前形态仅限本机互信环境。
+
 ## 安全模型
 
 stardeck 的威胁模型是**本机互信**：
@@ -177,7 +193,7 @@ stardeck 的威胁模型是**本机互信**：
 
 ## What is this
 
-stardeck is a **local-first** multi-agent orchestrator: it doesn't do the agents' work — it owns the full loop of *order → brief → execute → evidence → acceptance*. Any CLI coding agent (opencode / pi / zcode / Claude Code / …) takes orders through an injected MCP bridge or extension; **ledgers, tokens and evidence are verified mechanically by the system, never taken on the agent's word**.
+stardeck is a **local-first** multi-agent orchestrator: it doesn't do the agents' work — it owns the full loop of *order → brief → execute → evidence → acceptance*. Say a goal in the chat window; an AI Acting Captain shapes it into a command card, the first mate triages it, field agents execute with evidence — you just accept. Any CLI coding agent (opencode / pi / zcode / Claude Code / …) takes orders through an injected MCP bridge or extension; **ledgers, tokens and evidence are verified mechanically by the system, never taken on the agent's word**.
 
 - **3D starfield board**: every campaign is a planet; execution progresses in real time on the starfield (WebGL, 2D radar view, list view fallback).
 - **Outside the session belongs to the system; inside belongs to the agent**: workspace materialization, conscription, patrol and acceptance belong to stardeck; file edits and commands run with the agent's own tools — clean boundaries, no overreach.
@@ -188,14 +204,17 @@ stardeck is a **local-first** multi-agent orchestrator: it doesn't do the agents
 **🌊 3D starfield (default view)**
 Every campaign is a planet: executing campaigns advance along their orbits, finished ones turn captured, campaign rings segment per task. One-click dark mode, hover to highlight related card families, wheel zoom, middle-drag rotate.
 
+**💬 Bridge channel (v0.3.0 chat-first default; v0.4.0 the Acting Captain)**
+Open to a single chat window: say goals, ask status, ask anything. The **Acting Captain** (v0.4.0) is your proxy in the channel — natural language in, 【command】 blocks out, harvested into command cards for the first mate (say it and it becomes an order). Decision cards (clarify pills / five-field brief sign-off / acceptance with evidence) land in the chat for one-tap verdicts; you may explicitly delegate acceptance verdicts to the Acting Captain (off by default). Mechanical notices keep the channel alive without burning tokens.
+
 **🪐 Three-column operations board**
 Tasks column (execution status) · Mission logs column (evidence & closure) · bottom dispatch dock (command lifecycle). The board is a read projection: you decide on it (approve plans / accept / withdraw orders), agents work in workspaces.
 
 **🎯 Focus page: one command's whole life**
 Click any command card for its full lifecycle: original order → staff plan (reject with a note while pending) → execution sessions → mission report & evidence, all traceable.
 
-**🤖 Two-tier crew: first mate + field agents**
-An AI first mate triages your orders (L0 direct / L1 plan-first / L2 clarify-first), drafts task briefs for your approval; approved orders get an isolated workspace and a field agent conscripted. **The fleet binding follows your chosen CLI** — both the first mate and field agents run on the agent you pick; only CLIs with both roles wired appear in the binding gate (six today).
+**🤖 Acting Captain + first mate + field agents**
+The Acting Captain talks with you in the bridge channel; an AI first mate triages your orders (L0 direct / L1 brief-first), drafts task briefs for your approval; approved orders get an isolated workspace and a field agent conscripted. **The fleet binding follows your chosen CLI** — the Acting Captain, first mate and field agents all run on the agent you pick; only CLIs with both wired roles appear in the binding gate (six today).
 
 **🔒 Evidence verification (KillCredit)**
 "Done" is not a claim: every check passes, tests really run, no out-of-bounds file changes — all mechanical criteria green before it counts as delivered, and you give the final review.
@@ -261,6 +280,8 @@ Config file at `~/.stardeck/config.json` (or point `STARDECK_CONFIG` elsewhere);
 | `STARDECK_EXECUTOR` | default fleet | `opencode` |
 | `STARDECK_MODEL` | default model | empty (each CLI's own default) |
 | `STARDECK_STAFF` | AI first mate triage | on |
+| `STARDECK_PROXY` | Acting Captain seat (chat proxy / order drafting) | on (`=0` keeps notices+cards, input disabled) |
+| `STARDECK_PROXY_VERDICT` | Explicit delegation of acceptance verdicts to the Acting Captain | off (runtime toggle in settings; resets on restart) |
 
 Fleet binding is persisted to the config file and survives restarts; rebind anytime from the board (in-flight tasks unaffected).
 

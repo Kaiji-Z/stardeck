@@ -71,6 +71,9 @@ export interface Directive {
   readonly continuation?: { readonly mode: ContinuationMode; readonly parentId: string }
   /** V15 战线命名：舰长下达时可选（不填=命令原文当战线名）。 */
   readonly name?: string
+  /** D27 下令来源（审计，旧日志缺省='human' 语义）：'human'=舰长亲手（composer/
+   *  聚焦页）；'proxy-…'=代理舰长席拟令（聊天对话收割）；其余=外部调用者自报。 */
+  readonly issuedBy?: string
   /** 澄清协议态（2026-09-08，最新一轮）：pending=等舰长答复（工单不出单——
    * 「等」就是诚实，也不触发退场罚时）；answered=答复已入账（成案单随行）。
    * round 由 fold 推导（重放稳定）；成案动作（triaged/plan_opened/decomposed）
@@ -96,7 +99,7 @@ export interface Directive {
 export type DirectiveEvent =
   | { type: 'directive_created'; ts: string; directiveId: string; text: string; cron?: string;
       /** V10 战线续接：可选嫁接指针 + 冻结模式（旧日志无此字段照常 fold=初代）。 */
-      continuesFrom?: string; continuationMode?: ContinuationMode; /** V15 战线命名（可选，不填=命令原文当战线名）。 */ name?: string }
+      continuesFrom?: string; continuationMode?: ContinuationMode; /** V15 战线命名（可选，不填=命令原文当战线名）。 */ name?: string; /** D27 下令来源（缺省=human 语义）。 */ issuedBy?: string }
   | { type: 'directive_dispatched'; ts: string; directiveId: string }
   | { type: 'directive_session_opened'; ts: string; directiveId: string; staffSessionId: string }
   | { type: 'directive_received'; ts: string; directiveId: string; staffSessionId: string }
@@ -119,7 +122,7 @@ export type DirectiveEvent =
   | { type: 'directive_cancelled'; ts: string; directiveId: string; reason: string }
   // P0-1 板内答复审计（2026-09-02）：舰长经 pi RPC 续跑把答复送进大副会话——
   // 只入账不改 fold 状态（talking 态由大副后续 war_plan/war_publish 推进）。
-  | { type: 'directive_answered'; ts: string; directiveId: string; text: string; channel: string }
+  | { type: 'directive_answered'; ts: string; directiveId: string; text: string; channel: string; /** D27：续跑投递通道（pi-rpc/opencode-run）——与 channel（board/bridge 来源）正交，旧日志曾以 via 值覆盖 channel（审计分叉已修）。 */ via?: string }
   // 澄清协议（2026-09-08）：大副收令评估输入成熟度，缺关键项→结构化提问
   // 入账挂起（daemon 从大副最终答复收割）；舰长经答复通道入账→下一轮大副
   // 带问答史成案出任务书。round 不随事件走——fold 推导（重放稳定）。
@@ -180,6 +183,7 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
         id: event.directiveId, text: event.text, createdAt: event.ts, status: 'draft',
         ...(event.cron !== undefined ? { schedule: { cron: event.cron } } : {}),
         ...(event.name !== undefined ? { name: event.name } : {}),
+        ...(event.issuedBy !== undefined ? { issuedBy: event.issuedBy } : {}),
         ...(event.continuesFrom !== undefined
           ? {
               continuesFrom: event.continuesFrom,

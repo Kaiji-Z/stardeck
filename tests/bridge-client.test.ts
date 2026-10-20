@@ -179,3 +179,20 @@ test('BridgePane 发送：输入后 POST /bridge/messages 通道点名（channel
     assert.equal((hit!.body as { text: string }).text, '给工具箱加个每日格言')
   } finally { r.unmount() }
 })
+
+test('D27 降级态：bridge.proxy=false → 输入停用+诚实文案在场（战报/决策卡面不撤）', async () => {
+  boardFixture = { ...boardFixture, bridge: { enabled: true, proxy: false, verdictAuthorized: false } }
+  try {
+    const r = await render({}, '代理舰长未在役')
+    try {
+      const ta = r.textareaAt('data-bridge-input')!
+      assert.equal(ta.disabled, true, 'proxy 旗 OFF：输入停用')
+      const send = r.buttons().find(b => b.getAttribute('data-bridge-send') === '1')!
+      assert.equal(send.disabled, true, '发送钮停用')
+      assert.ok(r.text().includes('代理舰长未在役'), '降级诚实文案在场')
+      assert.ok(r.text().includes('等你定夺'), '决策卡坞照常在场')
+    } finally { r.unmount() }
+  } finally {
+    delete (boardFixture as { bridge?: unknown }).bridge
+  }
+})

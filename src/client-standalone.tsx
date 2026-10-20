@@ -13,7 +13,7 @@ import { ensureWarStyles } from './client/styles.ts'
 import { warView, type ClientServicesFace } from './client/views.tsx'
 import { fleetGate, type FleetState } from './client/fleet-gate.tsx'
 import { BridgePane } from './client/bridge.tsx'
-import { useWar } from './client/data.ts'
+import { useWar, setBridgeProxyVerdict, warBoardStore } from './client/data.ts'
 import { activeCopy, langId, setLang, setSkin, skinId, subscribeLang, subscribeSkin, type SkinId } from './client/copy.ts'
 
 ensureWarStyles()
@@ -39,11 +39,29 @@ function storedView(): ShellView | null {
   } catch { return null }
 }
 
-/** 聊天/分屏态的迷你设置弹层（皮肤/语言/明暗——看板全屏有自带设置抽屉）。 */
+/** 聊天/分屏态的迷你设置弹层（皮肤/语言/明暗/定夺授权——看板全屏有自带设置抽屉）。
+ * D27 授权钮：舰长显式授予/收回代理舰长代定夺（运行态不落盘，重启回落 OFF）。 */
 function BridgeSettings(props: { onClose: () => void }): ReturnType<typeof createElement> {
   const s = activeCopy().settings
+  const b = activeCopy().bridge
   useSyncExternalStore(subscribeSkin, skinId)
   useSyncExternalStore(subscribeLang, langId)
+  const { data } = useWar()
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authNote, setAuthNote] = useState<string | null>(null)
+  const authorized = data?.bridge?.enabled === true && data.bridge.verdictAuthorized === true
+  const proxyAway = data?.bridge?.enabled === true && data.bridge.proxy === false
+  const flipAuth = (granted: boolean): void => {
+    if (authBusy) return
+    setAuthBusy(true)
+    setAuthNote(null)
+    void setBridgeProxyVerdict(granted).then(out => {
+      setAuthBusy(false)
+      warBoardStore.refresh()
+      if (out.ok) setAuthNote(granted ? b.authOn : b.authOff)
+      else setAuthNote(out.error ?? b.authOff)
+    })
+  }
   const dark = document.body.getAttribute('data-ds-dark-theme') === 'true'
   const toggleDark = (): void => {
     const next = !dark
@@ -70,6 +88,13 @@ function BridgeSettings(props: { onClose: () => void }): ReturnType<typeof creat
         createElement('div', { className: 'war-settings-section' }, s.themeSection),
         createElement('div', { className: 'war-bridge-settings-row' },
           createElement('button', { className: `war-btn${dark ? ' primary' : ''}`, type: 'button', onClick: toggleDark }, s.themeDark)),
+        // D27 定夺授权（proxy 在役才有意义；降级态藏钮不误导演长）。
+        !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, b.authSection) : null,
+        !proxyAway ? createElement('div', { className: 'war-bridge-settings-row' },
+          createElement('button', { className: `war-btn${authorized ? ' primary' : ''}`, type: 'button', disabled: authBusy || authorized, 'data-bridge-auth-grant': '1', onClick: () => { flipAuth(true) } }, b.authGrant),
+          createElement('button', { className: `war-btn${!authorized ? ' primary' : ''}`, type: 'button', disabled: authBusy || !authorized, 'data-bridge-auth-revoke': '1', onClick: () => { flipAuth(false) } }, b.authRevoke),
+        ) : null,
+        authNote !== null ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, authNote) : null,
       ),
     ),
   )

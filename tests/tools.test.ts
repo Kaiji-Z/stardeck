@@ -286,7 +286,7 @@ test('B3: war_close_task 身份门——非所属大副/HQ 拒绝；所属大副
     const deps = makeDeps(dir, FLAG_OFF, { hqSessionId: 'hq-1' })
     await assert.rejects(
       execTool(deps, 'war_close_task', { task_id: 'c-evil', verdict: '打回：不达标' }, 'sec-evil'),
-      /大副会话或舰长（HQ）会话可记录判定/,
+      /大副会话、舰长（HQ[/／]板面）会话或获授权的代理舰长可记录判定/,
     )
     assert.equal(loadCampaign(dir, 'c-evil').status, 'reported', '越权收官零写入')
     await execTool(deps, 'war_close_task', { task_id: 'c-own', verdict: '打回：不达标' }, 'sec-own')

@@ -229,6 +229,14 @@ export interface DashboardDeps {
   /** D26 舰桥频道开关（daemon 注入 config.bridge；缺省 false=旗 OFF 面：bridge
    *  三端点 404、/board 不带 bridge 字段——与改前字节等价）。 */
   bridgeEnabled?: boolean
+  /** D27 代理舰长席运行态（daemon 注入；缺省=proxy 在役/未授权——纯路由测试
+   *  可省略）：/board bridge 面据此带 proxy/verdictAuthorized，聊天窗降级态
+   *  与授权钮的数据源。setProxyVerdict=舰长显式授权/收回（运行态，不落盘）。 */
+  bridgeProxy?: {
+    proxy: () => boolean
+    proxyVerdict: () => boolean
+    setProxyVerdict: (granted: boolean) => void
+  }
   /** P1-5 优雅停服（CLI stop 面）：缺席 → /shutdown 501（纯路由测试可省略）。 */
   shutdown?: () => void
   /** v3: fired after a command card is created — the host ticks the command
@@ -395,6 +403,8 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
       name: d.name ?? null,
       createdAt: d.createdAt,
       status: d.status,
+      // D27 下令来源（旧命令 null=舰长亲手语义；proxy-…=代理舰长席拟令）。
+      issuedBy: d.issuedBy ?? null,
       staffSessionId: d.staffSessionId ?? null,
       taskId: d.taskId ?? null,
       cancelledReason: d.cancelledReason ?? null,
@@ -588,7 +598,14 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           hqSessionId: deps.store.get().hqSessionId ?? null,
           revision: boardRevision(deps.stateDir, deps.activity?.salt()),
           // D26 舰桥频道（旗 ON 面才有此字段）：客户端据此决定默认脸面=聊天窗。
-          ...(deps.bridgeEnabled === true ? { bridge: { enabled: true } } : {}),
+          // D27：bridge 面带代理舰长在役/授权态——聊天窗降级与授权钮的数据源。
+          ...(deps.bridgeEnabled === true ? {
+            bridge: {
+              enabled: true,
+              proxy: deps.bridgeProxy?.proxy() ?? true,
+              verdictAuthorized: deps.bridgeProxy?.proxyVerdict() ?? false,
+            },
+          } : {}),
           commands: directiveProjection(deps.stateDir),
           tasks: boardProjection(deps.stateDir, deps.activity?.snapshot.bind(deps.activity)),
           threads: loadAttachedThreads(deps.stateDir).map(t => ({ sessionId: t.sessionId, note: t.note, attachedAt: t.attachedAt })),
@@ -751,12 +768,16 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           pivotTargetSessionId = derived.targetSessionId
         }
         const commandId = newDirectiveId()
+        // D27 下令来源（审计，可选 body 字段——外部调用者自报，如 MCP 客户端
+        // 的 agentId；缺省='human' 语义=舰长亲手 composer/聚焦面）。
+        const issuedBy = typeof (body as { issuedBy?: unknown }).issuedBy === 'string' ? (body as { issuedBy: string }).issuedBy.trim().slice(0, 64) : ''
         appendDirectiveEvent(deps.stateDir, {
           type: 'directive_created', ts: new Date().toISOString(), directiveId: commandId, text,
           ...(cron !== undefined ? { cron } : {}),
           ...(continuesFrom !== undefined ? { continuesFrom } : {}),
           ...(continuationMode !== undefined ? { continuationMode } : {}),
           ...(name !== '' ? { name } : {}),
+          ...(issuedBy !== '' ? { issuedBy } : {}),
         })
         // 定时命令不立即引信——到点 dispatched 后 15s 引信自会接手。
         if (cron === undefined) deps.onCommandCreated?.()
@@ -884,6 +905,26 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           return
         }
         send(200, { ok: true, digest: bridgeDigest(deps.stateDir) })
+        return
+      }
+      if (r.method === 'POST' && pathname === '/warroom/api/bridge/settings') {
+        // D27 定夺授权开关（舰长显式动作）：运行态翻转代理舰长代定夺授权，
+        // 不落盘——重启回落默认 OFF（安全缺省）。bridgeProxy 缺席=501。
+        if (deps.bridgeEnabled !== true) {
+          send(404, { ok: false, error: `路由不存在：${r.method ?? 'POST'} ${pathname}` })
+          return
+        }
+        if (deps.bridgeProxy === undefined) {
+          send(501, { ok: false, error: '该面未接线（daemon 形态才有）——代理舰长授权开关不可用。' })
+          return
+        }
+        const body = await readJsonBody(r) as { proxyVerdict?: unknown }
+        if (typeof body.proxyVerdict !== 'boolean') {
+          send(400, { ok: false, error: 'proxyVerdict 必须是布尔（true=授权代理舰长代定夺 / false=收回）。' })
+          return
+        }
+        deps.bridgeProxy.setProxyVerdict(body.proxyVerdict)
+        send(200, { ok: true, verdictAuthorized: deps.bridgeProxy.proxyVerdict(), note: body.proxyVerdict ? '已授权：代理舰长可代行验收定夺（须呈证据与理由；重启后回落未授权）。' : '已收回：一切定夺重新呈舰长亲手。' })
         return
       }
       if (r.method === 'POST' && pathname === '/warroom/api/commands/regrade') {

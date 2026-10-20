@@ -12,10 +12,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { bountyDraftingSkillContent } from '../src/prompts.ts'
+import { proxyOrderFor } from '../src/staff.ts'
 import {
   chainArchiveSection, chainDigest, chainOutcomeOf, commanderOrderFor, pivotPromptFor, relayPromptFor, rescueNudgeFor,
 } from '../src/prompts.ts'
-import { commanderPersonaText, commanderReportHint, conscriptBriefing, mailboxDiscipline, planApprovedNotice, planRejectedNotice, schedulerDiscipline, staffPersonaText, troopBriefing, troopReportDiscipline, warKickoffPrompt, wakeCommanderPrompt } from '../src/prompts.ts'
+import { commanderPersonaText, commanderReportHint, conscriptBriefing, mailboxDiscipline, planApprovedNotice, planRejectedNotice, proxyCaptainPersonaText, schedulerDiscipline, staffPersonaText, troopBriefing, troopReportDiscipline, warKickoffPrompt, wakeCommanderPrompt } from '../src/prompts.ts'
 import type { Directive } from '../src/directives.ts'
 
 const FIXTURE_DIR = join(import.meta.dirname, 'prompts-snapshots')
@@ -27,6 +28,24 @@ const demoDirective: Directive = {
 
 const cases: ReadonlyArray<readonly [name: string, text: string]> = [
   ['staff-persona.txt', staffPersonaText(4)],
+  ['proxy-persona.txt', proxyCaptainPersonaText()],
+  ['proxy-order.txt', proxyOrderFor({
+    pending: [{ text: '现在舰队什么情况？', ts: '2026-10-20T10:00:00.000Z' }],
+    history: [
+      { role: 'you', text: '舰长曾说过的话' },
+      { role: 'manager', text: '你上轮的答复' },
+      { role: 'system', text: '战报：t-1 已交证待验收' },
+    ],
+    digest: JSON.stringify({ pendingDecisions: [{ kind: 'review', refId: 't-1', title: '验收任务', since: '2026-10-20' }], commands: [], tasks: [], stats: { commands: 1, tasks: 1, inProgress: 0, reported: 1, failed: 0 } }),
+  })],
+  ['proxy-order-authorized.txt', proxyOrderFor(
+    {
+      pending: [{ text: '那个验收你自己看着办', ts: '2026-10-20T11:00:00.000Z' }],
+      history: [],
+      digest: '{}',
+    },
+    { verdictAuthorized: true },
+  )],
   ['commander-persona.txt', commanderPersonaText(3)],
   ['conscript-briefing.txt', conscriptBriefing({ taskId: 't-0001', title: '示例任务', workspacePath: '/w/proj', acceptance: '验收一；验收二', dossier: '（无历史档案。）' })],
   ['relay-base.txt', relayPromptFor(demoDirective)],

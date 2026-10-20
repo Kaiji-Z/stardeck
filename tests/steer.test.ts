@@ -223,7 +223,9 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
     assert.ok(argvLines.includes('【舰长答复】就按轻方案办。'), '答复文本经 argv 原样送达')
     assert.ok(argvLines.includes('war_plan'), '续跑指引在 argv')
     const ledgerOc = readFileSync(join(stateDir, 'directives.jsonl'), 'utf8')
-    assert.ok(ledgerOc.includes('"channel":"opencode-run"'), '审计事件带 opencode-run 通道')
+    // D27 双字段正名：channel=来源面（board），via=续跑通道（opencode-run）。
+    assert.ok(ledgerOc.includes('"via":"opencode-run"'), '审计事件带 opencode-run 续跑通道（via）')
+    assert.ok(ledgerOc.includes('"channel":"board"'), '审计事件保住来源面（channel）')
     // ③b 其余席（zcode）→ 诚实拒绝（通道名单点名 pi / opencode）。
     const zc = await fetch(`${base}/warroom/api/commands/answer`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

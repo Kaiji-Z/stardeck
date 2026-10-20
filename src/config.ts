@@ -38,9 +38,16 @@ export interface StardeckConfig {
   staff: boolean
   /** 大副单役时长上限（分钟）——超龄熔断重开（防挂死堵塞接令管道）。 */
   staffTimeoutMin: number
-  /** 舰桥频道（D26 对话范式，默认开）：聊天窗为默认脸面 + chat 工单 + 机械战报。
+  /** 舰桥频道（D26 对话范式，默认开）：聊天窗为默认脸面 + 机械战报 + 决策卡。
    *  STARDECK_BRIDGE=0/false/off 关（回退看板先行老形态——旗 OFF 面字节等价）。 */
   bridge: boolean
+  /** 代理舰长席（D27，默认开）：聊天窗对话者=代理舰长（拟令【命令】块→命令卡）。
+   *  STARDECK_PROXY=0/false/off 关（聊天窗降级态：战报+决策卡在场、输入停用）。 */
+  proxy: boolean
+  /** 定夺授权（D27，默认关）：舰长显式授权代理舰长代行验收定夺（【定夺】块，
+   *  B3 门 flag-gated 通路）。运行态开关（POST /bridge/settings）不改本配置——
+   *  重启回落默认 OFF。STARDECK_PROXY_VERDICT=1/on 开。 */
+  proxyVerdict: boolean
 }
 
 export function stardeckHome(): string {
@@ -62,6 +69,8 @@ interface ConfigFilePart {
   staff?: unknown
   staffTimeoutMin?: unknown
   bridge?: unknown
+  proxy?: unknown
+  proxyVerdict?: unknown
 }
 
 /** 纯合并：默认值 ← 配置文件 ← 环境变量 ← 调用方显式覆盖。 */
@@ -94,6 +103,8 @@ export function loadConfig(overrides: Partial<StardeckConfig> = {}): StardeckCon
     staff: boolPick(file.staff, env.STARDECK_STAFF, true),
     staffTimeoutMin: Number(env.STARDECK_STAFF_TIMEOUT_MIN ?? file.staffTimeoutMin ?? 30),
     bridge: boolPick(file.bridge, env.STARDECK_BRIDGE, true),
+    proxy: boolPick(file.proxy, env.STARDECK_PROXY, true),
+    proxyVerdict: boolPick(file.proxyVerdict, env.STARDECK_PROXY_VERDICT, false),
   }
   return { ...cfg, ...overrides }
 }

@@ -539,6 +539,10 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
         ? createElement('span', { className: `war-chip-grade gr-${gradeOf}` }, ` · ${gradeMeta.suffix}`)
         : null),
     genBadge(cmd),
+    // D27 下令来源徽标：代理舰长席拟令的命令卡挂「代理舰长令」（人类直下不带）。
+    cmd.issuedBy !== undefined && cmd.issuedBy !== null && cmd.issuedBy.startsWith('proxy-')
+      ? createElement('span', { className: 'war-chip proxy-issued', title: cmd.issuedBy }, activeCopy().commandCard.proxyBadge)
+      : null,
     pips,
     cmd.schedule !== null && cmd.schedule.dispatchedAt === null
       ? (() => {

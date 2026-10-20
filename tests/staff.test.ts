@@ -317,6 +317,37 @@ test('briefBlocksOf：markdown 列表变体（实弹③ VvIzdx 抓获）——�
   assert.ok(parsed[0]!.nonGoals.includes('不做其他文件改动'))
 })
 
+test('briefBlocksOf：粗体强调变体（2026-10-20 glm-5.3 实弹抓获）——`- **目标**：` 全五项粗体包裹也能收', () => {
+  const bold = [
+    '工单 1 办结（任务令已发布）。',
+    '',
+    '【任务书】（cmd-20261020-c630d9b2）',
+    '- **目标**：在任务工作区根创建 staff-live.txt，写 check.js 校验。',
+    '- **背景与约束**：舰长令（!!直接做），验证链路。',
+    '- **验收标准**：node check.js 退出码 0。',
+    '- **非目标**：不做其他改动。',
+    '- **交付物**：staff-live.txt、check.js。',
+  ].join('\n')
+  const parsed = briefBlocksOf(bold)
+  assert.equal(parsed.length, 1, '粗体五项俱全=有效块')
+  assert.equal(parsed[0]!.commandId, 'cmd-20261020-c630d9b2')
+  assert.equal(parsed[0]!.goal, '在任务工作区根创建 staff-live.txt，写 check.js 校验。')
+  assert.equal(parsed[0]!.background, '舰长令（!!直接做），验证链路。')
+  assert.equal(parsed[0]!.deliverables, 'staff-live.txt、check.js。')
+  // 括号注释与粗体同现：注释保留、强调剥离。
+  const combo = [
+    '【任务书】（cmd-20261020-eeee）',
+    '- **目标**：一句话',
+    '- **背景**：有边界',
+    '- **验收**：可判定',
+    '- **非目标（原令未指明）**：没有',
+    '- **交付物**：一个文件',
+  ].join('\n')
+  const comboParsed = briefBlocksOf(combo)
+  assert.equal(comboParsed.length, 1)
+  assert.ok(comboParsed[0]!.nonGoals.startsWith('（原令未指明）：没有'), `注释保留+强调剥离，实际=${comboParsed[0]!.nonGoals}`)
+})
+
 test('harvest 机械闸：第 3 轮澄清请求拒收（rejected 报告），未超限轮照收、混合文本成案优先——行为收敛', () => {
   assert.equal(CLARIFY_ROUNDS_CAP, 2)
   const known = new Set(['cmd-x'])

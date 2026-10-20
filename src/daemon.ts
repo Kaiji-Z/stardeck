@@ -17,13 +17,13 @@ import { loadRoster } from './units.ts'
 import { materializeTaskWorkspace, materializeInstanceWorkspace, releaseTaskWorkspace, resolveWorkspaceRoot } from './workspace.ts'
 import { runtimeFlags } from './flags.ts'
 import { appendEvent, listCampaignIds, loadCampaign } from './events.ts'
-import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives } from './directives.ts'
+import { appendDirectiveEvent, dueScheduledDirectives, loadDirectives, newDirectiveId } from './directives.ts'
 import { deliverViaOpencode, deliverViaRpc } from './steer.ts'
 import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, seatAgentPrefix, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, type StaffWorkItem } from './staff.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, type StaffWorkItem } from './staff.ts'
 import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices } from './bridge.ts'
 import { bridgeDigest } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
@@ -185,7 +185,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       settled = out.settled
       const viaChannel = entry.executor === 'pi' ? 'pi-rpc' : 'opencode-run'
       // 审计入账（append-only；不改 fold 状态——talking 态由大副后续动作推进）。
-      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel: viaChannel })
+      // D27 正名：channel=来源面（board/bridge），via=续跑投递通道——两维正交；
+      // 旧版以 via 覆盖 channel（对话面来源丢失，审计分叉），自 D27 起双字段。
+      appendDirectiveEvent(stateDir, { type: 'directive_answered', ts: new Date().toISOString(), directiveId: commandId, text, channel, via: viaChannel })
       console.log(`[stardeck] 舰长答复已送达 ${commandId} → ${entry.executor} 会话 ${entry.sessionId}（${viaChannel} 续跑）`)
       return { ok: true, note: `答复已送达大副会话（${viaChannel} 续跑）——它将继续推进；进展看命令卡与任务链。` }
     } finally {
@@ -213,6 +215,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   }
 
   // ---------- 工具注册表 ----------
+  // D27 定夺授权运行态：代理舰长会话在册表 + 舰长授权开关（启动取
+  // config.proxyVerdict；POST /bridge/settings 运行时可翻，重启回落默认 OFF——
+  // 授权是舰长的动作，不落盘=重启不继承授权，安全缺省）。
+  const proxyAgentIds = new Set<string>()
+  let proxyVerdictRuntime = config.proxyVerdict
   const tools = warTools({
     store,
     stateDir,
@@ -225,6 +232,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     warRoot: config.warRoot,
     workspaceRoot: resolveWorkspaceRoot('', config.warRoot),
     flags,
+    verdictProxyGate: (agentId: string) => proxyVerdictRuntime && proxyAgentIds.has(agentId),
   }) as Record<string, { name: string; description: string; parameters: Record<string, unknown>; execute(args: Record<string, unknown>, exec: unknown): Promise<unknown> }>
   const toolList = Object.values(tools)
   const byName = new Map(toolList.map(t => [t.name, t]))
@@ -265,6 +273,14 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       releaseWorkspace: path => releaseTaskWorkspace(config.warRoot, path),
       answerCommand,
       bridgeEnabled: config.bridge,
+      bridgeProxy: {
+        proxy: () => config.proxy,
+        proxyVerdict: () => proxyVerdictRuntime,
+        setProxyVerdict: (granted: boolean) => {
+          proxyVerdictRuntime = granted
+          console.log(`[stardeck] 舰长${granted ? '授权' : '收回'}代理舰长代定夺（运行态，重启回落 OFF）`)
+        },
+      },
       shutdown: () => { triggerShutdown() },
       // K17 计划判定回推（独立形态替位）：pi 席经 RPC 续跑投 follow_up（与板内答复
       // 同通道）；非 pi/失败 best-effort 跳过——驳回理由已入 fold，重拟工单必带。
@@ -360,10 +376,6 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   let staffSpawning = false
   let staffRetryAfter = 0
   let staffFleet = 'opencode'
-  // D26 舰桥频道运行态：resume 单飞守卫 + 失败退避（chat-only 轮优先续跑既有
-  // 经理人会话，失败/无答复退避 2 分钟后走全新 spawn 携史兜底）。
-  let bridgeResumeBusy = false
-  let bridgeResumeRetryAfter = 0
   async function staffTick(): Promise<void> {
     if (!config.staff) return
     for (const id of dueScheduledDirectives(loadDirectives(stateDir), Date.now())) {
@@ -424,80 +436,19 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
             console.log(`[stardeck] L1 任务书呈批 ${d.id}——等舰长签发`)
           }
         }
-        // D26 舰桥频道收割双写：大副最终答复**全文**入 bridge（chat 窗的经理人
-        // 话轮）；命令结构化块已在上面临账——对话与命令两账并行，同一末答取文
-        // （finalStaffReply 与 harvest 同源，永不漂移）。commandRefs=答复正文中
-        // 点到号的命令；agentId/sessionId 记逻辑常驻会话（下轮 chat-only 可 resume）。
-        if (config.bridge) {
-          const reply = finalStaffReply(stateDir, staffSession.agentId)
-          if (reply !== null) {
-            const entry = readAttachMap(stateDir)[staffSession.agentId]
-            const refs = staffItems.map(i => i.commandId).filter(id => reply.includes(id))
-            appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, ...(refs.length > 0 ? { commandRefs: refs } : {}), agentId: staffSession.agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}) })
-            console.log(`[stardeck] 舰桥经理人回话入账（${reply.length} 字${refs.length > 0 ? `，涉 ${refs.length} 命令` : ''}）`)
-          }
-        }
+        // D27：大副回话双写退役——聊天窗对话者换成代理舰长席（proxyTick），
+        // 大副只经澄清/任务书块+决策卡+机械战报显形，不再说聊天话。
       } catch (err) {
         console.warn(`[stardeck] 大副产出收割失败（下轮工单重试）：${err instanceof Error ? err.message : String(err)}`)
       }
       // 定向退避：退场/熔断后工单仍未清（这轮没干成活）→ 罚 2 分钟再重开，
       // 防 received-未分诊单引发 15s 重试风暴；干成了活（工单清空）不罚。
-      // D26：舰桥未答消息同算「没干完的活」（chat 回话失败同样退避防风暴）。
-      const chatStillPending = config.bridge && bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0
-      if (staffWorklist(loadDirectives(stateDir)).length > 0 || chatStillPending) staffRetryAfter = Date.now() + 120_000
+      if (staffWorklist(loadDirectives(stateDir)).length > 0) staffRetryAfter = Date.now() + 120_000
       staffSession = undefined
     }
     if (staffSpawning || Date.now() < staffRetryAfter) return
     const items = staffWorklist(loadDirectives(stateDir))
-    const chatMsgs = config.bridge ? bridgeUnanswered(loadBridgeMessages(stateDir)) : []
-    if (items.length === 0 && chatMsgs.length === 0) return
-    // D26 逻辑常驻（chat-only 轮优先续跑）：无命令工单、纯回话，且上轮经理人
-    // 原生会话在 attach-map 且席别=当前舰队（opencode/pi 有续跑原语）→ 工单全文
-    // resume 投递（会话自带全量记忆）；失败/无答复退避 2 分钟，下轮自然回落
-    // 全新 spawn 携史兜底（全席保底路径，行为不依赖 resume 成活）。
-    if (config.bridge && items.length === 0 && !bridgeResumeBusy && Date.now() >= bridgeResumeRetryAfter) {
-      const messages = loadBridgeMessages(stateDir)
-      const lastAgent = [...messages].reverse().find(m => m.kind === 'agent' && m.agentId !== undefined)
-      if (lastAgent !== undefined && lastAgent.agentId !== undefined) {
-        const entry = readAttachMap(stateDir)[lastAgent.agentId]
-        const fleetNow = staffExecutorFor(activeExecutor)
-        if (entry !== undefined && (entry.executor === 'opencode' || entry.executor === 'pi') && entry.executor === fleetNow && lastAgent.sessionId !== undefined) {
-          bridgeResumeBusy = true
-          const brief = staffOrderFor(items, flags, fleetNow === 'pi' ? 'pi-extension' : 'mcp', {
-            pending: chatMsgs.map(m => ({ text: m.text, ts: m.ts })),
-            history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && chatMsgs.some(c => c.ts === m.ts)))),
-            digest: JSON.stringify(bridgeDigest(stateDir)),
-          })
-          void (async () => {
-            try {
-              const out = entry.executor === 'pi'
-                ? await deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, kind: 'prompt' })
-                : await deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, stateDir })
-              if (!out.ok) {
-                console.warn(`[stardeck] 舰桥续跑投递失败（${out.error ?? '未知'}）——退避后全新回合兜底`)
-                bridgeResumeRetryAfter = Date.now() + 120_000
-                return
-              }
-              await (out.settled ?? Promise.resolve(false))
-              const reply = finalStaffReply(stateDir, lastAgent.agentId!)
-              if (reply === null) {
-                console.warn('[stardeck] 舰桥续跑完成但未取到答复——退避后全新回合兜底')
-                bridgeResumeRetryAfter = Date.now() + 120_000
-                return
-              }
-              appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, agentId: lastAgent.agentId, sessionId: entry.sessionId })
-              console.log(`[stardeck] 舰桥经理人续跑回话入账（${reply.length} 字，resume）`)
-            } catch (err) {
-              console.warn(`[stardeck] 舰桥续跑异常（退避后全新回合兜底）：${err instanceof Error ? err.message : String(err)}`)
-              bridgeResumeRetryAfter = Date.now() + 120_000
-            } finally {
-              bridgeResumeBusy = false
-            }
-          })()
-          return
-        }
-      }
-    }
+    if (items.length === 0) return
     staffSpawning = true
     try {
       const agentId = `staff-${Date.now().toString(36)}`
@@ -515,18 +466,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         appendDirectiveEvent(stateDir, { type: 'directive_session_opened', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
         appendDirectiveEvent(stateDir, { type: 'directive_received', ts: new Date().toISOString(), directiveId: d.id, staffSessionId: agentId })
       }
-      // D26 chat 附页（携史+速览）：舰长发话在场即随工单——命令工单照走，对话
-      // 纪律教大副「答复必伴自然语言」。携史窗口剔除待答新话（它们单列在
-      // 【舰长新话】段，不重复占 token）。
-      const chatOrder = chatMsgs.length > 0
-        ? {
-            pending: chatMsgs.map(m => ({ text: m.text, ts: m.ts })),
-            history: bridgeHistoryWindow(loadBridgeMessages(stateDir).filter(m => !(m.kind === 'user' && chatMsgs.some(c => c.ts === m.ts)))),
-            digest: JSON.stringify(bridgeDigest(stateDir)),
-          }
-        : undefined
+      // D27：chat 附页退役——聊天对话归代理舰长席（proxyTick）；大副工单只带命令。
       staffSession = await spawnStaffAgent({
-        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' || staffFleet === 'codex' ? 'http' : 'mcp', chatOrder),
+        brief: staffOrderFor(items, flags, staffFleet === 'pi' ? 'pi-extension' : staffFleet === 'zcode' || staffFleet === 'dsh' || staffFleet === 'codex' ? 'http' : 'mcp'),
         workspacePath: join(stateDir, 'staff'),
         http: base,
         agentId,
@@ -537,7 +479,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         codexShimBase: config.codexShimBase,
       })
       staffItems = items
-      console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件${chatOrder !== undefined ? '+舰桥发话' : ''}，日志 ${staffSession.logPath}）`)
+      console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件，日志 ${staffSession.logPath}）`)
     } finally {
       staffSpawning = false
     }
@@ -546,6 +488,151 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     void staffTick().catch(err => console.error('[stardeck] 大副 tick 异常（跳过本轮）:', err instanceof Error ? err.message : err))
   }, 15_000)
   staffTimer.unref()
+
+  // ---------- 代理舰长席（D27）：聊天窗对话者——拟令【命令】块→命令卡 ----------
+  // 舰长在舰桥频道的代理人：未答话驱动无头回合（resume 优先/全新 spawn 兜底），
+  // 退场收割三写——①终答全文入 bridge（对话面）②【命令】块经命令通道建 draft
+  // 卡（issuedBy=proxy-…，大副下轮分诊——拟令闭环）③（授权 ON）【定夺】块走
+  // war_close_task（B3 flag-gated 通路，身份=在册代理会话）。代理舰长无工具
+  // 面（executor.ts 注入守卫）——写全经收割，账本为源不变。
+  let proxySession: ExecutorSession | undefined
+  let proxySpawning = false
+  let proxyRetryAfter = 0
+  let proxyResumeBusy = false
+  let proxyResumeRetryAfter = 0
+  const proxyChatOrder = () => {
+    const messages = loadBridgeMessages(stateDir)
+    const pending = bridgeUnanswered(messages)
+    return {
+      pending: pending.map(m => ({ text: m.text, ts: m.ts })),
+      history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && pending.some(c => c.ts === m.ts)))),
+      digest: JSON.stringify(bridgeDigest(stateDir)),
+    }
+  }
+  const harvestProxyReply = async (agentId: string): Promise<void> => {
+    const reply = finalStaffReply(stateDir, agentId)
+    if (reply === null) return
+    const entry = readAttachMap(stateDir)[agentId]
+    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}) })
+    const { commands, dropped } = proxyCommandBlocksOf(reply)
+    for (const text of commands) {
+      const directiveId = newDirectiveId()
+      appendDirectiveEvent(stateDir, { type: 'directive_created', ts: new Date().toISOString(), directiveId, text, issuedBy: agentId })
+      console.log(`[stardeck] 代理舰长拟令入账 ${directiveId}（${text.length} 字）——大副下轮分诊`)
+    }
+    if (dropped > 0) console.warn(`[stardeck] 代理舰长【命令】块弃收 ${dropped} 条（空块/超 2000 字/超单轮上限）`)
+    for (const v of proxyVerdictBlocksOf(reply)) {
+      if (!proxyVerdictRuntime) {
+        console.warn(`[stardeck] 代理舰长【定夺】块拒收（授权 OFF）：任务 ${v.taskId}——仍呈舰长定夺`)
+        continue
+      }
+      const verdict = v.pass ? `通过（代理舰长代定夺：${v.reason === '' ? '证据与理由未附——呈舰长复核' : v.reason}）` : `打回（代理舰长代定夺：${v.reason}）`
+      const out = await callTool('war_close_task', { task_id: v.taskId, verdict }, agentId)
+      if (out.ok) console.log(`[stardeck] 代理舰长代定夺入账：任务 ${v.taskId} ${v.pass ? '通过' : '打回'}（授权在册）`)
+      else console.warn(`[stardeck] 代理舰长代定夺被拒：任务 ${v.taskId}——${out.error}`)
+    }
+  }
+  async function proxyTick(): Promise<void> {
+    if (!config.bridge || !config.proxy) return
+    if (proxySession !== undefined) {
+      const alive = proxySession.exitCode === null && proxySession.child.exitCode === null
+      if (alive) {
+        if (Date.now() - proxySession.startedAt < config.staffTimeoutMin * 60_000) return
+        console.warn(`[stardeck] 代理舰长席龄熔断（>${config.staffTimeoutMin}min）：${proxySession.agentId}——kill 后下轮重开`)
+        try { proxySession.child.kill() } catch { /* already gone */ }
+      } else {
+        console.log(`[stardeck] 代理舰长退场（exit=${proxySession.exitCode}）`)
+      }
+      // pi 惰性扫描（同大副家法）：退场时补会话号入 attach-map。
+      const fleetNow = staffExecutorFor(activeExecutor)
+      if (fleetNow === 'pi') {
+        const sid = piLatestSessionId(piSessionDirFor(join(stateDir, 'proxy')), proxySession.startedAt)
+        if (sid !== null) {
+          writeAttachMapEntry(stateDir, proxySession.agentId, { executor: 'pi', sessionId: sid, workspacePath: join(stateDir, 'proxy'), capturedAt: new Date().toISOString() })
+          console.log(`[stardeck] 代理舰长会话入账 ${proxySession.agentId} → pi ${sid}`)
+        }
+      }
+      try {
+        await harvestProxyReply(proxySession.agentId)
+      } catch (err) {
+        console.warn(`[stardeck] 代理舰长收割失败（下轮退避重试）：${err instanceof Error ? err.message : String(err)}`)
+      }
+      // 没干成活（未答话还在）→ 罚 2 分钟防重试风暴。
+      if (bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0) proxyRetryAfter = Date.now() + 120_000
+      proxySession = undefined
+    }
+    if (proxySpawning || Date.now() < proxyRetryAfter) return
+    const pendingMsgs = bridgeUnanswered(loadBridgeMessages(stateDir))
+    if (pendingMsgs.length === 0) return
+    // 逻辑常驻（resume 优先）：上轮代理舰长原生会话在 attach-map 且席别=当前
+    // 舰队（opencode/pi 有续跑原语）→ 简报 resume 投递；失败/无答复退避 2 分钟
+    // 后回落全新 spawn 携史兜底（全席保底路径，行为不依赖 resume 成活）。
+    if (!proxyResumeBusy && Date.now() >= proxyResumeRetryAfter) {
+      const messages = loadBridgeMessages(stateDir)
+      const lastProxy = [...messages].reverse().find(m => m.kind === 'agent' && m.agentId !== undefined && m.agentId.startsWith('proxy-'))
+      if (lastProxy !== undefined && lastProxy.agentId !== undefined && lastProxy.sessionId !== undefined) {
+        const entry = readAttachMap(stateDir)[lastProxy.agentId]
+        const fleetNow = staffExecutorFor(activeExecutor)
+        if (entry !== undefined && (entry.executor === 'opencode' || entry.executor === 'pi') && entry.executor === fleetNow) {
+          proxyResumeBusy = true
+          const brief = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
+          void (async () => {
+            try {
+              const out = entry.executor === 'pi'
+                ? await deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, kind: 'prompt' })
+                : await deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, stateDir })
+              if (!out.ok) {
+                console.warn(`[stardeck] 代理舰长续跑投递失败（${out.error ?? '未知'}）——退避后全新回合兜底`)
+                proxyResumeRetryAfter = Date.now() + 120_000
+                return
+              }
+              await (out.settled ?? Promise.resolve(false))
+              const reply = finalStaffReply(stateDir, lastProxy.agentId!)
+              if (reply === null) {
+                console.warn('[stardeck] 代理舰长续跑完成但未取到答复——退避后全新回合兜底')
+                proxyResumeRetryAfter = Date.now() + 120_000
+                return
+              }
+              await harvestProxyReply(lastProxy.agentId!)
+              console.log(`[stardeck] 代理舰长续跑回话入账（${reply.length} 字，resume）`)
+            } catch (err) {
+              console.warn(`[stardeck] 代理舰长续跑异常（退避后全新回合兜底）：${err instanceof Error ? err.message : String(err)}`)
+              proxyResumeRetryAfter = Date.now() + 120_000
+            } finally {
+              proxyResumeBusy = false
+            }
+          })()
+          return
+        }
+      }
+    }
+    proxySpawning = true
+    try {
+      const agentId = `proxy-${Date.now().toString(36)}`
+      const fleetNow = staffExecutorFor(activeExecutor)
+      if (fleetNow !== activeExecutor) console.log(`[stardeck] 代理舰长随舰队：${activeExecutor} 实弹受阻，本轮代理舰长由 ${fleetNow} 代跑`)
+      proxyAgentIds.add(agentId)
+      proxySession = await spawnStaffAgent({
+        brief: proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime }),
+        workspacePath: join(stateDir, 'proxy'),
+        http: base,
+        agentId,
+        model: fleetNow === 'zcode' ? '' : activeModel,
+        executor: fleetNow,
+        executorBin: binFor(fleetNow),
+        stateDir,
+        codexShimBase: config.codexShimBase,
+        role: 'proxy',
+      })
+      console.log(`[stardeck] 代理舰长应征 ${agentId}（${fleetNow} 席，待答 ${pendingMsgs.length} 条，日志 ${proxySession.logPath}）`)
+    } finally {
+      proxySpawning = false
+    }
+  }
+  const proxyTimer = setInterval(() => {
+    void proxyTick().catch(err => console.error('[stardeck] 代理舰长 tick 异常（跳过本轮）:', err instanceof Error ? err.message : err))
+  }, 15_000)
+  proxyTimer.unref()
 
   // ---------- 静态板 UI（public/ + dist/client.js；dev 未构建时给指引） ----------
   const here = fileURLToPath(new URL('.', import.meta.url))

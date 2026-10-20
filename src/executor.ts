@@ -127,7 +127,7 @@ export function detectPiBin(configured: string): string {
 
 /** spawn 一个 CLI 入口：JS 入口经 process.execPath 直跑（免 shell、免 .cmd
  * 垫片、参数零重组）；真实 exe 直接跑；win32 的 .cmd 垫片给教学错误。 */
-function spawnCli(entry: string, argv: string[], opts: { cwd: string; stateDir: string; role: 'executor' | 'staff'; agentId: string; taskId: string; env?: NodeJS.ProcessEnv; onStdoutLine?: (line: string) => void }): ExecutorSession {
+function spawnCli(entry: string, argv: string[], opts: { cwd: string; stateDir: string; role: 'executor' | 'staff' | 'proxy'; agentId: string; taskId: string; env?: NodeJS.ProcessEnv; onStdoutLine?: (line: string) => void }): ExecutorSession {
   if (/\.(js|mjs|cjs)$/.test(entry)) return spawnLogged(process.execPath, [entry, ...argv], opts)
   if (process.platform === 'win32' && /\.cmd$/i.test(entry)) {
     throw new Error(`执行者入口是 npm .cmd 垫片（${entry}）——不能无 shell 裸 spawn（参数会被重组）。请把 STARDECK_EXECUTOR_BIN 指到包内 JS 入口（如 node_modules/@openai/codex/bin/codex.js）或真实 exe。`)
@@ -463,7 +463,7 @@ function spawnLogged(bin: string, argv: string[], opts: { cwd: string; stateDir:
 export async function spawnHeadlessOpencode(args: HeadlessAgentArgs): Promise<ExecutorSession> {
   mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
   writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
-  injectOpencodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
+  if (args.role !== 'proxy') injectOpencodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId }) // D27：代理舰长无工具面，不注 MCP
   const modelArgs = args.model !== '' ? ['--model', args.model] : []
   return spawnLogged(args.executorBin, [
     'run', ...modelArgs, '--auto', '--format', 'json', '--dir', args.workspacePath,
@@ -486,7 +486,7 @@ export async function spawnHeadlessOpencode(args: HeadlessAgentArgs): Promise<Ex
 export async function spawnHeadlessZcode(args: HeadlessAgentArgs): Promise<ExecutorSession> {
   mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
   writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
-  injectZcodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
+  if (args.role !== 'proxy') injectZcodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId }) // D27：代理舰长无工具面
   return spawnCli(args.executorBin, zcodePromptArgs({ prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
@@ -506,7 +506,7 @@ export async function spawnHeadlessZcode(args: HeadlessAgentArgs): Promise<Execu
 export async function spawnHeadlessPi(args: HeadlessAgentArgs): Promise<ExecutorSession> {
   mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
   writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
-  injectPiExtension(args.workspacePath, { http: args.http, agentId: args.agentId }, args.role === 'staff' ? 'staff' : 'executor')
+  if (args.role !== 'proxy') injectPiExtension(args.workspacePath, { http: args.http, agentId: args.agentId }, args.role === 'staff' ? 'staff' : 'executor') // D27：代理舰长无工具面，不注扩展
   return spawnCli(args.executorBin, piPrintArgs({ model: args.model, prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
@@ -523,7 +523,7 @@ export async function spawnHeadlessPi(args: HeadlessAgentArgs): Promise<Executor
 export async function spawnHeadlessClaude(args: HeadlessAgentArgs): Promise<ExecutorSession> {
   mkdirSync(join(args.workspacePath, '.stardeck'), { recursive: true })
   writeFileSync(join(args.workspacePath, '.stardeck', 'brief.md'), args.brief, 'utf8')
-  injectZcodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId })
+  if (args.role !== 'proxy') injectZcodeMcp(args.workspacePath, { http: args.http, agentId: args.agentId }) // D27：代理舰长无工具面
   return spawnCli(args.executorBin, claudePrintArgs({ model: args.model, prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',

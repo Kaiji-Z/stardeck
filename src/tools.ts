@@ -152,8 +152,12 @@ export interface WarToolsDeps {
    * 缺席 → goal 代管诚实降级（不武装/不结算，账本记不了就跳过）。 */
   goals?: () => GoalsFace | undefined
   /** V5-R4 (staff-wake)：结算点唤醒大副（分级推+去抖在引擎侧）。旗关或
-   * 未接线 → 无唤醒（行为等价）。 */
+   *  未接线 → 无唤醒（行为等价）。 */
   wakeStaff?: (taskId: string, kind: 'reported' | 'failed', detail: string) => void
+  /** D27 定夺授权门（B3 扩展，flag-gated）：舰长显式授权（STARDECK_PROXY_VERDICT
+   *  运行态）且 agentId 属本 daemon 在册代理舰长会话时代行定夺放行。缺省/
+   *  返回 false=永拒——授权 OFF 面行为与 0.3.x 字节等价。 */
+  verdictProxyGate?: (agentId: string) => boolean
 }
 
 function requireAgent(exec: WarToolExec): { id: string } {
@@ -984,11 +988,16 @@ export function warTools(deps: WarToolsDeps) {
       // 或 HQ（舰长）会话——「强制人工验收（staff-auto-close 默认 OFF）」不能
       // 只靠提示词维持。打回/作废（非通过语义）同样走身份门。孤儿任务（无所属
       // directive，legacy/种子形态）宽容放行——两道门皆不追溯。
+      // D27 定夺通路两扩：①'captain-board'=板面舰长亲手验收的固定 principal
+      //（独立形态 hqSessionId 不设——B3 落地起板面验收对 staff-owned 任务实为
+      // 被拒的潜伏缺陷，本行修复；本地面板仅绑 127.0.0.1，principal 模型另案）；
+      // ②verdictProxyGate=代理舰长代定夺的 flag-gated 通路（授权 OFF=永拒）。
       const ownerStaff = staffOwnerOf(deps, args.task_id)
       if (ownerStaff !== undefined) {
         const hq = deps.store.get().hqSessionId
-        if (staff.id !== ownerStaff && staff.id !== hq) {
-          throw new Error(`收官是大副侧动词：只有任务 ${args.task_id} 所属命令的大副会话或舰长（HQ）会话可记录判定；当前会话 ${staff.id} 无权。请到对应大副会话操作。`)
+        const proxyAllowed = deps.verdictProxyGate?.(staff.id) === true
+        if (staff.id !== ownerStaff && staff.id !== hq && staff.id !== 'captain-board' && !proxyAllowed) {
+          throw new Error(`收官是大副侧动词：只有任务 ${args.task_id} 所属命令的大副会话、舰长（HQ/板面）会话或获授权的代理舰长可记录判定；当前会话 ${staff.id} 无权。请到对应大副会话操作。`)
         }
         // 通过语义的状态门：零汇报（in_progress 等）不得折 succeeded——「通过」
         // 只能记在待翻阅（reported）的任务上；打回/作废不受此限（随时可终局）。

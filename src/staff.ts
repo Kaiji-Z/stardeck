@@ -17,7 +17,7 @@
  */
 
 import type { Directive, DirectiveEvent, DirectiveGrade } from './directives.ts'
-import { relayPromptFor, staffPersonaText } from './prompts.ts'
+import { relayPromptFor, staffPersonaText, proxyCaptainPersonaText } from './prompts.ts'
 import type { FeatureFlags } from './flags.ts'
 import { readAttachMap, spawnHeadlessOpencode, spawnHeadlessPi, spawnHeadlessZcode, spawnHeadlessClaude, spawnHeadlessDsh, spawnHeadlessCodexStaff, type ExecutorSession } from './executor.ts'
 import { readSessionHistory } from './history.ts'
@@ -283,14 +283,15 @@ export function clarificationBlocksOf(text: string): ClarifyBlock[] {
 
 /** 五项标签(宽容变体):GLM 实弹常把任务书写成 markdown 列表(`- 目标：…`),
  *  且在标签与冒号之间插括号注释(「非目标（起草法补全）：…」)——标签前容忍
- *  列表符、标签后容忍同行修饰,值=冒号后内容(修饰注释保留在值里,「原令未
- *  指明」这类大副标注是任务书的诚实部分)。 */
+ *  列表符、强调包裹(`**目标**：`,glm-5.3 实弹变体)、标签后容忍同行修饰,
+ *  值=冒号后内容(修饰注释保留在值里,「原令未指明」这类大副标注是任务书的
+ *  诚实部分)。 */
 const BRIEF_LABELS: ReadonlyArray<readonly [key: keyof Omit<BriefBlock, 'commandId'>, re: RegExp]> = [
-  ['goal', /^(?:[-*•]\s*)?目标[^:\n]*[:：]/],
-  ['background', /^(?:[-*•]\s*)?背景(?:与约束)?[^:\n]*[:：]/],
-  ['acceptance', /^(?:[-*•]\s*)?验收(?:标准)?[^:\n]*[:：]/],
-  ['nonGoals', /^(?:[-*•]\s*)?非目标[^:\n]*[:：]/],
-  ['deliverables', /^(?:[-*•]\s*)?(?:交付物|交付)[^:\n]*[:：]/],
+  ['goal', /^(?:[-*•]\s*)?(?:\*{1,3}|_{1,3})?目标[^:\n]*[:：]/],
+  ['background', /^(?:[-*•]\s*)?(?:\*{1,3}|_{1,3})?背景(?:与约束)?[^:\n]*[:：]/],
+  ['acceptance', /^(?:[-*•]\s*)?(?:\*{1,3}|_{1,3})?验收(?:标准)?[^:\n]*[:：]/],
+  ['nonGoals', /^(?:[-*•]\s*)?(?:\*{1,3}|_{1,3})?非目标[^:\n]*[:：]/],
+  ['deliverables', /^(?:[-*•]\s*)?(?:\*{1,3}|_{1,3})?(?:交付物|交付)[^:\n]*[:：]/],
 ]
 
 /** 任务书块解析（纯）：五项标签行（值可多行，直至下一标签）。**五项缺一即
@@ -306,11 +307,13 @@ export function briefBlocksOf(text: string): BriefBlock[] {
       const hit = BRIEF_LABELS.find(([, re]) => re.test(trimmed))
       if (hit !== undefined) {
         cur = hit[0]
-        // 值=剥列表符、标签词(含变体)与冒号;括号注释保留(「原令未指明」是诚实标注)。
+        // 值=剥列表符、强调包裹、标签词(含变体)与冒号;括号注释保留(「原令未指明」是诚实标注)。
         const stripped = trimmed
           .replace(/^(?:[-*•]\s*)?/, '')
+          .replace(/^(?:\*{1,3}|_{1,3})/, '')
           .replace(/^(?:目标|背景与约束|背景|验收标准|验收|非目标|交付物|交付)/, '')
-          .replace(/^[:：]\s*/, '')
+          .replace(/^(（[^）]*）)(?:\*{1,3}|_{1,3})?[:：]/, '$1：') // 括号注释+强调同现：归一到旧形（注释保留在值里）
+          .replace(/^(?:\*{1,3}|_{1,3})?[:：]\s*/, '')
           .trim()
         fields[cur] = [stripped]
       } else if (cur !== undefined && trimmed !== '') {
@@ -330,14 +333,14 @@ export function briefBlocksOf(text: string): BriefBlock[] {
 }
 
 /**
- * 舰桥频道工单附页（D26）：舰长在聊天窗发话→大副回话。三件套=未答新话+
- * 近期对话史（工单携史=全席逻辑常驻兜底）+舰队速览（digest 快照，报战况的
- * 数据底料）。措辞与结构属快照门管辖（staff-snapshots）。
+ * 舰桥频道工单附页（D26 建、D27 转正为代理舰长席数据面）：未答新话+近期对话史
+ * （携史=全席逻辑常驻兜底）+舰队速览（digest 快照，报战况的数据底料）。措辞与
+ * 结构属快照门管辖（staff-snapshots / proxy-snapshots）。
  */
 export interface StaffChatOrder {
   /** 舰长未答新话（时间序，含 ts 仅审计——渲染不进提示词）。 */
   pending: ReadonlyArray<{ text: string; ts: string }>
-  /** 近期对话史（bridgeHistoryWindow 产物：you=舰长 / manager=你 / system=战报）。 */
+  /** 近期对话史（bridgeHistoryWindow 产物：you=舰长 / manager=对话者（大副/代理舰长） / system=战报）。 */
   history: ReadonlyArray<{ role: 'you' | 'manager' | 'system'; text: string }>
   /** 舰队速览 JSON 快照（bridgeDigest 产物的 stringify）。 */
   digest: string
@@ -347,11 +350,10 @@ export interface StaffChatOrder {
  * 外聘大副征召令（纯；措辞改动必须过 tests/staff.test.ts 快照门——
  * `WARROOM_UPDATE_SNAPSHOTS=1 node --import tsx --test tests/staff.test.ts`）。
  * 接令工单内嵌 relayPromptFor 正典（分诊纪律+起草法全文随旗面），续办
- * 工单只给增量指引——不改正典措辞。
- * D26：chat 附页在场时头部多一段「舰桥频道·舰长发话」（对话纪律+携史+速览）；
- * chat 缺席（=0.2.x 旧行为）字节不变——旗 OFF 面快照不受波及。
+ * 工单只给增量指引——不改正典措辞。D27：聊天职责移交代理舰长席
+ * （proxyOrderFor）——大副回归纯舰务（0.2.x 形态）。
  */
-export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' | 'http' = 'mcp', chat?: StaffChatOrder): string {
+export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: FeatureFlags = {}, face: 'mcp' | 'pi-extension' | 'http' = 'mcp'): string {
   const surface = face === 'mcp'
     ? '【stardeck MCP 接入面】你是 stardeck 舰的外聘大副——本进程已通过 MCP 桥（server 名 stardeck）直连舰桥，war_* 工具全量可用。大副侧动词：war_triage 报档位、war_plan 呈计划、war_publish 发布任务书（务必携带 commandId，发布后命令卡自动标记已批准）。你没有 war_claim/war_submit——那是外勤执行者的出口；你的产出就是账本上的分诊、计划与发布，不要试图替外勤交证。'
     : face === 'http'
@@ -362,24 +364,8 @@ export function staffOrderFor(items: ReadonlyArray<StaffWorkItem>, flags: Featur
     '',
     surface,
     '',
-    `【本轮工单】${items.length > 0 ? `共 ${items.length} 件，逐件办结（顺序处理，不挑单）：` : '无命令工单——本轮只回舰长的话。'}`,
+    `【本轮工单】共 ${items.length} 件，逐件办结（顺序处理，不挑单）：`,
   ]
-  if (chat !== undefined) {
-    const roleWord = (r: 'you' | 'manager' | 'system'): string => (r === 'you' ? '舰长' : r === 'manager' ? '你' : '战报')
-    const historyLines = chat.history.length > 0
-      ? chat.history.map(h => `${roleWord(h.role)}：${h.text.replaceAll('\n', ' ')}`).join('\n')
-      : '（此前无对话——舰长第一次发话，自我介绍一句再答。）'
-    sections.push([
-      '',
-      `── 舰桥频道（舰长发话）──`,
-      '你是舰上唯一的对话者（经理人）：舰长不进看板，只在这个频道和你说话——下令、问战况、问概念、闲聊都在这里。',
-      '【对话纪律】本轮最终答复必须以自然语言直接回应舰长（结论先行、说人话，几句话讲清）；若本轮工单另有任务书/澄清块，块照常输出，块外必须有给舰长的话。没有命令工单时，答复就是纯对话，不要硬凑结构化块。',
-      `【近期对话】（延续上下文，不要失忆）\n${historyLines}`,
-      `【舰长新话（待答）】\n${chat.pending.map((m, i) => `${i + 1}. ${m.text.replaceAll('\n', ' ')}`).join('\n')}`,
-      `【舰队速览】（系统快照，报战况以此为准——数据不编造）\n${chat.digest}`,
-      '【处理】问战况→按速览讲，点出 pendingDecisions 里等你定夺的事项；要下令→按下方命令工单纪律办（成案走结构化块）；问舰队/星舰概念→直接解释；纯闲聊→自然回应。只有命令工单才动 war_* 工具。',
-    ].join('\n'))
-  }
   let n = 0
   for (const item of items) {
     if (item.kind !== 'intake') continue
@@ -492,8 +478,115 @@ function divider(n: number, label: string): string {
   return `── 工单 ${n}（${label}）──`
 }
 
+// ---------- 代理舰长席（D27）：征召令 + 【命令】/【定夺】块解析 ----------
+
+/** 代理舰长单轮收割的【命令】块上限——防幻觉风暴（超出部分弃收+告警）。 */
+export const PROXY_COMMAND_BLOCKS_CAP = 5
+
+/**
+ * 代理舰长征召令（纯；措辞改动必须过快照门——tests/staff-snapshots/
+ * proxy-order.txt）。无工单概念：一轮=回应舰长新话；数据面复用
+ * {@link StaffChatOrder}（同一承运层）。verdictAuthorized=舰长显式授权
+ * 代定夺（STARDECK_PROXY_VERDICT 旗，daemon 注入）——授权段仅此时在场。
+ */
+export function proxyOrderFor(chat: StaffChatOrder, opts: { verdictAuthorized?: boolean } = {}): string {
+  const roleWord = (r: 'you' | 'manager' | 'system'): string => (r === 'you' ? '舰长' : r === 'manager' ? '你' : '战报')
+  const historyLines = chat.history.length > 0
+    ? chat.history.map(h => `${roleWord(h.role)}：${h.text.replaceAll('\n', ' ')}`).join('\n')
+    : '（此前无对话——舰长第一次发话，自我介绍一句再答。）'
+  const sections: string[] = [
+    proxyCaptainPersonaText(),
+    '',
+    '【产出说明】本进程没有任何工具可用（也不需要）：你的最终答复就是全部产出——答复正文是给舰长的话（系统原文转达），要落命令时在答复末尾附【命令】块（系统收割成命令卡，交大副分诊征召）。',
+    '',
+    '── 舰桥频道（舰长发话）──',
+    '舰长不进看板，只在这个频道和你说话——下令、问战况、问概念、闲聊都在这里。',
+    `【近期对话】（延续上下文，不要失忆）\n${historyLines}`,
+    `【舰长新话（待答）】\n${chat.pending.map((m, i) => `${i + 1}. ${m.text.replaceAll('\n', ' ')}`).join('\n')}`,
+    `【舰队速览】（系统快照，报战况以此为准——数据不编造）\n${chat.digest}`,
+    '【命令块格式】要落命令时，答复末尾按此格式（一令一块，可多块；舰长只是问或聊时不要硬凑）：',
+    '【命令】',
+    '<命令文本：按任务令起草法成形的强目标命令——目标明确、边界清楚、可验收；舰长原话是意图，你要翻译成专业命令，不是照抄>',
+    '【处理】问战况→按速览讲，点出 pendingDecisions 里等舰长定夺的事项；要下令→意图确认清楚后落【命令】块（一次对话可落多条，逐条独立）；问舰队/星舰概念→直接讲解；纯闲聊→自然回应。',
+  ]
+  if (opts.verdictAuthorized === true) {
+    sections.push(
+      '【定夺授权】舰长已显式授权你代行定夺（本轮回执随行）：对速览 pendingDecisions 里 review 态（已交证待验收）的任务，确凿达成时可出【定夺】块收官——必须呈证据与理由；不确定或超范围的一律呈舰长，不代行。',
+      '【定夺块格式】',
+      '【定夺】（<taskId>）通过',
+      '<理由与证据摘要（来自速览/战报的既有点查证）>',
+    )
+  }
+  return sections.join('\n')
+}
+
+/** 代理舰长块骨架：【命令】（无参）或【定夺】（taskId+判定词）头行，正文至下一块头/文末。 */
+interface RawProxyBlock { kind: '命令' | '定夺'; arg?: string; verdict?: '通过' | '打回'; lines: string[] }
+
+function parseProxyBlocks(text: string): RawProxyBlock[] {
+  const out: RawProxyBlock[] = []
+  let cur: RawProxyBlock | undefined
+  for (const raw of text.split(/\r?\n/)) {
+    const command = /^【命令】\s*$/.exec(raw.trim())
+    const verdict = /^【定夺】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*(通过|打回)\s*$/.exec(raw.trim())
+    if (command !== null || verdict !== null) {
+      if (cur !== undefined) out.push(cur)
+      cur = command !== null
+        ? { kind: '命令', lines: [] }
+        : { kind: '定夺', arg: verdict![1], verdict: verdict![2] as '通过' | '打回', lines: [] }
+      continue
+    }
+    if (cur !== undefined && /^【.+】/.test(raw.trim())) {
+      // 其他结构化块（任务书/澄清等）同样终止当前块——代理舰长终答不该有它们，防御性收边。
+      out.push(cur)
+      cur = undefined
+      continue
+    }
+    if (cur !== undefined) cur.lines.push(raw)
+  }
+  if (cur !== undefined) out.push(cur)
+  return out
+}
+
+/**
+ * 代理舰长终答 → 【命令】文本列表（纯，收割核心）。空块/超 2000 字块弃收
+ * （与 POST /commands 同规——命令上限就是通道上限）；至多 {@link
+ * PROXY_COMMAND_BLOCKS_CAP} 条（防幻觉风暴，调用方告警弃收部分）。
+ */
+export function proxyCommandBlocksOf(text: string): { commands: string[]; dropped: number } {
+  const commands: string[] = []
+  let dropped = 0
+  for (const b of parseProxyBlocks(text)) {
+    if (b.kind !== '命令') continue
+    const body = b.lines.join('\n').trim()
+    if (body === '' || body.length > 2000) {
+      dropped += 1
+      continue
+    }
+    if (commands.length >= PROXY_COMMAND_BLOCKS_CAP) {
+      dropped += 1
+      continue
+    }
+    commands.push(body)
+  }
+  return { commands, dropped }
+}
+
+/** 代理舰长【定夺】块：taskId+判定+理由（理由=块正文，可空——审计可见）。 */
+export interface ProxyVerdictBlock { taskId: string; pass: boolean; reason: string }
+
+/** 终答 → 【定夺】块列表（纯）。授权门在调用方（flag+身份）；这里只解析。 */
+export function proxyVerdictBlocksOf(text: string): ProxyVerdictBlock[] {
+  const out: ProxyVerdictBlock[] = []
+  for (const b of parseProxyBlocks(text)) {
+    if (b.kind !== '定夺' || b.arg === undefined) continue
+    out.push({ taskId: b.arg, pass: b.verdict === '通过', reason: b.lines.join('\n').trim() })
+  }
+  return out
+}
+
 export interface StaffSpawnArgs {
-  /** 落地简报正文（staffOrderFor 产物）。 */
+  /** 落地简报正文（staffOrderFor / proxyOrderFor 产物）。 */
   brief: string
   workspacePath: string
   http: string
@@ -505,6 +598,9 @@ export interface StaffSpawnArgs {
   stateDir: string
   /** V19.13 codex 垫片基址（codex 席大副的 GLM 直驱面；余席忽略）。 */
   codexShimBase?: string
+  /** D27 席位（缺省 staff=字节不变）：proxy=代理舰长席（title/日志前缀/无头
+   *  指令换面；spawn 路径不另构——进程框定法全席共用）。 */
+  role?: 'staff' | 'proxy'
 }
 
 /** 大副席别解析（纯）：**双席正典（V19.13）——可选舰队必须大副+外勤双接通**。
@@ -518,22 +614,27 @@ export function staffExecutorFor(fleet: string): 'opencode' | 'pi' | 'zcode' | '
 
 const STAFF_PROMPT = 'Mission: read the file .stardeck/brief.md at the workspace root and execute it now. You are the first mate (大副) of the stardeck fleet. The stardeck tools (war_*) are already connected. Process every work item in the brief to its terminal state (published / plan pending captain approval / abandoned with reason), then finish.'
 
-/** 框定 spawn 外聘大副（进程即生命——退出由 daemon staffTick 回收语义接管）。
+const PROXY_PROMPT = 'Mission: read the file .stardeck/brief.md at the workspace root and execute it now. You are the acting captain (代理舰长) of the stardeck fleet — the captain\'s proxy in the bridge channel. You have no tools and need none: your final answer is the deliverable (a direct reply to the captain, plus optional 【命令】 blocks; 【定夺】 blocks only if the brief says verdict authority is granted). Then finish.'
+
+/** 框定 spawn 外聘席位（进程即生命——退出由 daemon tick 回收语义接管）。
  * 大副随舰队：zcode=--prompt --json+.mcp.json 桥；pi=--approve -p+大副侧扩展
  * （禁出口协议三件）；opencode=--auto --format json+MCP 注入（codex 回退至此）。
- * attachTaskId=agentId：行钩/退场扫描捕获大副原生会话号入 attach-map（键=
- * staff-<id>）——板上「任务会话」钮独立形态跳转的数据源。 */
+ * attachTaskId=agentId：行钩/退场扫描捕获原生会话号入 attach-map（键=
+ * staff-<id> / proxy-<id>）——板上「任务会话」钮独立形态跳转的数据源。
+ * D27：role='proxy' 换 title/日志前缀/无头指令（代理舰长无工具面——pi 席
+ * 不注扩展），spawn 路径全席共用不另构。 */
 export async function spawnStaffAgent(args: StaffSpawnArgs): Promise<ExecutorSession> {
+  const proxy = args.role === 'proxy'
   const common = {
     workspacePath: args.workspacePath,
     brief: args.brief,
-    title: `stardeck:staff:${args.agentId}`,
+    title: `${proxy ? 'stardeck:proxy:' : 'stardeck:staff:'}${args.agentId}`,
     http: args.http,
     agentId: args.agentId,
     stateDir: args.stateDir,
-    role: 'staff' as const,
+    role: (proxy ? 'proxy' : 'staff') as 'staff' | 'executor' | 'proxy',
     attachTaskId: args.agentId,
-    prompt: STAFF_PROMPT,
+    prompt: proxy ? PROXY_PROMPT : STAFF_PROMPT,
   }
   if (args.executor === 'zcode') {
     // zcode 模型串不透传（引擎吃自身 config 的 provider 条目）。

@@ -60,6 +60,13 @@ if (process.env.STARDECK_VERIFY_MATRIX === '1') {
     { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, WARROOM_FEATURES: offFlags } })
   if (r.status !== 0) fail(`旗面双跑矩阵：全旗 OFF 面未全绿（off 面：${offFlags}）`)
   console.log(`旗面双跑矩阵 PASS（off 面：${offFlags}）`)
+  // D27 舰桥/代理舰长席旗面：STARDECK_BRIDGE=0 + STARDECK_PROXY=0 + 授权=1 的
+  // 混合旧形态面也须全绿（旗 OFF 面字节等价红线——套件对环境旗不敏感即过；
+  // 哪天有测试开始偷读环境旗，此面立即产信号）。
+  const bridgeFace = spawnSync('node', ['--import', 'tsx', '--test', ...readdirSync(join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => join('tests', f))],
+    { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, STARDECK_BRIDGE: '0', STARDECK_PROXY: '0', STARDECK_PROXY_VERDICT: '1' } })
+  if (bridgeFace.status !== 0) fail('旗面双跑矩阵：舰桥/代理舰长 OFF 面（STARDECK_BRIDGE=0 STARDECK_PROXY=0 STARDECK_PROXY_VERDICT=1）未全绿')
+  console.log('旗面双跑矩阵 PASS（舰桥/代理 OFF 面：STARDECK_BRIDGE=0 STARDECK_PROXY=0 STARDECK_PROXY_VERDICT=1）')
 }
 
 // 负针脚：零宿主引用（独立形态完整性铁证——import 层不许有 dsh 痕迹）。

@@ -299,6 +299,8 @@ export interface WarCopy {
     pipsTitle: (generations: number) => string
     /** 代际罗马数字溢出（>Ⅻ）回退词。 */
     genOverflow: (n: number) => string
+    /** D27 下令来源徽标（issuedBy=proxy-… 时挂「代理舰长令」）。 */
+    proxyBadge: string
     pipStatus: Record<'run' | 'wait' | 'done' | 'fail' | 'idle', string>
     panelAria: (generations: number) => string
   }
@@ -612,6 +614,13 @@ export interface WarCopy {
     viewSplit: string
     viewBoard: string
     settings: string
+    /** D27 代理舰长席：降级态（proxy 旗 OFF——输入停用）与定夺授权钮。 */
+    proxyAway: string
+    authSection: string
+    authGrant: string
+    authRevoke: string
+    authOn: string
+    authOff: string
   }
 }
 
@@ -836,6 +845,7 @@ export const warCopy: WarCopy = {
     noQuickSettled: '已收官——全线终局',
     pipsTitle: n => `这条战线共 ${n} 代——每个圆点是一代，颜色即该代当前状态`,
     genOverflow: n => `第 ${n} 代`,
+    proxyBadge: '代理舰长令',
     pipStatus: { run: '推进中', wait: '等你发落', done: '善终', fail: '败退', idle: '未战而终' },
     panelAria: n => `战线前史共 ${n} 代（最新一代就在坞上）：上/下键选代，回车打开详情`,
   },
@@ -1179,18 +1189,18 @@ export const warCopy: WarCopy = {
   },
   bridge: {
     title: '舰桥频道',
-    motto: '和你的大副说话：下令、问战况、问概念——舰队的事他兜着。',
-    welcome: '这里是舰桥频道。想做什么直接说，大副会驱动舰队并在这里回话；机械战报也会推到这里。',
+    motto: '和你的代理舰长说话：下令、问战况、问概念——舰队的事他兜着。',
+    welcome: '这里是舰桥频道。想做什么直接说，代理舰长会把话成形为命令卡并驱动舰队，回话也在这里；机械战报照推。',
     roleYou: '舰长',
-    roleManager: '大副',
+    roleManager: '代理舰长',
     roleSystem: '战报',
-    inputPh: '跟大副说点什么……（Ctrl+Enter 发送）',
+    inputPh: '跟代理舰长说点什么……（Ctrl+Enter 发送）',
     send: '发送',
     sending: '发送中…',
-    sentNote: '已入账——大副下一轮回话（约 15 秒起档）。',
+    sentNote: '已入账——代理舰长下一轮回话（约 15 秒起档）。',
     loadFail: '频道消息读取失败（daemon 不在或舰桥未开）。',
     dockTitle: '等你定夺',
-    dockEmpty: '没有等你定夺的事——舰队自转中，有事大副会来请示。',
+    dockEmpty: '没有等你定夺的事——舰队自转中，有事代理舰长会来请示。',
     cardClarify: '等你答复',
     cardSign: '等你签发',
     cardReview: '等你验收',
@@ -1204,6 +1214,12 @@ export const warCopy: WarCopy = {
     viewSplit: '分屏',
     viewBoard: '看板',
     settings: '设置',
+    proxyAway: '代理舰长未在役（STARDECK_PROXY=0）——战报与决策卡照常，输入停用。',
+    authSection: '定夺授权',
+    authGrant: '授权代定夺',
+    authRevoke: '收回授权',
+    authOn: '已授权：代理舰长可代行验收定夺（须呈证据与理由；重启回落未授权）。',
+    authOff: '未授权：一切定夺呈你亲手。',
   },
 }
 
@@ -1431,6 +1447,7 @@ export const plainCopy: WarCopy = {
     noQuickSettled: '已完成——全部结束',
     pipsTitle: n => `这条跟进线共 ${n} 步——每个圆点是一步，颜色是每步状态`,
     genOverflow: n => `第 ${n} 轮`,
+    proxyBadge: '代理管家单',
     pipStatus: { run: '进行中', wait: '待你处理', done: '已完成', fail: '失败', idle: '已取消' },
     panelAria: n => `此前跟进共 ${n} 步（最新一步就在下方）：上/下键选择，回车查看`,
   },
@@ -1768,10 +1785,10 @@ export const plainCopy: WarCopy = {
   },
   bridge: {
     title: '对话频道',
-    motto: '和你的规划 Agent 说话：下单、问进度、问用法——项目的事他兜着。',
-    welcome: '这里是对话频道。想做什么直接说，规划 Agent 会调度执行 Agent 并在这里回话；系统通知也会推到这里。',
+    motto: '和你的代理管家说话：下单、问进度、问用法——项目的事他兜着。',
+    welcome: '这里是对话频道。想做什么直接说，代理管家会把话整理成工作单并调度执行 Agent，回话也在这里；系统通知照推。',
     roleYou: '我',
-    roleManager: '规划 Agent',
+    roleManager: '代理管家',
     roleSystem: '通知',
     inputPh: '说点什么……（Ctrl+Enter 发送）',
     send: '发送',
@@ -1779,7 +1796,7 @@ export const plainCopy: WarCopy = {
     sentNote: '已入账——下一轮回话（约 15 秒起档）。',
     loadFail: '频道消息读取失败（daemon 不在或频道未开）。',
     dockTitle: '等你定夺',
-    dockEmpty: '没有等你定夺的事——一切自动运转中，有事他会来请示。',
+    dockEmpty: '没有等你定夺的事——一切自动运转中，有事代理管家会来请示。',
     cardClarify: '等你答复',
     cardSign: '等你签发',
     cardReview: '等你验收',
@@ -1793,6 +1810,12 @@ export const plainCopy: WarCopy = {
     viewSplit: '分屏',
     viewBoard: '看板',
     settings: '设置',
+    proxyAway: '代理管家未在役（STARDECK_PROXY=0）——通知与待办卡照常，输入停用。',
+    authSection: '定夺授权',
+    authGrant: '授权代定夺',
+    authRevoke: '收回授权',
+    authOn: '已授权：代理管家可代行验收（须呈证据与理由；重启回落未授权）。',
+    authOff: '未授权：一切定夺呈你亲手。',
   },
 }
 
