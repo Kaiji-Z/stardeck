@@ -23,15 +23,15 @@ deck 一词双关：星舰飞行甲板（agent 在这里起降调度）+ deck of
 
 stardeck 是一个**本地优先**的多 agent 编排器：它不替 agent 干活，而是管住「下令 → 成案 → 执行 → 交证 → 验收」的完整环流。任意 CLI coding agent（opencode / pi / zcode / Claude Code / …）经注入的 MCP 桥或扩展领令出勤；**账本、令牌、证据核验由系统机械核对，不靠 agent 自报**。
 
-- **一个聊天窗（舰桥频道，默认脸面）**：你只和一位**代理舰长**对话——说目标他拟令成卡、问战况他实时报、不懂概念他现场讲；任务书签发、验收请示以决策卡推到聊天里一键定夺（也可显式授权他代行验收，默认不开）。不需要选会话、选项目、建工作区。
+- **一个聊天窗（舰桥频道，默认脸面）**：你只和一位**代理舰长**（百事通）对话——说目标他拟令成卡、问战况他实时报（复杂态势直接配一页**图景**：零脚本沙箱图页，数据逐条对账账本，编造的进不来）、问概念他现场讲、撤令/重派/停定时/换席口头说他就代落块执行（全审计）；任务书签发、验收请示以决策卡推到聊天里一键定夺（也可显式授权他代行验收，默认不开）。不需要选会话、选项目、建工作区。
 - **看板可展开旁观**：分屏看着看板被聊天驱动，或进板亲自下令——3D 星域、三列作战看板原样保留。
 - **会话外归系统，会话内归 agent**：工作区物化、征召、巡检、验收定夺归 stardeck；读写文件、跑命令由 agent 自带工具完成——边界清晰，互不越权。
 - **出口协议不可裁剪**：`war_claim` 令牌制领取、`war_submit` 证据核验（checks 全过 + 测试退出码 0 + 无越界文件，即 KillCredit）、`war_close_task` 人工验收收官——验收与签发的定夺永远归你，经理人不代签。
 
 ## 核心特性
 
-**💬 舰桥频道（v0.3.0 对话范式，默认视图；v0.4.0 对话者=代理舰长）**
-打开就是聊天窗：说目标、问战况、问概念、闲聊都在这里。**代理舰长**（v0.4.0）是你在频道里的代理人——把你的自然语言拟成【命令】块，系统收割成命令卡交大副分诊（说了就成单）；机械战报（交证待验收/澄清挂起/失败重试/收官/定时派发）自动推进频道；请示出决策卡——澄清选择题药丸点选即答（`1A;2B`）、任务书五项卡可逐项修改后签发、验收卡带证据摘要一键定夺。不习惯对话模式？右上角一键切回看板（`STARDECK_BRIDGE=0` 可永久回退老形态；`STARDECK_PROXY=0` 只关对话者保留战报与决策卡）。
+**💬 舰桥频道（v0.3.0 对话范式，默认视图；v0.4.0 对话者=代理舰长；v0.5.0 百事通：全知+图景+全能管理）**
+打开就是聊天窗：说目标、问战况、问概念、闲聊都在这里。**代理舰长**（v0.4.0）是你在频道里的代理人——把你的自然语言拟成【命令】块，系统收割成命令卡交大副分诊（说了就成单）；机械战报（交证待验收/澄清挂起/失败重试/收官/定时派发/图景对账失败）自动推进频道；v0.5.0 起他百事通化——征召令自带近期账本切片+只读查证通道（GET /board、/bridge/digest、/ledger），讲复杂态势可附【图景】块（系统确定性渲染成零脚本单文件图页，编号逐一对账、对不上整页拒收），撤令/重派/停定时令/换席四个管理块口头直落（系统代执行+战报回报）；请示出决策卡——澄清选择题药丸点选即答（`1A;2B`）、任务书五项卡可逐项修改后签发、验收卡带证据摘要一键定夺。不习惯对话模式？右上角一键切回看板（`STARDECK_BRIDGE=0` 可永久回退老形态；`STARDECK_PROXY=0` 只关对话者保留战报与决策卡）。
 
 **🌊 3D 星域（看板视图）**
 每条战线是一颗行星：执行中=推进行星轨迹，已收官=占领态，战线环分段=任务数。暗色模式一键切换，悬停高亮关联卡族，滚轮缩放、中键旋转。
@@ -204,8 +204,8 @@ stardeck is a **local-first** multi-agent orchestrator: it doesn't do the agents
 **🌊 3D starfield (default view)**
 Every campaign is a planet: executing campaigns advance along their orbits, finished ones turn captured, campaign rings segment per task. One-click dark mode, hover to highlight related card families, wheel zoom, middle-drag rotate.
 
-**💬 Bridge channel (v0.3.0 chat-first default; v0.4.0 the Acting Captain)**
-Open to a single chat window: say goals, ask status, ask anything. The **Acting Captain** (v0.4.0) is your proxy in the channel — natural language in, 【command】 blocks out, harvested into command cards for the first mate (say it and it becomes an order). Decision cards (clarify pills / five-field brief sign-off / acceptance with evidence) land in the chat for one-tap verdicts; you may explicitly delegate acceptance verdicts to the Acting Captain (off by default). Mechanical notices keep the channel alive without burning tokens.
+**💬 Bridge channel (v0.3.0 chat-first default; v0.4.0 the Acting Captain; v0.5.0 the know-it-all)**
+Open to a single chat window: say goals, ask status, ask anything. The **Acting Captain** (v0.4.0) is your proxy in the channel — natural language in, 【command】 blocks out, harvested into command cards for the first mate (say it and it becomes an order). v0.5.0 makes him a know-it-all: every order ships with a recent ledger slice plus a read-only query channel (GET /board, /bridge/digest, /ledger); complex situations get a 【scene】 block rendered by a deterministic zero-script engine (every id reconciled against the ledger — fabricated scenes are rejected wholesale); and verbal management intents (cancel / retry / halt schedule / switch seat) land as management blocks executed by the system with full audit. Decision cards (clarify pills / five-field brief sign-off / acceptance with evidence) land in the chat for one-tap verdicts; you may explicitly delegate acceptance verdicts to the Acting Captain (off by default). Mechanical notices keep the channel alive without burning tokens.
 
 **🪐 Three-column operations board**
 Tasks column (execution status) · Mission logs column (evidence & closure) · bottom dispatch dock (command lifecycle). The board is a read projection: you decide on it (approve plans / accept / withdraw orders), agents work in workspaces.

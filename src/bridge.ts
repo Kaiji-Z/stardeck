@@ -23,13 +23,18 @@ import { readJsonlCached } from './fold-cache.ts'
 import { loadDirectives, readDirectiveEvents } from './directives.ts'
 import { listCampaignIds, loadCampaign } from './events.ts'
 
-/** 机械战报五触发（D26：聊天窗保持「活着」——不跑模型，模板+点穿链接）。 */
-export type BridgeNoticeKind = 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled'
+/** 机械战报六种（D26 五触发 + D28 scene：图景渲染未过对账的诚实告知）。 */
+export type BridgeNoticeKind = 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene'
+
+/** 图景附件（D28 图景面）：代理舰长【图景】块经确定性渲染器产出的 HTML 图页
+ * 引用——id 即 GET /warroom/api/artifact/<id> 的路径段；正文 text 仍是给舰长的
+ * 话，图页是附页（沙箱 iframe，零脚本）。 */
+export interface BridgeArtifact { id: string; title: string }
 
 /** The bridge log's entry union (one JSON line each). */
 export type BridgeEvent =
   | { type: 'bridge_user_message'; ts: string; text: string }
-  | { type: 'bridge_agent_message'; ts: string; text: string; /** 本轮答复涉及的命令号（点穿用）。 */ commandRefs?: string[]; /** 大副 agentId（staff-<ts36>，逻辑常驻键）。 */ agentId?: string; /** 原生会话号（attach-map 捕获；resume 续跑依据）。 */ sessionId?: string }
+  | { type: 'bridge_agent_message'; ts: string; text: string; /** 本轮答复涉及的命令号（点穿用）。 */ commandRefs?: string[]; /** 大副 agentId（staff-<ts36>，逻辑常驻键）。 */ agentId?: string; /** 原生会话号（attach-map 捕获；resume 续跑依据）。 */ sessionId?: string; /** 图景附件（D28：渲染器落盘成功时随话轮入账）。 */ artifact?: BridgeArtifact }
   | { type: 'bridge_system_notice'; ts: string; noticeKind: BridgeNoticeKind; /** 源事件指纹（幂等键：同键不再入账）。 */ dedupKey: string; text: string; /** 点穿引用（commandId/taskId → 板聚焦页/trace）。 */ refs?: Record<string, string> }
 
 /** Fold 后的一条频道消息（渲染面形状）。 */
@@ -44,6 +49,8 @@ export interface BridgeMessage {
   /** 机械战报的幂等键（fold 透传——syncBridgeNotices 去重读消息流即可）。 */
   readonly dedupKey?: string
   readonly refs?: Readonly<Record<string, string>>
+  /** 图景附件（D28：agent 话轮可带——聊天窗渲染沙箱 iframe）。 */
+  readonly artifact?: BridgeArtifact
 }
 
 function bridgeFile(stateDir: string): string {
@@ -70,7 +77,7 @@ export function foldBridge(events: ReadonlyArray<BridgeEvent>): BridgeMessage[] 
   const out: BridgeMessage[] = []
   for (const e of events) {
     if (e.type === 'bridge_user_message') out.push({ kind: 'user', ts: e.ts, text: e.text })
-    else if (e.type === 'bridge_agent_message') out.push({ kind: 'agent', ts: e.ts, text: e.text, ...(e.commandRefs !== undefined ? { commandRefs: e.commandRefs } : {}), ...(e.agentId !== undefined ? { agentId: e.agentId } : {}), ...(e.sessionId !== undefined ? { sessionId: e.sessionId } : {}) })
+    else if (e.type === 'bridge_agent_message') out.push({ kind: 'agent', ts: e.ts, text: e.text, ...(e.commandRefs !== undefined ? { commandRefs: e.commandRefs } : {}), ...(e.agentId !== undefined ? { agentId: e.agentId } : {}), ...(e.sessionId !== undefined ? { sessionId: e.sessionId } : {}), ...(e.artifact !== undefined ? { artifact: e.artifact } : {}) })
     else if (e.type === 'bridge_system_notice') out.push({ kind: 'system', ts: e.ts, text: e.text, noticeKind: e.noticeKind, dedupKey: e.dedupKey, ...(e.refs !== undefined ? { refs: e.refs } : {}) })
   }
   return out

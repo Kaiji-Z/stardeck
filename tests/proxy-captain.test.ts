@@ -11,10 +11,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, PROXY_COMMAND_BLOCKS_CAP } from '../src/staff.ts'
+import { proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, proxySceneBlocksOf, proxyManagementBlocksOf, PROXY_COMMAND_BLOCKS_CAP, PROXY_SCENE_DRAFT_CAP, PROXY_MANAGEMENT_BLOCKS_CAP } from '../src/staff.ts'
 import { appendDirectiveEvent, loadDirectives } from '../src/directives.ts'
+import { appendBridgeEvent, foldBridge, loadBridgeMessages } from '../src/bridge.ts'
 import { loadConfig } from '../src/config.ts'
-import { registerDashboard, type RouteRegistry } from '../src/dashboard.ts'
+import { registerDashboard, ledgerSlice, type RouteRegistry } from '../src/dashboard.ts'
 
 const chat = {
   pending: [{ text: '现在舰队什么情况？', ts: '2026-10-20T10:00:00.000Z' }],
@@ -24,6 +25,7 @@ const chat = {
     { role: 'system' as const, text: '战报：t-1 已交证待验收' },
   ],
   digest: JSON.stringify({ pendingDecisions: [], commands: [], tasks: [], stats: { commands: 0, tasks: 0, inProgress: 0, reported: 0, failed: 0 } }),
+  ledger: '[]',
 }
 
 test('proxyOrderFor：无授权面——代理舰长条令+携史+速览+【命令】块正典在场，无【定夺】', () => {
@@ -219,5 +221,123 @@ test('双旗配置面：STARDECK_PROXY 默认开、=0 关；STARDECK_PROXY_VERDI
     delete process.env.STARDECK_PROXY
     delete process.env.STARDECK_PROXY_VERDICT
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+// ---------- D28 百事通：图景/管理块解析 + 知识面（ledger/只读通道） ----------
+
+test('D28 order 教学：舰队日志/只读通道/图景格式/管理块格式在场；只读只教 GET、不教任何写通道', () => {
+  const order = proxyOrderFor({ ...chat, ledger: '[{"kind":"directive","type":"directive_created","ts":"t1","id":"cmd-1","summary":"测试令"}]' })
+  assert.ok(order.includes('【舰队日志】'), '账本切片段在场')
+  assert.ok(order.includes('directive_created'), '切片内容入提示词')
+  assert.ok(order.includes('【只读通道】'), '只读通道教学在场')
+  assert.ok(order.includes('/warroom/api/board') && order.includes('/warroom/api/ledger'), '只读端点教学在场')
+  assert.ok(order.includes('只许 GET'), '只许 GET 红线句在场')
+  assert.ok(!order.includes('/warroom/api/tools/call'), '不教工具写通道'
+  )
+  assert.ok(!order.includes('/warroom/api/commands\"'), '不教命令写端点')
+  assert.ok(order.includes('【图景块格式】') && order.includes('```timeline') && order.includes('```cards'), '图景组件教学在场')
+  assert.ok(order.includes('对不上整页拒收'), '对账纪律句在场')
+  assert.ok(order.includes('【管理块格式】') && order.includes('【撤令】') && order.includes('【重派】') && order.includes('【定时令】') && order.includes('【绑席】'), '四管理块教学在场')
+  assert.ok(!order.includes('war_claim') && !order.includes('war_submit') && !order.includes('war_publish') && !order.includes('war_close_task'), '出口/舰务动词仍然全禁')
+})
+
+test('D28 proxySceneBlocksOf：单轮一份、空/超 6000 字弃收计 dropped', () => {
+  const good = '# 标题\n```stats\n键: 值\n```'
+  const two = `【图景】\n${good}\n\n【图景】\n${good}`
+  const out = proxySceneBlocksOf(two)
+  assert.equal(out.scene, good, '首份收下')
+  assert.equal(out.dropped, 1, '第二份弃收')
+  assert.equal(proxySceneBlocksOf('【图景】\n\n【命令】\n正文').scene, null, '空块弃收（body 判空）')
+  assert.equal(proxySceneBlocksOf(`【图景】\n${'x'.repeat(PROXY_SCENE_DRAFT_CAP + 1)}`).dropped, 1, '超 6000 字弃收')
+})
+
+test('D28 proxyManagementBlocksOf：四类块解析+理由上限+单轮 3 块上限+畸形头忽略', () => {
+  const text = [
+    '正文话。',
+    '【撤令】（cmd-20261020-abcd）',
+    '方向变了，不做了。',
+    '【重派】（20261020-1234）',
+    '上次超时，再试一次。',
+    '【定时令】（cmd-20261020-efff）停',
+    '【撤令】（cmd-bad',
+    '这不构成块头',
+  ].join('\n')
+  const { blocks, dropped } = proxyManagementBlocksOf(text)
+  assert.equal(blocks.length, 3)
+  assert.equal(blocks[0]!.kind, '撤令')
+  assert.equal(blocks[0]!.id, 'cmd-20261020-abcd')
+  assert.equal(blocks[0]!.reason, '方向变了，不做了。')
+  assert.equal(blocks[1]!.kind, '重派')
+  assert.equal(blocks[2]!.kind, '定时令停')
+  assert.equal(blocks[2]!.reason, '', '停用块无理由行=空理由（审计可见）')
+  assert.equal(dropped, 0)
+  // 绑席块：理由位=模型串（可空=沿用当前）。
+  const bind = proxyManagementBlocksOf('【绑席】（pi）\nzai/glm-5.2')
+  assert.equal(bind.blocks[0]!.kind, '绑席')
+  assert.equal(bind.blocks[0]!.id, 'pi')
+  assert.equal(bind.blocks[0]!.reason, 'zai/glm-5.2')
+  const bindBare = proxyManagementBlocksOf('【绑席】（opencode）')
+  assert.equal(bindBare.blocks[0]!.reason, '', '省略模型=空串（daemon 补当前模型）')
+  // 理由超 300 字弃收。
+  const longReason = ['【撤令】（cmd-x1）', 'y'.repeat(301)].join('\n')
+  assert.equal(proxyManagementBlocksOf(longReason).dropped, 1)
+  // 单轮 3 块上限（第 4 块起弃收）。
+  const many = ['【撤令】（c1）', 'r', '【撤令】（c2）', 'r', '【撤令】（c3）', 'r', '【撤令】（c4）', 'r'].join('\n')
+  const capped = proxyManagementBlocksOf(many)
+  assert.equal(capped.blocks.length, PROXY_MANAGEMENT_BLOCKS_CAP)
+  assert.equal(capped.dropped, 1)
+})
+
+test('D28 图景/管理块头强调包裹容忍（glm-5.3 粗体风格）', () => {
+  const bold = '**【图景】**\n# t\n```stats\n键: 值\n```\n\n**【撤令】**（cmd-bold）\n理由'
+  assert.equal(proxySceneBlocksOf(bold).scene, '# t\n```stats\n键: 值\n```')
+  const mgmt = proxyManagementBlocksOf(bold)
+  assert.equal(mgmt.blocks.length, 1)
+  assert.equal(mgmt.blocks[0]!.id, 'cmd-bold')
+})
+
+function getReq(url: string): { method: string; url: string; on(event: string, cb: (chunk?: unknown) => void): void } {
+  return { method: 'GET', url, on: (_e, _cb) => {} }
+}
+
+test('D28 GET /ledger：scope 过滤、limit 钳制、坏 scope 400；ledgerSlice 两尾形状', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'stardeck-ledger-'))
+  try {
+    appendDirectiveEvent(dir, { type: 'directive_created', ts: '2026-10-20T01:00:00.000Z', directiveId: 'cmd-l1', text: '第一条令' })
+    appendDirectiveEvent(dir, { type: 'directive_created', ts: '2026-10-20T02:00:00.000Z', directiveId: 'cmd-l2', text: '第二条令' })
+    const handler = makeHandler(dir)
+    const all = await call(handler, getReq('/warroom/api/ledger'))
+    assert.equal(all.body.ok, true)
+    assert.ok(Array.isArray(all.body.entries) && all.body.entries.length === 2)
+    assert.equal(all.body.entries[0]!.id, 'cmd-l2', '时间降序（最新在前）')
+    const scoped = await call(handler, getReq('/warroom/api/ledger?scope=task'))
+    assert.equal(scoped.body.entries.length, 0, 'task 面无事件')
+    const clamped = await call(handler, getReq('/warroom/api/ledger?limit=99999'))
+    assert.equal(clamped.body.limit, 200, 'limit 封顶 200')
+    const bad = await call(handler, getReq('/warroom/api/ledger?scope=nonsense'))
+    assert.equal(bad.code, 400)
+    // ledgerSlice（提示词切片）：时间升序、摘要 clip 生效。
+    const slice = ledgerSlice(dir)
+    assert.equal(slice.length, 2)
+    assert.equal(slice[0]!.id, 'cmd-l1', '升序（读史顺序）')
+    assert.ok(slice[0]!.summary.includes('第一条令'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('D28 bridge artifact 账面贯通：agent 话轮带 artifact → fold 读回；scene 战报 noticeKind 生效', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'stardeck-artifact-'))
+  try {
+    appendBridgeEvent(dir, { type: 'bridge_agent_message', ts: '2026-10-20T03:00:00.000Z', text: '配图说明', agentId: 'proxy-x', artifact: { id: 'scene-abc', title: '舰队晨报' } })
+    appendBridgeEvent(dir, { type: 'bridge_system_notice', ts: '2026-10-20T03:01:00.000Z', noticeKind: 'scene', dedupKey: 'scene:proxy-x:t', text: '图景渲染未过对账：cards 编号不在册' })
+    const msgs = loadBridgeMessages(dir)
+    assert.equal(msgs[0]!.artifact?.id, 'scene-abc', 'artifact 随话轮入账可读回')
+    assert.equal(msgs[1]!.noticeKind, 'scene', 'scene 战报第六种在场')
+    const legacy = foldBridge([{ type: 'bridge_agent_message', ts: 't', text: '旧消息' }])
+    assert.equal(legacy[0]!.artifact, undefined, '旧消息零迁移（条件 spread）')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

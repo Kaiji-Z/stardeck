@@ -1131,6 +1131,10 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bref{font-size:calc(11px*var(--war-fs));padding:1px 8px}
 .war-bnotice-reported{border-color:var(--war-run-border,var(--war-border))}
 .war-bnotice-retry{border-color:var(--war-fail,var(--war-border))}
+.war-bmsg-scenewrap{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
+.war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-well-bg)}
 .war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:44%;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
 .war-bridge-dock[data-bridge-dock='empty']{max-height:none}
 .war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em}

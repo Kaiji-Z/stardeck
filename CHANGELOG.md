@@ -23,6 +23,17 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
+### Added（D28 百事通席——代理舰长全知+图景+全能管理，三层模型正名）
+- **知识面（全知）**：代理舰长征召令携带账本切片（ledgerSlice：directive 尾 30+task 尾 30，每条摘要 clip 100）+ 只读通道教学（STARDECK_HTTP 下 GET /board、/bridge/digest、/ledger——只许 GET，一切写只能走块）；新端点 `GET /warroom/api/ledger?limit&scope`（limit≤200 钳制、scope=directive|task|both）。
+- **图景面（直白）**：【图景】块（每轮≤1 份、草稿≤6000 字；标题+摘要+timeline/stats/cards 三组件围栏）→ 新 `src/scene.ts` 确定性渲染器（answer-me-with-html 三权分立：模型只写草稿，布局/配色/转义全由代码算；零 `<script>` 单文件+内联 CSS）→ **cards 编号逐一对账账本快照，未知即整页拒收**（数字可溯源，幻觉图景进不了聊天）→ 落盘 `stateDir/artifacts/` + `bridge_agent_message.artifact` 字段（向后兼容条件 spread）→ 出线端点 `GET /warroom/api/artifact/<id>`（CSP default-src 'none'）→ 聊天窗**沙箱 iframe（sandbox=''）+新窗链接**（防「战报诱导→图景带脚本→打 API」注入链，服务端 CSP+客户端沙箱双保险）；渲染失败=第六种机械战报 `scene`（诚实告知原因，下轮可重出）。
+- **管理面（全能，全部直落不设旗——舰长拍板）**：【撤令】（cmdId+理由）→war_abandon_command；【重派】（taskId+理由）→RetryCard 同构两步（续接令建卡+作废收官）；【定时令】（cmdId）停→撤 draft（状态闸天然闸）；【绑席】（席位+可选模型串）→bindableSeatIds 校验→切席落盘+战报确认；每轮合计≤3 块、单块理由≤300 字（parse 层拒收+告警）。B3 门增 **managementProxyGate 支线**：在册代理会话的**作废语义**收官放行（重派后半步），**通过语义仍走授权旗**——管理与定夺两权分立。
+- 代理舰长 persona/征召令升格百事通（职责四条：听懂/拟令/报战况（可配图景）/代行管理；纪律补「只读通道只许看」）；监督层 +3 例（图景数据溯源正/口头撤令正/编造数据图景负例一票否决，共 16 例）；live 门代理相位 6→9 断言（图景全链 200+CSP+零 script/撤令 directive_cancelled 入账/绑席战报往返）。
+
+### Changed
+- POST /fleet 核心提取为 applyFleetBinding（与【绑席】块共用，空模型=覆写旧约不变）；块头解析强调包裹容忍（glm-5.3 粗体风格，图景/管理/定夺/命令全块型）。
+
 ## [0.4.0] - 2026-10-20
 
 ### Added（D27 代理舰长席——对话者与舰务分离 + 外部调用面正名）

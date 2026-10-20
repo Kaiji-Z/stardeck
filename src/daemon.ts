@@ -7,7 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createWarStore } from './state.ts'
@@ -23,12 +23,13 @@ import { conscriptPlan } from './rules.ts'
 import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectClaudeBin, detectGeminiBin, detectDshBin, ADAPTERS, ExecutorRegistry, jumpArgs, buildTerminalCommand, readAttachMap, writeAttachMapEntry, piLatestSessionId, piSessionDirFor, seatAgentPrefix, type ExecutorSession, type AttachEntry } from './executor.ts'
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
-import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, type StaffWorkItem } from './staff.ts'
-import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices } from './bridge.ts'
-import { bridgeDigest } from './dashboard.ts'
+import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, proxySceneBlocksOf, proxyManagementBlocksOf, type StaffWorkItem } from './staff.ts'
+import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, type BridgeArtifact } from './bridge.ts'
+import { bridgeDigest, ledgerSlice } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
+import { renderScene, type SceneContext } from './scene.ts'
 import type { CampaignState } from './types.ts'
 
 export interface DaemonHandle {
@@ -233,6 +234,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     workspaceRoot: resolveWorkspaceRoot('', config.warRoot),
     flags,
     verdictProxyGate: (agentId: string) => proxyVerdictRuntime && proxyAgentIds.has(agentId),
+    managementProxyGate: (agentId: string) => proxyAgentIds.has(agentId), // D28③：管理块作废语义直落（无旗拍板）；通过语义仍走上行授权旗
   }) as Record<string, { name: string; description: string; parameters: Record<string, unknown>; execute(args: Record<string, unknown>, exec: unknown): Promise<unknown> }>
   const toolList = Object.values(tools)
   const byName = new Map(toolList.map(t => [t.name, t]))
@@ -507,13 +509,52 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       pending: pending.map(m => ({ text: m.text, ts: m.ts })),
       history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && pending.some(c => c.ts === m.ts)))),
       digest: JSON.stringify(bridgeDigest(stateDir)),
+      ledger: JSON.stringify(ledgerSlice(stateDir)), // D28 知识面：近期账本切片（directive 尾 30+task 尾 30）
     }
+  }
+  /** D28③ 绑席核心（POST /fleet 与代理舰长【绑席】块共用）：校验→切运行态→
+   * 落盘。坏席/契约席诚实拒绝（可绑面=bindableSeatIds）。 */
+  const applyFleetBinding = (executor: string, model: string): { ok: true; note: string; persisted: boolean } | { ok: false; error: string } => {
+    if (ADAPTERS[executor] === undefined) {
+      return fleetSeatIds().includes(executor)
+        ? { ok: false, error: `${executor} 是契约席（spawn 适配器未实装——只登记可看，接入轮实装后开放绑定）。` }
+        : { ok: false, error: `未知舰队：${executor}（可绑：${bindableSeatIds().join(' | ')}）。` }
+    }
+    activeExecutor = executor
+    activeModel = model // 空串=执行者自身默认（POST /fleet 既有语义——绑定即覆写）
+    console.log(`[stardeck] 舰队绑定 → ${activeExecutor}${activeModel !== '' ? ` @ ${activeModel}` : ''}（只影响后续征召与下一轮大副；在役执行者不动）`)
+    const persist = persistFleetBinding(activeExecutor, activeModel)
+    if (!persist.ok) console.warn(`[stardeck] 舰队绑定未落盘：${persist.error}`)
+    return { ok: true, note: bindNoteFor(activeExecutor, activeModel), persisted: persist.ok }
   }
   const harvestProxyReply = async (agentId: string): Promise<void> => {
     const reply = finalStaffReply(stateDir, agentId)
     if (reply === null) return
     const entry = readAttachMap(stateDir)[agentId]
-    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: new Date().toISOString(), text: reply, agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}) })
+    const ts = new Date().toISOString()
+    // D28② 图景：先渲染（草稿对账过才随话轮带 artifact 入账；失败落 scene 战报
+    // 诚实告知——下轮可重出，不硬凑半图）。
+    let artifact: BridgeArtifact | undefined
+    const { scene, dropped: sceneDropped } = proxySceneBlocksOf(reply)
+    if (sceneDropped > 0) console.warn(`[stardeck] 代理舰长【图景】块弃收 ${sceneDropped} 份（空块/超 6000 字/单轮限 1 份）`)
+    if (scene !== null) {
+      const context: SceneContext = {
+        commands: new Map(loadDirectives(stateDir).map(d => [d.id, { status: d.status }])),
+        tasks: new Map(listCampaignIds(stateDir).map(id => { const t = loadCampaign(stateDir, id); return [id, { status: t.status }] as const })),
+      }
+      const rendered = renderScene(scene, context)
+      if (rendered.ok) {
+        const id = `scene-${Date.now().toString(36)}`
+        mkdirSync(join(stateDir, 'artifacts'), { recursive: true })
+        writeFileSync(join(stateDir, 'artifacts', `${id}.html`), rendered.html, 'utf8')
+        artifact = { id, title: rendered.title }
+        console.log(`[stardeck] 代理舰长图景落盘 ${id}（${rendered.title}）`)
+      } else {
+        appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts, noticeKind: 'scene', dedupKey: `scene:${agentId}:${ts}`, text: `图景渲染未过对账：${rendered.reason}` })
+        console.warn(`[stardeck] 代理舰长图景拒收：${rendered.reason}`)
+      }
+    }
+    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts, text: reply, agentId, ...(entry !== undefined ? { sessionId: entry.sessionId } : {}), ...(artifact !== undefined ? { artifact } : {}) })
     const { commands, dropped } = proxyCommandBlocksOf(reply)
     for (const text of commands) {
       const directiveId = newDirectiveId()
@@ -530,6 +571,40 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       const out = await callTool('war_close_task', { task_id: v.taskId, verdict }, agentId)
       if (out.ok) console.log(`[stardeck] 代理舰长代定夺入账：任务 ${v.taskId} ${v.pass ? '通过' : '打回'}（授权在册）`)
       else console.warn(`[stardeck] 代理舰长代定夺被拒：任务 ${v.taskId}——${out.error}`)
+    }
+    // D28③ 管理块（全部直落拍板——无旗，全审计）：撤令/停定时令→war_abandon_command；
+    // 重派→续接令建卡+作废收官（B3 门 managementProxyGate 支线=作废语义放行）；
+    // 绑席→applyFleetBinding+战报确认。
+    const { blocks: mgmt, dropped: mgmtDropped } = proxyManagementBlocksOf(reply)
+    if (mgmtDropped > 0) console.warn(`[stardeck] 代理舰长管理块弃收 ${mgmtDropped} 条（理由超 300 字/超单轮 3 条）`)
+    for (const b of mgmt) {
+      if (b.kind === '撤令' || b.kind === '定时令停') {
+        const reason = `${b.kind === '撤令' ? '代理舰长代撤（舰长口谕）' : '代理舰长代停定时令（舰长口谕）'}：${b.reason === '' ? '（未附理由）' : b.reason}`
+        const out = await callTool('war_abandon_command', { command_id: b.id, reason }, agentId)
+        if (out.ok) console.log(`[stardeck] 代理舰长${b.kind}入账：命令 ${b.id}`)
+        else console.warn(`[stardeck] 代理舰长${b.kind}被拒：命令 ${b.id}——${out.error}`)
+        continue
+      }
+      if (b.kind === '重派') {
+        const directiveId = newDirectiveId()
+        appendDirectiveEvent(stateDir, { type: 'directive_created', ts: new Date().toISOString(), directiveId, text: `!!直接做：重派失败任务 ${b.id}——按原任务书与验收标准重跑一遍（原任务作废收官，本令是其续接）。代理舰长代落（舰长口谕）：${b.reason}`, issuedBy: agentId })
+        const out = await callTool('war_close_task', { task_id: b.id, verdict: `作废收官——重派续接令 ${directiveId}（代理舰长代行，舰长口谕：${b.reason === '' ? '未附理由' : b.reason}）` }, agentId)
+        if (out.ok) console.log(`[stardeck] 代理舰长重派入账：任务 ${b.id} 作废，续接令 ${directiveId} 已建——大副下轮分诊`)
+        else console.warn(`[stardeck] 代理舰长重派被拒：任务 ${b.id}——${out.error}（续接令 ${directiveId} 已建，舰长可在板上处置）`)
+        continue
+      }
+      // 绑席：坏席诚实拒绝+战报（成功也战报——聊天里看得见换席生效）。
+      const seatNote = (ok: boolean, text: string): void => {
+        appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts: new Date().toISOString(), noticeKind: 'terminal', dedupKey: `fleet:${Date.now().toString(36)}`, text })
+        console.log(`[stardeck] 代理舰长绑席${ok ? '' : '被拒'}：${text}`)
+      }
+      if (!bindableSeatIds().includes(b.id)) {
+        seatNote(false, `绑席被拒：${b.id} 不可绑（可绑：${bindableSeatIds().join(' | ')}）。`)
+        continue
+      }
+      const applied = applyFleetBinding(b.id, b.reason !== '' ? b.reason : activeModel) // 块省略模型=沿用当前（POST 语义是覆写，调用侧补齐）
+      if (applied.ok) seatNote(true, `舰队绑定 → ${b.id}${b.reason !== '' ? ` @ ${b.reason}` : ''}（代理舰长代行；只影响后续征召${applied.persisted ? '' : '；⚠ 未落盘' }）。`)
+      else seatNote(false, `绑席被拒：${applied.error}`)
     }
   }
   async function proxyTick(): Promise<void> {
@@ -711,19 +786,28 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         if (key === 'POST /warroom/api/fleet') {
           const body = JSON.parse(await readBody(req)) as { executor?: unknown; model?: unknown }
           const executor = typeof body.executor === 'string' ? body.executor.trim() : ''
+          const model = typeof body.model === 'string' ? body.model.trim() : ''
           if (executor === '') return sendJson(res, 400, { ok: false, error: 'executor 必填（opencode | pi | codex）。' })
-          if (ADAPTERS[executor] === undefined) {
+          const applied = applyFleetBinding(executor, model)
+          if (!applied.ok) {
             // 契约席（copilot/amp/cursor/droid…）档案在档但适配器未实装——诚实拒绝绑定。
             const contract = fleetSeatIds().filter(id => ADAPTERS[id] === undefined)
-            return sendJson(res, 400, { ok: false, error: fleetSeatIds().includes(executor) ? `${executor} 是契约席（spawn 适配器未实装——只登记可看，接入轮实装后开放绑定）。` : `未知舰队：${executor}（可绑：${bindableSeatIds().join(' | ')}）。` , contractSeats: contract })
+            return sendJson(res, 400, { ok: false, error: applied.error, contractSeats: contract })
           }
-          activeExecutor = executor
-          if (typeof body.model === 'string') activeModel = body.model.trim()
-          console.log(`[stardeck] 舰队绑定 → ${activeExecutor}${activeModel !== '' ? ` @ ${activeModel}` : ''}（只影响后续征召与下一轮大副；在役执行者不动）`)
           // P0-2 落盘：重启不丢绑定（env 优先级不变；坏 JSON 拒绝覆盖——回执警示）。
-          const persist = persistFleetBinding(activeExecutor, activeModel)
-          if (!persist.ok) console.warn(`[stardeck] 舰队绑定未落盘：${persist.error}`)
-          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, note: bindNoteFor(activeExecutor, activeModel), ...(persist.ok ? {} : { warning: `绑定已生效但未落盘：${persist.error}（重启后将回落启动配置）` }) })
+          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, note: applied.note, ...(applied.persisted ? {} : { warning: '绑定已生效但未落盘（重启后将回落启动配置）。' }) })
+        }
+        if (key.startsWith('GET /warroom/api/artifact/')) {
+          // D28② 图景出线：artifacts/ 下已对账图页（零脚本、CSP 全关——沙箱
+          // iframe 的 src 面）。id 白名单 + 目录限界，404/400 按码出线。
+          const id = key.slice('GET /warroom/api/artifact/'.length)
+          if (!/^[a-z0-9-]{1,64}$/.test(id)) return sendJson(res, 400, { ok: false, error: '图景 id 形如 scene-<ts36>。' })
+          const file = join(stateDir, 'artifacts', `${id}.html`)
+          if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `图景 ${id} 不存在（或已被清理）。` })
+          const html = readFileSync(file, 'utf8')
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", 'cache-control': 'no-store' })
+          res.end(html)
+          return
         }
         // 附着面共用解析（jump/history 共享）：映射优先、双键型——taskId=执行者
         // 原生会话；staff-<id>=大副原生会话（无 campaign，账本查找只放映射未命中

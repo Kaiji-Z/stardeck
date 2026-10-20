@@ -287,8 +287,10 @@ export interface BridgeChatMessage {
   ts: string
   text: string
   commandRefs?: string[]
-  noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled'
+  noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene'
   refs?: Record<string, string>
+  /** D28 图景附件：沙箱 iframe 渲染的已对账图页（GET /warroom/api/artifact/<id>）。 */
+  artifact?: { id: string; title: string }
 }
 
 /** D26 舰长发话入账（写通道本体：追加即受理，大副 15s tick 回话）。 */

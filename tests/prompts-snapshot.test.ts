@@ -37,12 +37,14 @@ const cases: ReadonlyArray<readonly [name: string, text: string]> = [
       { role: 'system', text: '战报：t-1 已交证待验收' },
     ],
     digest: JSON.stringify({ pendingDecisions: [{ kind: 'review', refId: 't-1', title: '验收任务', since: '2026-10-20' }], commands: [], tasks: [], stats: { commands: 1, tasks: 1, inProgress: 0, reported: 1, failed: 0 } }),
+    ledger: JSON.stringify([{ kind: 'task', type: 'task_report', ts: '2026-10-20T09:00:00.000Z', id: 't-1', summary: '交证：验收 2/2 通过' }]),
   })],
   ['proxy-order-authorized.txt', proxyOrderFor(
     {
       pending: [{ text: '那个验收你自己看着办', ts: '2026-10-20T11:00:00.000Z' }],
       history: [],
       digest: '{}',
+      ledger: '[]',
     },
     { verdictAuthorized: true },
   )],

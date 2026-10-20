@@ -344,6 +344,8 @@ export interface StaffChatOrder {
   history: ReadonlyArray<{ role: 'you' | 'manager' | 'system'; text: string }>
   /** 舰队速览 JSON 快照（bridgeDigest 产物的 stringify）。 */
   digest: string
+  /** 近期账本切片（D28 知识面：ledgerSlice 产物的一行式 stringify——时间序摘要流，查旧事以此为准）。 */
+  ledger: string
 }
 
 /**
@@ -494,20 +496,45 @@ export function proxyOrderFor(chat: StaffChatOrder, opts: { verdictAuthorized?: 
   const historyLines = chat.history.length > 0
     ? chat.history.map(h => `${roleWord(h.role)}：${h.text.replaceAll('\n', ' ')}`).join('\n')
     : '（此前无对话——舰长第一次发话，自我介绍一句再答。）'
+  const ledgerText = chat.ledger.trim() === '' ? '（空——新账本，暂无历史事件。）' : chat.ledger
   const sections: string[] = [
     proxyCaptainPersonaText(),
     '',
-    '【产出说明】本进程没有任何工具可用（也不需要）：你的最终答复就是全部产出——答复正文是给舰长的话（系统原文转达），要落命令时在答复末尾附【命令】块（系统收割成命令卡，交大副分诊征召）。',
+    '【产出说明】本进程没有任何写工具（也不需要）：你的最终答复就是全部产出——答复正文是给舰长的话（系统原文转达）；要落命令、给图景、行管理时在答复末尾附对应结构化块（系统收割代执行，全部入账可审计）。',
     '',
     '── 舰桥频道（舰长发话）──',
     '舰长不进看板，只在这个频道和你说话——下令、问战况、问概念、闲聊都在这里。',
     `【近期对话】（延续上下文，不要失忆）\n${historyLines}`,
     `【舰长新话（待答）】\n${chat.pending.map((m, i) => `${i + 1}. ${m.text.replaceAll('\n', ' ')}`).join('\n')}`,
     `【舰队速览】（系统快照，报战况以此为准——数据不编造）\n${chat.digest}`,
+    `【舰队日志】（近期账本切片，时间序——查旧事/前因后果以此为准）\n${ledgerText}`,
+    '【只读通道】速览/日志不够答时，可用 node 发 GET 查证（恒 UTF-8，禁用 Windows 控制台 curl）：端点=环境变量 STARDECK_HTTP 的值 + 路径。三个只读端点：/warroom/api/board（全板投影）、/warroom/api/bridge/digest（全况速览）、/warroom/api/ledger?limit=50&scope=both（账本尾查，scope=directive|task|both）。只许 GET——一切写操作只能靠结构化块（系统代执行），不要发任何 POST。',
     '【命令块格式】要落命令时，答复末尾按此格式（一令一块，可多块；舰长只是问或聊时不要硬凑）：',
     '【命令】',
     '<命令文本：按任务令起草法成形的强目标命令——目标明确、边界清楚、可验收；舰长原话是意图，你要翻译成专业命令，不是照抄>',
-    '【处理】问战况→按速览讲，点出 pendingDecisions 里等舰长定夺的事项；要下令→意图确认清楚后落【命令】块（一次对话可落多条，逐条独立）；问舰队/星舰概念→直接讲解；纯闲聊→自然回应。',
+    '【图景块格式】讲复杂态势（多条线并进/全况复盘/前后对比）时可附一页图景给舰长直观看（简单问题不配图，舰长问一句就别画）：',
+    '【图景】',
+    '# <标题>',
+    '<一两句摘要（给舰长的话）>',
+    '```timeline',
+    '- <时:分 或日期> <事件一句话>',
+    '```',
+    '```stats',
+    '<键>: <数值>',
+    '```',
+    '```cards',
+    '<命令号或任务号> | <状态> | <一句话>',
+    '```',
+    '（三个组件可按需取舍，至少一个；timeline 按时间升序；cards 里的编号必须真实来自速览/日志/只读通道——系统逐一对账，对不上整页拒收。）',
+    '【管理块格式】舰长表达管理意图（撤令/重派/停定时令/换席）时落对应块（系统代执行并回报结果；每轮至多 3 块）：',
+    '【撤令】（<命令号>）',
+    '<一句理由>',
+    '【重派】（<任务号>）',
+    '<一句理由>',
+    '【定时令】（<命令号>）停',
+    '【绑席】（<席位，如 opencode>）',
+    '<模型串可省略，如 zai-coding-plan/glm-5.3——省略=沿用当前模型>',
+    '【处理】问战况→按速览/日志讲，点出 pendingDecisions 里等舰长定夺的事项，复杂态势可配【图景】；要下令→意图确认清楚后落【命令】块（一次可多条，逐条独立）；管理意图→对应管理块；问舰队/星舰概念→直接讲解；纯闲聊→自然回应。',
   ]
   if (opts.verdictAuthorized === true) {
     sections.push(
@@ -520,23 +547,46 @@ export function proxyOrderFor(chat: StaffChatOrder, opts: { verdictAuthorized?: 
   return sections.join('\n')
 }
 
-/** 代理舰长块骨架：【命令】（无参）或【定夺】（taskId+判定词）头行，正文至下一块头/文末。 */
-interface RawProxyBlock { kind: '命令' | '定夺'; arg?: string; verdict?: '通过' | '打回'; lines: string[] }
+/** 代理舰长块骨架：【命令】/【图景】（无参）或【定夺】/管理块（带参）头行，
+ * 正文至下一块头/文末。头行容忍 markdown 强调包裹（`**【命令】**`——glm-5.3
+ * 风格变体，实弹教训在档）。 */
+type ProxyBlockKind = '命令' | '定夺' | '图景' | '撤令' | '重派' | '定时令停' | '绑席'
+interface RawProxyBlock { kind: ProxyBlockKind; arg?: string; verdict?: '通过' | '打回'; lines: string[] }
+
+function stripEmphasisLine(s: string): string {
+  return s.replace(/^\*{1,3}|_{1,3}/, '').replace(/\*{1,3}|_{1,3}$/, '').trim()
+}
 
 function parseProxyBlocks(text: string): RawProxyBlock[] {
   const out: RawProxyBlock[] = []
   let cur: RawProxyBlock | undefined
   for (const raw of text.split(/\r?\n/)) {
-    const command = /^【命令】\s*$/.exec(raw.trim())
-    const verdict = /^【定夺】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*(通过|打回)\s*$/.exec(raw.trim())
-    if (command !== null || verdict !== null) {
+    const line = stripEmphasisLine(raw.trim())
+    const command = /^【命令】\s*$/.test(line)
+    const scene = /^【图景】\s*$/.test(line)
+    const verdict = /^【定夺】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*(通过|打回)\s*$/.exec(line)
+    const abandon = /^【撤令】[（(]((?:cmd-)?[A-Za-z0-9._-]+)[)）]\s*$/.exec(line)
+    const retry = /^【重派】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*$/.exec(line)
+    const halt = /^【定时令】[（(]((?:cmd-)?[A-Za-z0-9._-]+)[)）]\s*停\s*$/.exec(line)
+    const bind = /^【绑席】[（(]([A-Za-z0-9_-]+)[)）]\s*$/.exec(line)
+    if (command || scene || verdict !== null || abandon !== null || retry !== null || halt !== null || bind !== null) {
       if (cur !== undefined) out.push(cur)
-      cur = command !== null
+      cur = command
         ? { kind: '命令', lines: [] }
-        : { kind: '定夺', arg: verdict![1], verdict: verdict![2] as '通过' | '打回', lines: [] }
+        : scene
+          ? { kind: '图景', lines: [] }
+          : verdict !== null
+            ? { kind: '定夺', arg: verdict[1], verdict: verdict[2] as '通过' | '打回', lines: [] }
+            : abandon !== null
+              ? { kind: '撤令', arg: abandon[1], lines: [] }
+              : retry !== null
+                ? { kind: '重派', arg: retry[1], lines: [] }
+                : halt !== null
+                  ? { kind: '定时令停', arg: halt[1], lines: [] }
+                  : { kind: '绑席', arg: bind![1], lines: [] }
       continue
     }
-    if (cur !== undefined && /^【.+】/.test(raw.trim())) {
+    if (cur !== undefined && /^【.+】/.test(line)) {
       // 其他结构化块（任务书/澄清等）同样终止当前块——代理舰长终答不该有它们，防御性收边。
       out.push(cur)
       cur = undefined
@@ -583,6 +633,59 @@ export function proxyVerdictBlocksOf(text: string): ProxyVerdictBlock[] {
     out.push({ taskId: b.arg, pass: b.verdict === '通过', reason: b.lines.join('\n').trim() })
   }
   return out
+}
+
+/** 代理舰长【图景】草稿上限——超出弃收（渲染器另有组件级校验，这里只管体量）。 */
+export const PROXY_SCENE_DRAFT_CAP = 6000
+
+/** 终答 → 【图景】草稿（纯，每轮至多 1 份：一图胜千言，多图即噪声；多余/超限
+ * 计入 dropped 由调用方告警）。草稿规格（标题+摘要+timeline/stats/cards 围栏）
+ * 由 scene.ts 解析对账——这里只切块与体量闸。 */
+export function proxySceneBlocksOf(text: string): { scene: string | null; dropped: number } {
+  let scene: string | null = null
+  let dropped = 0
+  for (const b of parseProxyBlocks(text)) {
+    if (b.kind !== '图景') continue
+    const body = b.lines.join('\n').trim()
+    if (body === '' || body.length > PROXY_SCENE_DRAFT_CAP) {
+      dropped += 1
+      continue
+    }
+    if (scene !== null) {
+      dropped += 1
+      continue
+    }
+    scene = body
+  }
+  return { scene, dropped }
+}
+
+/** 代理舰长管理块：撤令/重派/停定时令/绑席（D28 全部直落拍板——无旗，全审计）。 */
+export interface ProxyManagementBlock { kind: '撤令' | '重派' | '定时令停' | '绑席'; id: string; reason: string }
+
+/** 管理块单轮合计上限与单块理由上限（防幻觉风暴；超限弃收+告警）。 */
+export const PROXY_MANAGEMENT_BLOCKS_CAP = 3
+export const PROXY_MANAGEMENT_REASON_CAP = 300
+
+/** 终答 → 管理块列表（纯）。理由=块正文（≤300 字；绑席块的「理由」位=可选模型串）。 */
+export function proxyManagementBlocksOf(text: string): { blocks: ProxyManagementBlock[]; dropped: number } {
+  const blocks: ProxyManagementBlock[] = []
+  let dropped = 0
+  for (const b of parseProxyBlocks(text)) {
+    if (b.kind !== '撤令' && b.kind !== '重派' && b.kind !== '定时令停' && b.kind !== '绑席') continue
+    if (b.arg === undefined) continue
+    const reason = b.lines.join('\n').trim()
+    if (reason.length > PROXY_MANAGEMENT_REASON_CAP) {
+      dropped += 1
+      continue
+    }
+    if (blocks.length >= PROXY_MANAGEMENT_BLOCKS_CAP) {
+      dropped += 1
+      continue
+    }
+    blocks.push({ kind: b.kind, id: b.arg, reason })
+  }
+  return { blocks, dropped }
 }
 
 export interface StaffSpawnArgs {

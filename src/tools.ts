@@ -158,6 +158,10 @@ export interface WarToolsDeps {
    *  运行态）且 agentId 属本 daemon 在册代理舰长会话时代行定夺放行。缺省/
    *  返回 false=永拒——授权 OFF 面行为与 0.3.x 字节等价。 */
   verdictProxyGate?: (agentId: string) => boolean
+  /** D28 管理块门（B3 扩展支线）：agentId 属在册代理舰长会话时，**作废语义**
+   *  （非通过判定）收官放行——重派续接两步的后半步。通过语义仍走 verdictProxyGate
+   *  （授权旗），定夺权红线不动。缺省/false=永拒。 */
+  managementProxyGate?: (agentId: string) => boolean
 }
 
 function requireAgent(exec: WarToolExec): { id: string } {
@@ -992,11 +996,15 @@ export function warTools(deps: WarToolsDeps) {
       //（独立形态 hqSessionId 不设——B3 落地起板面验收对 staff-owned 任务实为
       // 被拒的潜伏缺陷，本行修复；本地面板仅绑 127.0.0.1，principal 模型另案）；
       // ②verdictProxyGate=代理舰长代定夺的 flag-gated 通路（授权 OFF=永拒）。
+      // D28③ 管理支线：managementProxyGate=在册代理舰长的**作废语义**收官放行
+      //（重派续接两步的后半步）——通过语义仍走 verdictProxyGate 授权旗，定夺权
+      // 红线不动（管理是生命周期动作，不是验收定夺）。
       const ownerStaff = staffOwnerOf(deps, args.task_id)
       if (ownerStaff !== undefined) {
         const hq = deps.store.get().hqSessionId
         const proxyAllowed = deps.verdictProxyGate?.(staff.id) === true
-        if (staff.id !== ownerStaff && staff.id !== hq && staff.id !== 'captain-board' && !proxyAllowed) {
+        const mgmtAllowed = !isPassVerdict(args.verdict) && deps.managementProxyGate?.(staff.id) === true
+        if (staff.id !== ownerStaff && staff.id !== hq && staff.id !== 'captain-board' && !proxyAllowed && !mgmtAllowed) {
           throw new Error(`收官是大副侧动词：只有任务 ${args.task_id} 所属命令的大副会话、舰长（HQ/板面）会话或获授权的代理舰长可记录判定；当前会话 ${staff.id} 无权。请到对应大副会话操作。`)
         }
         // 通过语义的状态门：零汇报（in_progress 等）不得折 succeeded——「通过」

@@ -53,6 +53,26 @@ test('落盘：坏 JSON 拒绝覆盖——文件字节不动，回执可警示',
   })
 })
 
+test('落盘：fs 异常不炸——母目录是普通文件时吞成 ok:false（POST /fleet 竞态 500 回归）', () => {
+  withIsolatedConfig(cfgPath => {
+    // 母目录占位成普通文件 → mkdirSync 递归必炸（Windows ENOTDIR 家族）。
+    // 旧实现在此直接 throw → daemon POST /fleet 500（全量并行实测咬过）；
+    // 新家法=吞成 ok:false，绑定运行态先行、持久化 best-effort。
+    const blocker = cfgPath + '.d-blocker'
+    writeFileSync(blocker, 'not a directory', 'utf8')
+    const prevCfg = process.env.STARDECK_CONFIG
+    process.env.STARDECK_CONFIG = join(blocker, 'config.json')
+    try {
+      const out = persistFleetBinding('pi', '')
+      assert.equal(out.ok, false)
+      assert.ok(out.error.includes('配置落盘失败'))
+    } finally {
+      if (prevCfg === undefined) delete process.env.STARDECK_CONFIG
+      else process.env.STARDECK_CONFIG = prevCfg
+    }
+  })
+})
+
 test('落盘：真 daemon 重启往返——绑定 pi 重启后仍在', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-fleetrestart-'))
   const cfgPath = join(dir, 'config.json')

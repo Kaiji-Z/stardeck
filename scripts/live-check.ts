@@ -440,6 +440,40 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
       const grantOn = await post2('/warroom/api/bridge/settings', { proxyVerdict: true }) as { ok?: boolean; verdictAuthorized?: boolean }
       const grantOff = await post2('/warroom/api/bridge/settings', { proxyVerdict: false }) as { ok?: boolean; verdictAuthorized?: boolean }
       check('D27 代理舰长：定夺授权开关往返（授予→收回，运行态）', grantOn.ok === true && grantOn.verdictAuthorized === true && grantOff.ok === true && grantOff.verdictAuthorized === false, `${grantOn.verdictAuthorized}→${grantOff.verdictAuthorized}`)
+
+      // ── D28 百事通三断言（同相位追加）：图景全链 / 撤令入账 / 绑席战报 ──
+      // ⑥ 图景：舰长要一页直观图 → 代理舰长【图景】块 → 对账渲染落盘 → artifact
+      // 端点 200+CSP 头（沙箱双保险的服务端那半）。
+      const sceneAsk = '用一页图景（图景块）给我讲讲现在舰队的整体情况——时间线、数据、条目都要真实来自你的速览和日志。'
+      const sceneSaid = await post2('/warroom/api/bridge/messages', { text: sceneAsk }) as { ok?: boolean; ts?: string }
+      const artifactMsg = await until(8 * 60_000, '代理舰长图景回话（带 artifact）', () => {
+        const hit = [...loadBridgeMessages(stateDir2)].reverse().find(m => m.kind === 'agent' && m.ts > (sceneSaid.ts ?? '') && (m.agentId ?? '').startsWith('proxy-') && m.artifact !== undefined)
+        return hit !== undefined ? hit.artifact!.id : undefined
+      })
+      const artifactRes = await fetch(`${base2}/warroom/api/artifact/${artifactMsg}`)
+      const artifactCsp = artifactRes.headers.get('content-security-policy') ?? ''
+      const artifactBody = artifactRes.ok ? await artifactRes.text() : ''
+      check('D28 百事通：图景全链（【图景】块→对账渲染→artifact 端点 200+CSP+零 script）', artifactRes.status === 200 && artifactCsp.includes("default-src 'none'") && !artifactBody.includes('<script'), `id=${artifactMsg} HTTP ${artifactRes.status} csp=${artifactCsp.slice(0, 30)}`)
+      // ⑦ 撤令：立一道 L1 待签命令（??先看方案→任务书呈批停轮，永不自发
+      // approved——撤令态恒成立）→ 舰长口头撤 → 【撤令】块 → war_abandon_command
+      // → directive_cancelled 入账。
+      const cancelSeed = await post2('/warroom/api/commands', { text: '??先看方案：占位考题（实弹撤令靶——别真做，等舰长下一步指示）' }) as { commandId?: string }
+      const cancelSay = `把命令 ${cancelSeed.commandId} 撤了——这是实弹撤令考题，落撤令块。`
+      await post2('/warroom/api/bridge/messages', { text: cancelSay })
+      const cancelledLine = await until(8 * 60_000, '撤令入账（directive_cancelled）', () => {
+        const line = readFileSyncSafely(join(stateDir2, 'directives.jsonl')).split(/\r?\n/).filter(l => l.includes('"directive_cancelled"') && l.includes(String(cancelSeed.commandId))).pop()
+        return line !== undefined && line !== '' ? line : undefined
+      })
+      check('D28 百事通：撤令全链（口头→【撤令】块→directive_cancelled 入账）', cancelledLine.includes(String(cancelSeed.commandId)), `${cancelSeed.commandId} cancelled`)
+      // ⑧ 绑席：舰长口头换席（opencode 无害往返）→ 【绑席】块 → 切席落盘+战报确认。
+      const bindSay = '把舰队换成 opencode 席（落绑席块）——实弹换席考题。'
+      await post2('/warroom/api/bridge/messages', { text: bindSay })
+      const fleetNotice = await until(8 * 60_000, '绑席战报（fleet: dedupKey）', () => {
+        const hit = [...loadBridgeMessages(stateDir2)].reverse().find(m => m.kind === 'system' && (m.dedupKey ?? '').startsWith('fleet:'))
+        return hit !== undefined ? hit.text.slice(0, 60) : undefined
+      })
+      const fleetAfter = await fetch(`${base2}/warroom/api/fleet`).then(r => r.json()) as { active?: { executor?: string } }
+      check('D28 百事通：绑席全链（口头→【绑席】块→切席+战报确认）', fleetNotice.includes('opencode') && fleetAfter.active?.executor === 'opencode', fleetNotice)
     }
 
     // taskB 的外勤可以仍在跑——成案即证明派发链，收官不阻塞本门（主环已验收官语义）。

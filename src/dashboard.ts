@@ -527,6 +527,49 @@ export function bridgeDigest(stateDir: string, now = new Date()): BridgeDigest {
   }
 }
 
+/** D28 知识面：账本切片条目（代理舰长「百事通」数据底料）。只读派生——
+ * 账本为源，本切片不另立账（摘要 clip 100，字段从事件常见载荷宽选取）。 */
+export interface LedgerEntry { kind: 'directive' | 'task'; type: string; ts: string; id: string; summary: string }
+
+const LEDGER_SUMMARY_FIELDS = ['text', 'goal', 'note', 'verdict', 'reason', 'title', 'status', 'cron', 'intent', 'report'] as const
+
+function ledgerSummarize(e: Record<string, unknown>): string {
+  const parts: string[] = []
+  for (const key of LEDGER_SUMMARY_FIELDS) {
+    const v = e[key]
+    if (typeof v === 'string' && v !== '') parts.push(v)
+  }
+  const q = e['questions']
+  if (Array.isArray(q)) parts.push(q.filter((x): x is string => typeof x === 'string').join('；'))
+  const t = parts.join(' · ').replaceAll('\n', ' ').trim()
+  return t.length > 100 ? `${t.slice(0, 100)}…` : t
+}
+
+function ledgerDirectiveEntries(stateDir: string): LedgerEntry[] {
+  return readDirectiveEvents(stateDir).map(e => {
+    const rec = e as unknown as Record<string, unknown>
+    return { kind: 'directive' as const, type: String(rec['type'] ?? ''), ts: String(rec['ts'] ?? ''), id: String(rec['directiveId'] ?? ''), summary: ledgerSummarize(rec) }
+  })
+}
+
+function ledgerTaskEntries(stateDir: string): LedgerEntry[] {
+  const out: LedgerEntry[] = []
+  for (const taskId of listCampaignIds(stateDir)) {
+    for (const e of readEvents(stateDir, taskId)) {
+      const rec = e as unknown as Record<string, unknown>
+      out.push({ kind: 'task', type: String(rec['type'] ?? ''), ts: String(rec['ts'] ?? ''), id: taskId, summary: ledgerSummarize(rec) })
+    }
+  }
+  return out
+}
+
+/** D28 知识面·提示词切片：directive 事件尾 30 + 跨任务 task 事件尾 30，按时间
+ * 升序合并（近事全通，token 封顶可控——两尾各管各的，互不挤占）。 */
+export function ledgerSlice(stateDir: string, directiveCap = 30, taskCap = 30): LedgerEntry[] {
+  return [...ledgerDirectiveEntries(stateDir).slice(-directiveCap), ...ledgerTaskEntries(stateDir).slice(-taskCap)]
+    .sort((a, b) => (a.ts < b.ts ? -1 : 1))
+}
+
 /**
  * B1-件② 单命令追踪投影（纯，只读——板是读投影红线内的调试面）：命令摘要 +
  * 该命令的原始 directive 事件时间线 + 关联任务（复用板投影：attemptLog /
@@ -905,6 +948,21 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           return
         }
         send(200, { ok: true, digest: bridgeDigest(deps.stateDir) })
+        return
+      }
+      if (r.method === 'GET' && pathname === '/warroom/api/ledger') {
+        // D28 知识面·只读账本尾查（代理舰长百事通的查证通道，也可被板/外部调用）。
+        // scope=directive|task|both（缺省 both）；limit 缺省 50、封顶 200（钳制不报错）。
+        const q = new URL(r.url ?? '/', 'http://local').searchParams
+        const scopeRaw = q.get('scope') ?? 'both'
+        if (scopeRaw !== 'directive' && scopeRaw !== 'task' && scopeRaw !== 'both') {
+          send(400, { ok: false, error: 'scope 只认 directive / task / both。' })
+          return
+        }
+        const limitRaw = Number(q.get('limit') ?? '50')
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 200) : 50
+        const entries = scopeRaw === 'directive' ? ledgerDirectiveEntries(deps.stateDir) : scopeRaw === 'task' ? ledgerTaskEntries(deps.stateDir) : [...ledgerDirectiveEntries(deps.stateDir), ...ledgerTaskEntries(deps.stateDir)]
+        send(200, { ok: true, scope: scopeRaw, limit, entries: entries.sort((a, b) => (a.ts < b.ts ? 1 : -1)).slice(0, limit) })
         return
       }
       if (r.method === 'POST' && pathname === '/warroom/api/bridge/settings') {

@@ -333,6 +333,18 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         ? createElement('div', { className: 'war-bmsg-refs' },
             createElement('span', { className: 'war-bmsg-chips' }, ...m.commandRefs.map((c, j) => openFocusBtn(c, `c-${j}`))))
         : null,
+      // D28 图景附件：已对账图页（沙箱 iframe，sandbox=''禁一切脚本+API——服务端
+      // CSP 再关一道；零脚本单文件，新窗可开全图）。
+      m.kind === 'agent' && m.artifact !== undefined
+        ? createElement('div', { className: 'war-bmsg-scenewrap', 'data-bridge-scene': m.artifact.id },
+            createElement('div', { className: 'war-bmsg-scenehead' },
+              createElement('span', { className: 'war-bmsg-scenetag' }, bc.sceneCaption(m.artifact.title)),
+              createElement('a', { href: `/warroom/api/artifact/${m.artifact.id}`, target: '_blank', rel: 'noreferrer', className: 'war-bref' }, bc.sceneOpen)),
+            createElement('iframe', {
+              src: `/warroom/api/artifact/${m.artifact.id}`, title: m.artifact.title,
+              sandbox: '', loading: 'lazy', className: 'war-bmsg-scene',
+            }))
+        : null,
     )
   }
 

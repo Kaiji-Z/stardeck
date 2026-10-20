@@ -621,6 +621,9 @@ export interface WarCopy {
     authRevoke: string
     authOn: string
     authOff: string
+    /** D28 图景附件：agent 话轮随附的已对账图页（沙箱 iframe 渲染）。 */
+    sceneCaption: (title: string) => string
+    sceneOpen: string
   }
 }
 
@@ -1220,6 +1223,8 @@ export const warCopy: WarCopy = {
     authRevoke: '收回授权',
     authOn: '已授权：代理舰长可代行验收定夺（须呈证据与理由；重启回落未授权）。',
     authOff: '未授权：一切定夺呈你亲手。',
+    sceneCaption: (title: string) => `图景：${title}（沙箱渲染，零脚本）`,
+    sceneOpen: '新窗看全图',
   },
 }
 
@@ -1816,6 +1821,8 @@ export const plainCopy: WarCopy = {
     authRevoke: '收回授权',
     authOn: '已授权：代理管家可代行验收（须呈证据与理由；重启回落未授权）。',
     authOff: '未授权：一切定夺呈你亲手。',
+    sceneCaption: (title: string) => `一页图：${title}（安全沙箱里显示）`,
+    sceneOpen: '新窗口看大图',
   },
 }
 

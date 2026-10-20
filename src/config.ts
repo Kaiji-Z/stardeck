@@ -147,9 +147,16 @@ export function persistFleetBinding(executor: string, model: string): { ok: true
       return { ok: false, error: `配置文件损坏（${path}，JSON 解析失败）——拒绝覆盖，请手工修复后再绑` }
     }
   }
-  mkdirSync(dirname(path), { recursive: true })
-  const tmp = `${path}.tmp-${Date.now().toString(36)}`
-  writeFileSync(tmp, `${JSON.stringify({ ...base, executor, model }, null, 2)}\n`, 'utf8')
-  renameSync(tmp, path)
+  // 落盘=best-effort（绑定运行态先行，持久化失败不炸路由）：Windows 下并行
+  // daemon 同写一份 config 时 rename 可抛 EPERM/EBUSY——吞成 ok:false，POST /fleet
+  // 照常 200 + persisted:false（全量测试并行实测咬过一次 500）。
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    const tmp = `${path}.tmp-${Date.now().toString(36)}`
+    writeFileSync(tmp, `${JSON.stringify({ ...base, executor, model }, null, 2)}\n`, 'utf8')
+    renameSync(tmp, path)
+  } catch (err) {
+    return { ok: false, error: `配置落盘失败（${path}：${err instanceof Error ? err.message : String(err)}）——本次绑定仅运行态生效，重启回落` }
+  }
   return { ok: true }
 }

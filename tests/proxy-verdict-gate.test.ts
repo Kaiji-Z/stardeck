@@ -24,7 +24,7 @@ function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'stardeck-proxy-gate-'))
 }
 
-function makeDeps(dir: string, over: { verdictProxyGate?: (id: string) => boolean } = {}): Parameters<typeof warTools>[0] {
+function makeDeps(dir: string, over: { verdictProxyGate?: (id: string) => boolean; managementProxyGate?: (id: string) => boolean } = {}): Parameters<typeof warTools>[0] {
   const roster: Roster = { units: [], errors: [] }
   return {
     store: { get: () => ({ version: 2 as const, active: true, hqSessionId: undefined }), save: () => {} },
@@ -46,6 +46,7 @@ function makeDeps(dir: string, over: { verdictProxyGate?: (id: string) => boolea
     warRoot: join(dir, 'war'),
     flags: FLAG_OFF,
     ...(over.verdictProxyGate !== undefined ? { verdictProxyGate: over.verdictProxyGate } : {}),
+    ...(over.managementProxyGate !== undefined ? { managementProxyGate: over.managementProxyGate } : {}),
   } as Parameters<typeof warTools>[0]
 }
 
@@ -109,6 +110,36 @@ test('D27 授权门：gate 在册但不匹配的代理会话仍拒（gate 判式
       /无权/,
       '伪造 proxy- 前缀不算在册代理会话',
     )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('D28 管理门（managementProxyGate）：作废语义放行、通过语义仍锁授权旗——管理是生命周期动作不是验收定夺', async () => {
+  const dir = tmpDir()
+  try {
+    seedOwnedReported(dir, 'c-mgmt')
+    seedOwnedReported(dir, 'c-mgmt2')
+    seedOwnedReported(dir, 'c-mgmt3')
+    // 无 gate：作废语义也拒（0.4.x 行为等价——缺省/false=永拒）。
+    const off = makeDeps(dir)
+    await assert.rejects(
+      execTool(off, 'war_close_task', { task_id: 'c-mgmt3', verdict: '作废收官——重派续接令 cmd-x' }, 'proxy-abc'),
+      /无权/,
+      '缺省面：管理支线不生效（OFF 面字节等价）',
+    )
+    assert.equal(loadCampaign(dir, 'c-mgmt3').status, 'reported', '越权作废零写入')
+    // gate 在册+作废语义：放行（重派两步的后半步）。
+    const on = makeDeps(dir, { managementProxyGate: id => id === 'proxy-abc' })
+    await execTool(on, 'war_close_task', { task_id: 'c-mgmt', verdict: '作废收官——重派续接令 cmd-x（代理舰长代行）' }, 'proxy-abc')
+    assert.equal(loadCampaign(dir, 'c-mgmt').status, 'closed', '在册代理会话可作废收官（管理支线）')
+    // gate 在册但**通过**语义：仍拒——定夺权红线不因管理块松动（verdictProxyGate 缺席）。
+    await assert.rejects(
+      execTool(on, 'war_close_task', { task_id: 'c-mgmt2', verdict: '通过' }, 'proxy-abc'),
+      /无权/,
+      '管理门只放行作废语义；验收通过仍走授权旗',
+    )
+    assert.equal(loadCampaign(dir, 'c-mgmt2').status, 'reported', '通过语义零写入')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

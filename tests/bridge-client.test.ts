@@ -196,3 +196,27 @@ test('D27 降级态：bridge.proxy=false → 输入停用+诚实文案在场（�
     delete (boardFixture as { bridge?: unknown }).bridge
   }
 })
+
+test('BridgePane 图景附件：agent 话轮带 artifact → 沙箱 iframe（sandbox=""）+新窗链接', async () => {
+  bridgeFixture = {
+    ok: true,
+    revision: 'r2',
+    messages: [
+      { kind: 'user', ts: '2026-10-20T10:00:00.000Z', text: '讲讲现在舰队情况' },
+      { kind: 'agent', ts: '2026-10-20T10:01:00.000Z', text: '配一页图景给你看。', agentId: 'proxy-x', artifact: { id: 'scene-mock', title: '舰队晨报' } },
+    ],
+  }
+  boardFixture = {
+    ...boardFixture,
+    commands: [], tasks: [],
+  } as never
+  const r = await render({}, '舰队晨报')
+  try {
+    const frame = document.querySelector('iframe.war-bmsg-scene') as HTMLIFrameElement | null
+    assert.ok(frame !== null, '图景 iframe 在场')
+    assert.equal(frame!.getAttribute('sandbox'), '', 'sandbox 空串=禁一切脚本/同源（第一道保险）')
+    assert.equal(frame!.getAttribute('src'), '/warroom/api/artifact/scene-mock', 'src 指 artifact 端点')
+    const link = [...document.querySelectorAll('a.war-bref')].find(a => (a.getAttribute('href') ?? '').includes('scene-mock'))
+    assert.ok(link !== null, '新窗看全图链接在场')
+  } finally { r.unmount() }
+})

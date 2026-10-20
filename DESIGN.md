@@ -283,3 +283,21 @@
 
 - npm 发布管线（release.mjs/OIDC 移植）
 - 监督层工具落点（promptfoo 移植 vs 暂缓——前置 VERIFICATION.md §8.4/8.5 项目主答复）
+
+## D28 百事通席：代理舰长全知+图景+全能管理（2026-10-20，舰长拍板三项，v0.5.0）
+
+**源起**：舰长提出三层模型——用户（舰长）层想说什么说什么（不可控）；代理舰长层=**整个舰队的百事通，一个入口控制整个舰队**；工作层=大副/外勤/通知/cron（全部既有功能，是被驱动物）。参考 [answer-me-with-html](https://github.com/QingYunA/answer-me-with-html)（4k★）：其最值钱处不是「AI 写 HTML」而是**模型只写 612 token 的 Markdown 草稿、CLI 负责排版画图**（手写 HTML 的 1/8 token）——三权分立照搬进 stardeck。
+
+**三项拍板（AskUserQuestion 在案）**：
+1. **管理块全部直落**：撤令/重派/停定时令/绑席默认可用，不设新旗，全审计兜底（幻觉风险由严格块格式+存在性校验+eval 负例兜住）。
+2. **澄清不可代答**：药丸卡恒舰长亲手——决策记录零转译失真；代理舰长只负责把问题讲明白。
+3. **一次到位**：三面（知识/图景/管理）+UI+测试+文档全量，v0.5.0。
+
+**三面架构**：
+- **知识面（全知）**：征召令携带账本切片（ledgerSlice=directive 尾 30+task 尾 30，clip 100）+ **只读通道**教学（STARDECK_HTTP 下 GET /board、/bridge/digest、/ledger?limit&scope——只许 GET，写只能走块；新端点 GET /warroom/api/ledger limit≤200 钳制）。
+- **图景面（直白）**：【图景】块（每轮≤1 份、草稿≤6000 字；标题+摘要+```timeline/```stats/```cards 三组件）→ **src/scene.ts 确定性渲染器**（纯函数：模型只写草稿，布局/配色/转义全由代码算；零 `<script>` 单文件+内联 CSS）→ cards 编号**逐一对账**账本快照（未知即整页拒收——数字可溯源，幻觉图景进不了聊天）→ 落盘 `stateDir/artifacts/scene-<ts36>.html` + `bridge_agent_message.artifact` 字段（条件 spread，旧消息零迁移）→ 出线 `GET /warroom/api/artifact/<id>`（CSP `default-src 'none'; style-src 'unsafe-inline'`）→ 聊天窗沙箱 iframe（`sandbox=''` 禁脚本禁同源——与服务端 CSP 双保险，防「外勤战报诱导→图景带脚本→打 API」注入链）+新窗链接。渲染失败=第六种战报 `scene`（诚实告知原因，下轮可重出）。
+- **管理面（全能）**：【撤令】（cmdId）→war_abandon_command；【重派】（taskId）→RetryCard 同构两步（续接令建卡+作废收官）；【定时令】（cmdId）停→撤 draft（状态闸=天然闸）；【绑席】（seat[模型]）→bindableSeatIds 校验→切席落盘+战报。每轮≤3 块、理由≤300 字。B3 门加 **managementProxyGate 支线**：在册代理会话的**作废语义**收官放行（重派后半步），**通过语义仍锁授权旗**——管理是生命周期动作不是验收定夺，两权分立。
+
+**红线核对**：出口协议不裁剪（只教 GET）；澄清代答不做；验收通过语义仍走 STARDECK_PROXY_VERDICT；L1 签发权不动；不新增旗；账本为源（图景/管理全经块收割+账本事件）；板=读投影（artifact 也是账本消息）。
+
+**坑录（实弹预埋）**：glm-5.3 粗体风格→新解析器强调包裹容忍（stripEmphasisLine/stripEmphasis 双处）；POST /fleet 空模型语义=覆写（applyFleetBinding 忠实旧约，绑席块调用侧补当前模型）；styles.ts 禁裸 hex（war-tokens 令牌纯度）。

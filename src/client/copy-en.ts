@@ -599,6 +599,8 @@ export const enWarCopy: WarCopy = {
     authRevoke: 'Revoke delegation',
     authOn: 'Delegated: the Acting Captain may record acceptance verdicts (with evidence and rationale; resets on restart).',
     authOff: 'Not delegated: every verdict comes to you.',
+    sceneCaption: (title: string) => `Scene: ${title} (sandboxed, zero-script)`,
+    sceneOpen: 'Open full view',
   },
 }
 
@@ -1192,6 +1194,8 @@ export const enPlainCopy: WarCopy = {
     authRevoke: 'Revoke delegation',
     authOn: 'Delegated: the Deputy Manager may record acceptance verdicts (with evidence; resets on restart).',
     authOff: 'Not delegated: every verdict comes to you.',
+    sceneCaption: (title: string) => `One-pager: ${title} (shown in a safe sandbox)`,
+    sceneOpen: 'Open in new tab',
   },
 }
 
