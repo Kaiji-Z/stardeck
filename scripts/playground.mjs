@@ -45,7 +45,7 @@ mkdirSync(stateDir, { recursive: true })
 // zcode 席 headless 当前被桌面版自身回归卡死（裸引擎同错复现：Model provider
 // builtin:zai-coding-plan is missing baseURL——与 stardeck 无关），门前可换席。
 console.log(`[playground] 起 daemon → ${base}（账本 ${stateDir} · 舰队 opencode · 大副在岗）`)
-const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
   cwd: repoRoot,
   env: {
     ...process.env,

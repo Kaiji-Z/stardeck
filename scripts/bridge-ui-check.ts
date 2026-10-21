@@ -50,7 +50,7 @@ try {
   appendEvent(stateDir, { type: 'task_submitted', ts: now, campaignId: 'task-ui-1', from: 'oc-exec-1', report: '安装一节已补：三步命令 + 前置条件清单。' })
   console.log(`种账完毕：clarify cmd-ui-clar + reported task-ui-1（stateDir=${stateDir}）`)
 
-  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STATE_DIR: stateDir, STARDECK_WAR_ROOT: warRoot, STARDECK_PORT: String(PORT), STARDECK_STAFF: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],

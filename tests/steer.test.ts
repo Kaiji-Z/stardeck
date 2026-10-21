@@ -174,7 +174,7 @@ test('答复端点：真 daemon + stub pi——投递成功入账 + 非 talking 
     JSON.stringify({ type: 'directive_talking', ts: now, directiveId: 'cmd-oc' }),
   ].join('\n') + '\n', 'utf8')
   const port = 41150 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_EXECUTOR_BIN: stubPath },
     stdio: 'ignore',

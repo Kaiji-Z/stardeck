@@ -25,7 +25,7 @@ test('独立派生：host-sessions 含 attach-map 会话号 + host-workspaces �
     'staff-old': { executor: 'zcode', sessionId: 'sess_localface2', workspacePath: join(stateDir, 'staff'), capturedAt: new Date().toISOString() },
   }), 'utf8')
   const port = 41090 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0' },
     stdio: 'ignore',
