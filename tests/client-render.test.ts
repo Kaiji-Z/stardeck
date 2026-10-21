@@ -781,3 +781,37 @@ test('D29 回归：非空板 pipe-hint 分支可渲染（tabCounts 自由变量�
     boardFixture = { ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r0', commands: [], tasks: [], threads: [], roster: [], rosterErrors: [] }
   }
 })
+
+test('D30 死路治理：全席缺席→安装引导卡（复制钮+重新探测）+内置 loop 指引', async () => {
+  const { fleetGate } = await import('../src/client/fleet-gate.tsx')
+  const seats = ['opencode', 'pi', 'codex', 'zcode', 'claude'].map(id => ({
+    id, label: id, ok: false, bin: `bin-${id}`, note: '未检出。', adapter: true, staffReady: true,
+  }))
+  let reprobes = 0
+  const r = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: seats as never, proxyLoop: false },
+    onEnter: () => {}, dismissible: false,
+    onReprobe: () => { reprobes++ },
+  }))
+  const guide = document.querySelector('[data-war-install-guide]')
+  assert.ok(guide !== null, '安装引导卡在场（全席缺席）')
+  assert.ok((guide!.textContent ?? '').includes('npm i -g opencode-ai'), '正典包名命令在场')
+  assert.ok((guide!.textContent ?? '').includes('@earendil-works/pi-coding-agent'), 'pi 包名在场')
+  const reprobe = document.querySelector('[data-war-reprobe]') as HTMLButtonElement | null
+  assert.ok(reprobe !== null, '重新探测钮在场')
+  reprobe!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(reprobes, 1, '点击触发重探')
+  assert.ok((guide!.textContent ?? '').includes('STARDECK_PROXY_LOOP=1'), '零 CLI 内置 loop 指引在场（proxyLoop=false）')
+  r.unmount()
+  const r2 = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: seats as never, proxyLoop: true },
+    onEnter: () => {}, dismissible: false,
+  }))
+  const guide2 = document.querySelector('[data-war-install-guide]')
+  assert.ok(
+    (guide2?.textContent ?? '').includes('内置代理舰长已就绪') || (guide2?.textContent ?? '').includes('Built-in proxy captain is ready'),
+    'proxyLoop=true 就绪文案在场',
+  )
+  r2.unmount()
+})

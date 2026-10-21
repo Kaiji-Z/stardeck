@@ -317,3 +317,14 @@
 **红线核对**：出口协议不裁剪（座席面/loop 教学永不出现 war_claim/war_submit，测试锁）；澄清代答不做（收割管线强制）；L1 签发权不动；通过语义仍走 STARDECK_PROXY_VERDICT 默认 OFF；默认面纪律（旗 OFF 舰队席字节不变，矩阵锁）；key 只走 env；账本为源（loop/外接席的「写」只有终答里的块）。
 
 **坑录（实弹/实测预埋）**：@ai-sdk/openai-compatible v3=spec v4 与 ai 5 不兼容（钉 ^1.0.48 实取 1.0.58）；mcp-bridge 双脸替换文本自匹配（锚点须不含自身）；指令种子 received 必须先于 approved（approved 是终态，fold 吞后到事件→staffSessionId 绑不上→身份门整段跳过，考题失效）；styles.ts 是模板字符串——追加 CSS 必须进字面量内（出界=esbuild transform 炸整文件）；createElement.Fragment 不存在（须 import Fragment——React #130 静默白屏）；.war-dispatch 拆行插规则会把规则劈成未闭合；让位补偿（chrome padding）必须分视图作用域（全局面一刀切→分屏 38% 列被压成竖排单字 P0）。
+
+## D30 开箱即用 + 一行接入 + 桌面壳（2026-10-21，舰长三拍板，v0.7.0）
+
+**拍板**：点击应用=Electron 桌面壳（desktop/ 自包子包，主包零新依赖）；npm 发布解禁（v0.7.0 起 tag→CI Trusted Publisher 直发）；connect 首批四宿主（claude/zcode/opencode/codex+通用打印），**注册面以各宿主当前最新版机制实证为准**（调研实锚：zcode=~/.zcode/cli/config.json 的 mcp.servers、开源 CLI 变体 setting.json+features.mcp；codex 官方 codex mcp add 写 config.toml；opencode=opencode.json mcp 键 type:local；claude=claude mcp add -s user 同址）。
+
+**定案**：
+1. **connect 全声明式文件写**（不 spawn 宿主 CLI）——win32 .cmd 垫片陷阱整类绕开、跨平台一致、可纯函数单测；代价是宿主配置格式漂移时需跟随（回落 generic 打印恒可用）。daemon 缺席自拉起：detached spawn node 直跑 bin/stardeck.mjs（打包态判据=入口以 stardeck.mjs 结尾，dev 态诚实报「先 start」）。
+2. **桌面壳=进程编排不做二次真相**：壳只是 daemon 的窗口+托盘——已有 daemon 在跑则复用不代管（谁生的谁管），ELECTRON_RUN_AS_NODE 用 Electron 自带 node 跑 daemon（用户机器零 Node 依赖），关窗进托盘、退出杀进程树。主包运行时依赖（ai SDK 三件）不变——Electron 全在 desktop/ 自带 devDeps，npm stardeck 与桌面安装器是两个发行物、一个内核。
+3. **死路治理的诚实口径**：全席缺席给「安装命令一键复制+重新探测」，不假装能绕过外勤依赖；内置 loop 指引只教 env（key 只走 env 永不入盘红线——UI 永不设输 key 面）。
+
+**坑录**：electron 二进制下载慢→查 %LOCALAPPDATA%/electron/Cache 本地缓存直接钉已有版本（44.3.0 缓存命中秒装）；electron 窗口开关是 chromium 级参数须放 app 路径**前面**；.mjs 里手滑 TS 注解（`()=>: void`）=SyntaxError Unexpected token；CHANGELOG 整文件重写前先查历史段位（本文件 0.3.0 是 warroom 时代遗留段位，新节插文件头不覆写）；测试全量并行下 connect 真 daemon 测试在矩阵 OFF 面会拿到签席 404（产品正确）——测试文件级显式 STARDECK_PROXY=1 回 ON，OFF 面 404 纪律由独立子进程测试钉死。

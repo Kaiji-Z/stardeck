@@ -15,7 +15,7 @@
  *   node scripts/release.mjs <version|major|minor|patch> ["commit message"]
  */
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 
 const OWNER_REPO = 'Kaiji-Z/stardeck'
 const NPM_NAME = 'stardeck'
@@ -115,6 +115,24 @@ for (;;) {
   } catch { /* transient network failure: keep polling */ }
   if (versions !== null && versions[next] !== undefined) {
     console.log(`RELEASED ${NPM_NAME}@${next} is live on npm`)
+    // GATE 5（可选）——桌面安装器上传：tag 的 GitHub Release 由 CI/手动创建后，
+    // 把 desktop/release 的成品挂上去。安装器缺席=跳过（纯 npm 版本照常收尾）。
+    const installers = existsSync('desktop/release')
+      ? readdirSync('desktop/release').filter(f => /\.(exe|dmg|AppImage)$/.test(f))
+      : []
+    if (installers.length > 0) {
+      console.log(`desktop installers found: ${installers.join(', ')} — uploading to GitHub Release ${tag}…`)
+      let uploaded = false
+      for (let attempt = 0; attempt < 10 && !uploaded; attempt++) {
+        // Release 对象可能尚未存在（CI 刚跑完 npm）——先 create（已存在则忽略错）再 upload。
+        sh('gh', ['release', 'create', tag, '--title', tag, '--notes', `stardeck ${next}`, '--clobber'], true)
+        uploaded = sh('gh', ['release', 'upload', tag, ...installers.map(f => `desktop/release/${f}`), '--clobber'], false) === 0
+        if (!uploaded) await new Promise(resolve => setTimeout(resolve, 30_000))
+      }
+      console.log(uploaded ? `desktop installers uploaded（${installers.join(', ')}）` : 'desktop installers upload failed — gh release upload 手动补挂（npm 版本不受影响）')
+    } else {
+      console.log('desktop/release 无安装器——跳过 GATE 5（桌面壳随 npm 版本照常）')
+    }
     console.log(`next: npm i -g ${NPM_NAME}@${next}（或 npm update ${NPM_NAME}）`)
     process.exit(0)
   }

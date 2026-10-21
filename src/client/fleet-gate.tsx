@@ -10,7 +10,7 @@ import { Fragment, createElement, useState, useSyncExternalStore } from 'react'
 import { langId, subscribeLang } from './copy.ts'
 
 export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
-export interface FleetState { active: { executor: string; model: string }; seats: Seat[] }
+export interface FleetState { active: { executor: string; model: string }; seats: Seat[]; proxyLoop?: boolean }
 
 /** 席位三分语义（纯）：可绑定（大副+外勤双接通且实证在役）/ 受限·实验性（契约
  * 在档但本机有已知阻碍）/ 未检出。V19.13 双席正典：**staffReady=false=不可选**
@@ -47,6 +47,24 @@ interface GateCopy {
   absentFold: (n: number) => string
   /** D29 critique：席位注解技术细节折叠标签（第一屏只说人话）。 */
   techDetails: string
+  /** D30 开箱面：全席缺席死路治理——安装引导 + 重新探测 + 内置 loop 指引。 */
+  installTitle: string
+  installVia: (pkg: string) => string
+  reprobe: string
+  copied: string
+  copyFail: string
+  loopReady: string
+  loopHint: string
+}
+
+/** 可安装席的正典 npm 包名（2026-10 本机 npm ls 实锚；zcode/dsh 走各自渠道无 npm 包）。 */
+const INSTALL_PKGS: Record<string, string> = {
+  opencode: 'opencode-ai',
+  pi: '@earendil-works/pi-coding-agent',
+  codex: '@openai/codex',
+  claude: '@anthropic-ai/claude-code',
+  gemini: '@google/gemini-cli',
+  qwen: '@qwen-code/qwen-code',
 }
 
 const GATE: Record<'zh' | 'en', GateCopy> = {
@@ -74,6 +92,13 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     absentTitle: '该舰队本机未检出——先安装或检查入口路径',
     absentFold: n => `+${n} 即将支持`,
     techDetails: '技术细节',
+    installTitle: '本机没有检出任何舰队——挑一个装上（复制命令到终端跑），装好点「重新探测」：',
+    installVia: pkg => `npm i -g ${pkg}`,
+    reprobe: '装好了，重新探测',
+    copied: '已复制',
+    copyFail: '复制失败——请手动选中命令复制',
+    loopReady: '内置代理舰长已就绪（STARDECK_PROXY_LOOP=1）——聊天窗由内置 loop 担任（模型走 Z_AI_* 环境变量）；舰队外勤仍需上方任一席。',
+    loopHint: '一个 CLI 都不想装也可以先聊：设环境变量 STARDECK_PROXY_LOOP=1 与 Z_AI_BASE_URL / Z_AI_API_KEY 后重启 stardeck，聊天窗的代理舰长由内置 loop 担任。',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -99,6 +124,13 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     absentTitle: 'Fleet not found on this machine — install it or check the entry path',
     absentFold: n => `+${n} coming soon`,
     techDetails: 'Technical details',
+    installTitle: 'No fleet CLI detected — install one (copy the command into a terminal), then re-scan:',
+    installVia: pkg => `npm i -g ${pkg}`,
+    reprobe: 'Installed — re-scan',
+    copied: 'Copied',
+    copyFail: 'Copy failed — please select and copy the command manually',
+    loopReady: 'Built-in proxy captain is ready (STARDECK_PROXY_LOOP=1) — the chat window runs on the built-in loop (model via Z_AI_* env); field missions still need a seat above.',
+    loopHint: 'No CLI at all? You can still chat: set STARDECK_PROXY_LOOP=1 plus Z_AI_BASE_URL / Z_AI_API_KEY environment variables and restart stardeck — the chat captain runs on the built-in loop.',
   },
 }
 
@@ -109,6 +141,8 @@ export function fleetGate(props: {
   onDismiss?: () => void
   /** 绑定失败提示（POST /fleet 失败不再静默放行——R3 次要项）。 */
   error?: string
+  /** D30 开箱面：全席缺席时引导卡上的「重新探测」（App 重拉 GET /fleet）。 */
+  onReprobe?: () => void
 }): ReturnType<typeof createElement> {
   useSyncExternalStore(subscribeLang, langId)
   const t = GATE[langId()]
@@ -123,6 +157,17 @@ export function fleetGate(props: {
   const picked = props.fleet.seats.find(s => s.id === pick) ?? selected
   const [model, setModel] = useState(props.fleet.active.model)
   const [showAbsent, setShowAbsent] = useState(false)
+  // D30 开箱面：全席缺席死路治理——复制反馈态（哪个包名的命令刚被复制）。
+  const [copiedId, setCopiedId] = useState('')
+  const copyInstall = (id: string): void => {
+    const pkg = INSTALL_PKGS[id]
+    if (pkg === undefined) return
+    const cmd = t.installVia(pkg)
+    const done = (): void => { setCopiedId(id); setTimeout(() => { setCopiedId(c => (c === id ? '' : c)) }, 2000) }
+    try {
+      void navigator.clipboard?.writeText(cmd).then(done).catch(() => console.warn(t.copyFail))
+    } catch { console.warn(t.copyFail) }
+  }
   const card = (seat: Seat): ReturnType<typeof createElement> => {
     const status = seatStatusOf(seat)
     const isPick = seat.id === pick
@@ -212,6 +257,35 @@ export function fleetGate(props: {
       // 在容器外常驻，不随席列滚动）。
       createElement('div', { className: 'war-gate-scroll', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'grid', gap: 8, alignContent: 'start', paddingBottom: 4 } },
         visibleSeats.map(card),
+        // D30 开箱面：全席缺席不再是哑谜死路——安装引导卡（正典包名一键复制）
+        // + 重新探测；内置 loop 指引（env 已开=就绪卡，未开=零 CLI 指路）。
+        visibleSeats.length === 0
+          ? createElement('div', {
+              key: 'install-guide', 'data-war-install-guide': '1',
+              style: { padding: '12px 14px', borderRadius: 'var(--war-r-md, 10px)', background: 'var(--war-well-bg)', border: '1px solid var(--war-border-soft)' },
+            },
+              createElement('div', { style: { fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.6 } }, t.installTitle),
+              ...absentSeats.filter(s => INSTALL_PKGS[s.id] !== undefined).map(seat =>
+                createElement('div', { key: `ins-${seat.id}`, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
+                  createElement('code', {
+                    style: { flex: '1 1 auto', fontFamily: 'var(--war-font-code)', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-1)', background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '5px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                  }, t.installVia(INSTALL_PKGS[seat.id]!)),
+                  createElement('button', {
+                    type: 'button',
+                    onClick: () => { copyInstall(seat.id) },
+                    style: { flex: '0 0 auto', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--war-border)', background: 'transparent', color: copiedId === seat.id ? 'var(--war-done)' : 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))' },
+                  }, copiedId === seat.id ? t.copied : seat.label),
+                )),
+              createElement('button', {
+                type: 'button', 'data-war-reprobe': '1',
+                onClick: () => { props.onReprobe?.() },
+                style: { marginTop: 10, padding: '7px 14px', borderRadius: 8, border: '1px solid var(--war-border-hover)', background: 'var(--war-card-bg)', color: 'var(--war-text-1)', cursor: 'pointer', fontSize: 'calc(13px*var(--war-fs))' },
+              }, t.reprobe),
+              props.fleet.proxyLoop === true
+                ? createElement('div', { style: { marginTop: 10, fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-done)', lineHeight: 1.6 } }, t.loopReady)
+                : createElement('div', { style: { marginTop: 10, fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-3)', lineHeight: 1.6 } }, t.loopHint),
+            )
+          : null,
         absentSeats.length > 0
           ? createElement('button', {
               key: 'absent-fold', type: 'button',

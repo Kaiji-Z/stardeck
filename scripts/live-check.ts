@@ -773,6 +773,58 @@ if (process.env.STARDECK_LIVE_STEER === '1') {
   }
 }
 
+// ---------- 可选相位：一行接入实弹（STARDECK_LIVE_CONNECT=1） ----------
+// 真 daemon + runConnect：opencode 真写盘（隔离 XDG）、generic 配置块、
+// 红线三查（--face proxy / token 48hex env / war 面键零出现）、fleet 带 proxyLoop。
+if (process.env.STARDECK_LIVE_CONNECT === '1') {
+  const { runConnect } = await import('../src/connect.ts')
+  const PORT3 = PORT + 2
+  const base3 = `http://127.0.0.1:${PORT3}`
+  const stateDir3 = mkdtempSync(join(tmpdir(), 'stardeck-live-connect-'))
+  const home3 = mkdtempSync(join(tmpdir(), 'stardeck-live-connhome-'))
+  let daemon3: ChildProcess | undefined
+  try {
+    daemon3 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        STARDECK_CONFIG: join(stateDir3, 'config.json'), STARDECK_STATE_DIR: stateDir3, STARDECK_WAR_ROOT: join(stateDir3, 'tasks'), STARDECK_PORT: String(PORT3), STARDECK_STAFF: '0',
+        ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: 'zai-coding-plan/glm-5.3' }),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    daemon3.stdout?.on('data', d => process.stdout.write(d))
+    daemon3.stderr?.on('data', d => process.stderr.write(d))
+    const t3 = Date.now()
+    for (;;) {
+      try { const r = await fetch(`${base3}/warroom/api/healthz`); if (r.ok) break } catch { /* not up */ }
+      if (Date.now() - t3 > 30_000) throw new Error('connect 相位 daemon 30s 未活')
+      await new Promise(r => setTimeout(r, 500))
+    }
+    const paths3 = { home: home3, xdgConfig: join(home3, '.config'), codexHome: join(home3, '.codex'), zcodeHome: join(home3, '.zcode') }
+    const oc = await runConnect('opencode', { base: base3, paths: paths3 })
+    check('D30 connect：opencode 一行接入（签席+写盘）', oc.ok && oc.seatId?.startsWith('proxyx-') === true, `seat=${oc.seatId ?? '-'} err=${oc.error ?? '-'}`)
+    const ocCfg = JSON.parse(readFileSync(join(paths3.xdgConfig, 'opencode', 'opencode.json'), 'utf8')) as { mcp: Record<string, { command: string[]; environment: Record<string, string> }> }
+    const entry = ocCfg.mcp['stardeck-proxy']
+    check('D30 connect：注册面红线三查（--face proxy / token 48hex / war 键零出现）', entry !== undefined
+      && entry.command.join(' ').includes('--face') && entry.command.join(' ').includes('proxy')
+      && /^[0-9a-f]{48}$/.test(entry.environment.STARDECK_PROXY_TOKEN ?? '')
+      && !JSON.stringify(ocCfg).includes('STARDECK_AGENT'), JSON.stringify(entry?.command ?? null))
+    const gen = await runConnect('generic', { base: base3, paths: paths3 })
+    check('D30 connect：generic 配置块（mcpServers 键形自拷）', gen.ok && gen.lines.some(l => l.includes('"mcpServers"')), `lines=${gen.lines.length}`)
+    const fleetOut = await fetch(`${base3}/warroom/api/fleet`).then(r => r.json()) as { proxyLoop?: boolean }
+    check('D30 connect：/fleet 暴露 proxyLoop（门面指引数据源）', fleetOut.proxyLoop === false, `proxyLoop=${String(fleetOut.proxyLoop)}`)
+  } catch (err) {
+    check('D30 connect 相位整体', false, err instanceof Error ? err.message : String(err))
+  } finally {
+    daemon3?.kill()
+    await new Promise(r => setTimeout(r, 500))
+    try { rmSync(stateDir3, { recursive: true, force: true }) } catch { /* 句柄竞速，尽力清 */ }
+    try { rmSync(home3, { recursive: true, force: true }) } catch { /* 同上 */ }
+  }
+}
+
 const passed = results.filter(r => r.pass).length
 const verdict = passed === results.length ? 'PASS' : 'FAIL'
 writeFileSync(join(evidenceDir, 'REPORT.md'), [

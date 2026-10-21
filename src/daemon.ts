@@ -858,7 +858,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           return sendJson(res, 200, out) // 工具业务失败也 200——调用方看 ok/error（错误文案即教学）
         }
         if (key === 'GET /warroom/api/fleet') {
-          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin) })
+          // D30 开箱面：proxyLoop 随门面下发——全席缺席时门给「内置 loop」诚实指引。
+          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin), proxyLoop: proxyLoopEnvOf(process.env).enabled })
         }
         if (key === 'POST /warroom/api/fleet') {
           const body = JSON.parse(await readBody(req)) as { executor?: unknown; model?: unknown }

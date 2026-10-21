@@ -6,3 +6,8 @@ dist/
 .playwright-mcp/
 .impeccable/
 HANDOFF.md
+desktop/node_modules/
+desktop/release/
+desktop/resources/
+.video_agent/
+.zcode/

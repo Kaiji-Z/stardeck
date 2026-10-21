@@ -1,0 +1,66 @@
+{
+  "name": "stardeck-desktop",
+  "private": true,
+  "version": "0.7.0",
+  "description": "stardeck 桌面壳——点击即用的舰队甲板（daemon 内置，窗口+托盘）",
+  "main": "src/main.mjs",
+  "scripts": {
+    "icon": "node scripts/gen-icon.mjs",
+    "predist": "node scripts/pack-daemon.mjs",
+    "dist": "electron-builder --win",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "ai.stardeck.desktop",
+    "productName": "stardeck",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/stardeck",
+        "to": "stardeck"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "stardeck"
+    }
+  }
+}

@@ -468,3 +468,21 @@ for (const [name, text] of cases) {
     assert.equal(text, expected)
   })
 }
+
+test('D30 回归：任务书五项编号列表变体（glm-5.3-flash 实弹风格 `1. **目标**：`）可收割', async () => {
+  const { briefBlocksOf } = await import('../src/staff.ts')
+  const text = [
+    '【任务书】（cmd-flash-1）',
+    '1. **目标**：任务工作区根有 staff-live.txt（含标记串），并有 check.js 真实校验通过。',
+    '2. **背景与约束**：舰桥连通性实测命令；Node 单脚本，不引第三方依赖。',
+    '3. **验收标准**：staff-live.txt 存在且内容含标记串；node check.js 退出码 0（附取证）。',
+    '4. **非目标**：不改工作区内其他文件；不写额外工具或文档。',
+    '5. **交付物**：staff-live.txt、check.js、运行取证。',
+  ].join('\n')
+  const blocks = briefBlocksOf(text)
+  assert.equal(blocks.length, 1, '编号+粗体五项整块收割')
+  assert.equal(blocks[0]!.commandId, 'cmd-flash-1')
+  assert.ok(blocks[0]!.goal.includes('staff-live.txt'), 'goal 值剥净前缀')
+  assert.ok(!blocks[0]!.goal.startsWith('1.'), 'goal 不带编号残留')
+  assert.ok(blocks[0]!.nonGoals.includes('其他文件'), 'nonGoals 值在')
+})

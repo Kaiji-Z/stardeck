@@ -2,6 +2,21 @@
 
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
+
+## [0.7.0] - 2026-10-21
+
+### Added（D30 开箱即用 + 一行接入 + 桌面壳——npm 发布解禁后的第一刀）
+
+- **`stardeck` 一条命令即用**：`npm i -g stardeck && stardeck`——起 daemon 后**自动打开浏览器**（`--no-open` 关；`open` 子命令保留为显式面）；首跑（配置文件缺席判据）自动建「点击即用」快捷方式（win32 开始菜单 .lnk 经 PowerShell COM / darwin .command / linux .desktop，`--no-app` 关、`stardeck app` 恒建；开发态 tsx 直跑诚实拒绝建）；package.json 补 `engines.node >=22`。
+- **`stardeck connect [host]` 一行接入代理舰长外接席**：daemon 不在自动后台拉起（打包态 detached 自 spawn，node 直跑 mjs 不触 .cmd 垫片）→ 签席（token 只此一次）→ 按宿主**声明式文件写**注册（不 spawn 宿主 CLI——跨平台一致）：claude（~/.claude.json mcpServers，`claude mcp add -s user` 同址）/ zcode（~/.zcode/cli/config.json 的 mcp.servers；检测到开源 CLI 的 setting.json 则双写并补 features.mcp 闸）/ opencode（opencode.json 的 mcp 键）/ codex（CODEX_HOME config.toml 的 [mcp_servers.stardeck-proxy]，文本级摘旧表再追加）/ 通用（打印 {"mcpServers":…} 块自拷）。写盘承注入家族纪律：首动备份 *.pre-stardeck、tmp+rename 原子、幂等、坏 JSON 拒绝覆盖。**红线**：注册面只含 --face proxy + STARDECK_PROXY_TOKEN，war_* 一件不出（单测+live 三查钉死）。
+- **Electron 桌面壳**（`desktop/` 自包子包——主包运行时依赖不变，Electron 全在壳内）：单实例锁 → 内置 daemon 拉起（`ELECTRON_RUN_AS_NODE=1` 用 Electron 自带 node 跑 dist/cli.mjs——用户机器零 Node 依赖；已有 daemon 在跑则复用不代管）→ BrowserWindow 载甲板 → 关窗进托盘（托盘菜单打开/退出，退出杀 daemon 进程树）；?cb=版本号 强刷 client.js（升级缓存家法）；electron-builder 出 win NSIS oneClick 安装器（mac dmg/linux AppImage 配置在档实弹候机）；图标纯 node PNG 编码生成（夜空+罗经星+甲板弧）。
+- **首跑死路治理**（fleet-gate）：全席缺席不再哑谜——安装引导卡（六席正典 npm 包名一键复制 + 「重新探测」钮重拉 /fleet）+ 内置 loop 指引（`/fleet` 新增 `proxyLoop` 字段下发：env 已开=就绪卡，未开=零 CLI 设 env 指路——key 只走 env 红线，UI 不设输 key 面）。
+
+### Changed
+- README 快速开始 npm-first 重写（中英同步）：`npm i -g stardeck && stardeck` 为正典入口，connect 四宿主一行命令表，桌面安装器指路；源码安装降「开发」节。
+
+### 门禁
+- 测试 525→532（+7：connect 生成器红线/writer 纪律（坏 JSON 拒绝/首动备份/幂等结构不变——每次连接签新席 token 必异，幂等=结构面不是字节）/真 daemon 四宿主全流程/缺席诚实报错；fleet-gate 引导卡渲染×2）；live 新相位 `STARDECK_LIVE_CONNECT`（opencode 真写盘+红线三查+generic 块+proxyLoop 下发）；verify+旗面矩阵全绿。
 ## [0.3.0] - 2026-10-20
 
 ### Added（D26 舰桥频道：对话范式回归，DESIGN D26 三轮拍板）

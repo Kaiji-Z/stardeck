@@ -65,14 +65,14 @@ AI 大副分诊你的命令（L0 直发 / L1 签任务书），起草任务书�
 
 ## 快速开始
 
-前置：[Node.js](https://nodejs.org) ≥ 22、[pnpm](https://pnpm.io) ≥ 9，以及至少一个受支持的 coding CLI（如 [opencode](https://opencode.ai)）。
+前置：[Node.js](https://nodejs.org) ≥ 22，以及至少一个受支持的 coding CLI（如 [opencode](https://opencode.ai)；一个都没有也可以先聊天，见下）。
 
 ```bash
-git clone https://github.com/Kaiji-Z/stardeck.git
-cd stardeck
-pnpm install && pnpm build
-node bin/stardeck.mjs          # 起守护进程 + 打开浏览器
+npm i -g stardeck
+stardeck                       # 起 daemon + 自动打开浏览器（首跑自动建开始菜单快捷方式）
 ```
+
+想要「双击图标」的桌面应用形态，直接下安装器：[GitHub Releases → stardeck Setup](https://github.com/Kaiji-Z/stardeck/releases)（Windows；macOS/Linux 随后跟上）。
 
 浏览器会先经过**舰队选择门**——选一个已安装的 CLI（模型留空即沿用其自身默认），点「开始调度」，然后进入**舰桥频道**（聊天窗），跟代理舰长说你的第一句话，例如：
 
@@ -84,15 +84,32 @@ node bin/stardeck.mjs          # 起守护进程 + 打开浏览器
 
 `!!` 强制直发（跳过签发），`??` 强制先看方案（看板 composer 直令照旧——聊天里说目标则由代理舰长拟令成卡）。不喊 `!!`/`??` 也可以纯聊天（问战况、问用法）。右上角可随时切到分屏/看板视图。
 
+本机一个 CLI 都没有？门面会给出各席安装命令（一键复制）；或者设 `STARDECK_PROXY_LOOP=1` 与 `Z_AI_BASE_URL`/`Z_AI_API_KEY` 环境变量后重启——聊天窗的代理舰长由内置 loop 担任（key 只走环境变量，永不落盘）。
+
+### 把你自己的 agent 接进来当代理舰长（一行命令）
+
+任何支持 MCP 或 HTTP 的 agent 都能坐上代理舰长席（`stardeck connect` 自动起 daemon、签席、写宿主注册）：
+
+```bash
+stardeck connect claude      # Claude Code（写 ~/.claude.json，等价 claude mcp add -s user）
+stardeck connect zcode       # zcode（写 ~/.zcode/cli/config.json 的 mcp.servers）
+stardeck connect opencode    # opencode（写 ~/.config/opencode/opencode.json 的 mcp 键）
+stardeck connect codex       # Codex CLI（写 ~/.codex/config.toml 的 [mcp_servers.stardeck-proxy]）
+stardeck connect             # 其他宿主：打印 {"mcpServers": …} 配置块，自己粘
+```
+
+注册后打开 `http://127.0.0.1:3970` 聊天——回话的就是你的 agent（它拿到的是五件只读+交答工具，执行者的 war_* 一件不出；token 只在注册时出现一次）。撤销：删除宿主配置里的 `stardeck-proxy` 键即可。
+
 ### 常用命令
 
 ```bash
-node bin/stardeck.mjs open     # 起守护进程并拉起浏览器
-node bin/stardeck.mjs status   # 探活：舰队/revision/账面计数
-node bin/stardeck.mjs stop     # 优雅停服（在役执行者先行收割）
-pnpm test                      # 全量测试
-pnpm verify                    # 三段式验收门：tests + build + 针脚
-pnpm live                      # 端到端实机门：真 CLI 外勤全链（需已配好 opencode）
+stardeck open     # 起 daemon 并强制拉起浏览器
+stardeck app      # 建「点击即用」快捷方式（首跑自动建）
+stardeck status   # 探活：舰队/revision/账面计数
+stardeck stop     # 优雅停服（在役执行者先行收割）
+pnpm test         # 全量测试（开发态）
+pnpm verify       # 三段式验收门：tests + build + 针脚（开发态）
+pnpm live         # 端到端实机门：真 CLI 外勤全链（开发态）
 ```
 
 ### 配置
@@ -191,6 +208,17 @@ stardeck 的威胁模型是**本机互信**：
 - [VERIFICATION.md](VERIFICATION.md) — 验证体系
 - [eval/](eval) — 监督评测（promptfoo 三维门）
 
+## 开发（源码安装）
+
+```bash
+git clone https://github.com/Kaiji-Z/stardeck.git
+cd stardeck
+pnpm install && pnpm build
+node bin/stardeck.mjs          # 起 daemon + 自动开浏览器（pnp 装包用户走 npm i -g stardeck 即可）
+```
+
+桌面壳（可选）：`cd desktop && npm install && npm run dev`（开发态，复用主仓 dist）；出安装器 `npm run dist`。
+
 ## 贡献
 
 欢迎 issue 与 PR。提交前请跑 `pnpm verify`（tests + build + 针脚三段式）与 `pnpm live`（端到端实机门）。改提示词资产必须过快照门（`WARROOM_UPDATE_SNAPSHOTS=1` 重新生成 fixtures 并随改动一并提交）。
@@ -251,33 +279,51 @@ Switch 中文/English in the settings drawer — the whole board re-renders live
 
 ## Quick start
 
-Prerequisites: [Node.js](https://nodejs.org) ≥ 22, [pnpm](https://pnpm.io) ≥ 9, and at least one supported coding CLI (e.g. [opencode](https://opencode.ai)).
+Prerequisites: [Node.js](https://nodejs.org) ≥ 22 and at least one supported coding CLI (e.g. [opencode](https://opencode.ai); none installed yet? see below).
 
 ```bash
-git clone https://github.com/Kaiji-Z/stardeck.git
-cd stardeck
-pnpm install && pnpm build
-node bin/stardeck.mjs          # start the daemon + open the browser
+npm i -g stardeck
+stardeck                       # starts the daemon + opens your browser (first run also creates a Start-menu shortcut)
 ```
 
-The browser first shows the **fleet gate** — pick an installed CLI (leave the model empty to use its own default), hit *Start dispatching*, then type your first order in the bottom-left composer:
+Prefer a desktop app? Grab the installer from [GitHub Releases](https://github.com/Kaiji-Z/stardeck/releases) (Windows; macOS/Linux to follow).
+
+The browser first shows the **fleet gate** — pick an installed CLI (leave the model empty to use its own default), hit *Start dispatching*, then type your first order in the chat window:
 
 ```
 !!direct: create hello.txt in the workspace root with the current time
 ??plan-first: run a dependency health check on this project, show me the plan first
+What's the fleet status? Give me a quick rundown
 ```
 
 `!!` forces direct execution (skips plan approval), `??` forces plan-first. Default tiers are triaged by the AI first mate.
 
+No CLI on this machine? The gate shows one-click-copy install commands for every seat; or set `STARDECK_PROXY_LOOP=1` plus `Z_AI_BASE_URL`/`Z_AI_API_KEY` environment variables and restart — the chat captain runs on the built-in loop (keys live in env vars only, never on disk).
+
+### Plug your own agent in as the proxy captain (one line)
+
+Any MCP- or HTTP-capable agent can take the proxy captain seat (`stardeck connect` starts the daemon, issues the seat token, and writes the host registration):
+
+```bash
+stardeck connect claude      # Claude Code (~/.claude.json; same as claude mcp add -s user)
+stardeck connect zcode       # zcode (mcp.servers in ~/.zcode/cli/config.json)
+stardeck connect opencode    # opencode (mcp key in ~/.config/opencode/opencode.json)
+stardeck connect codex       # Codex CLI ([mcp_servers.stardeck-proxy] in ~/.codex/config.toml)
+stardeck connect             # anything else: prints a {"mcpServers": …} block to paste
+```
+
+Open `http://127.0.0.1:3970` and chat — your own agent now answers as the proxy captain (it only ever sees five read+reply tools; the executors' war_* tools never cross the proxy face. The token is shown exactly once, at registration). To undo: remove the `stardeck-proxy` key from the host config.
+
 ### Commands
 
 ```bash
-node bin/stardeck.mjs open     # start the daemon and open the browser
-node bin/stardeck.mjs status   # liveness: fleet / revision / ledger counts
-node bin/stardeck.mjs stop     # graceful shutdown (in-flight agents harvested first)
-pnpm test                      # full test suite
-pnpm verify                    # three-stage gate: tests + build + needles
-pnpm live                      # end-to-end live gate: a real CLI agent full loop (needs opencode set up)
+stardeck open     # start the daemon and force-open the browser
+stardeck app      # create the "click to launch" shortcut (auto-created on first run)
+stardeck status   # liveness: fleet / revision / ledger counts
+stardeck stop     # graceful shutdown (in-flight agents harvested first)
+pnpm test         # full test suite (development)
+pnpm verify       # three-stage gate: tests + build + needles (development)
+pnpm live         # end-to-end live gate: a real CLI agent full loop (development)
 ```
 
 ### Configuration
@@ -348,6 +394,17 @@ stardeck's threat model is **local mutual trust**:
 - [CHANGELOG.md](CHANGELOG.md) — changelog
 - [VERIFICATION.md](VERIFICATION.md) — verification system
 - [eval/](eval) — supervised evaluation (promptfoo three-dimension gate)
+
+## Development (source install)
+
+```bash
+git clone https://github.com/Kaiji-Z/stardeck.git
+cd stardeck
+pnpm install && pnpm build
+node bin/stardeck.mjs          # start the daemon + open the browser (end users: npm i -g stardeck)
+```
+
+Desktop shell (optional): `cd desktop && npm install && npm run dev` (uses the repo's dist); build the installer with `npm run dist`.
 
 ## Contributing
 

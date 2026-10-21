@@ -17,7 +17,8 @@
 
 | 文件 | 职责 |
 |---|---|
-| `cli.ts` | **bin 入口**（daemon.ts 是库模块不自动起服——spawn/直跑 daemon.ts 会静默退出，入口永远是 cli.ts） |
+| `cli.ts` | **bin 入口**（daemon.ts 是库模块不自动起服——spawn/直跑 daemon.ts 会静默退出，入口永远是 cli.ts）。**D30 开箱面**：start 就绪自动开浏览器（--no-open 关）+ 首跑自动建快捷方式（--no-app 关；`app` 子命令恒建——win32 开始菜单 .lnk 经 PowerShell COM/darwin .command/linux .desktop，dev 态诚实拒绝）+ `connect [host]` 一行接入 |
+| `connect.ts` | **一行接入代理舰长外接席**（D30）：daemon 缺席自拉起（detached spawn node 直跑 bin/stardeck.mjs，dev 态诚实报「先 start」）→ 签席 → 四宿主**声明式文件写**（claude=~/.claude.json mcpServers / zcode=~/.zcode/cli/config.json mcp.servers（CLI setting.json 在则双写+features.mcp）/ opencode=opencode.json mcp 键 / codex=CODEX_HOME config.toml 文本级摘旧表再追加）+ generic 打印块。注入家族纪律（首动备份 *.pre-stardeck/原子/幂等/坏 JSON 拒绝）；红线：注册面只含 --face proxy + STARDECK_PROXY_TOKEN（测试三查钉死） |
 | `daemon.ts` | 装配层（原插件 index.ts 的对位物）：dashboard 鸭子直挂 + war_* 注册表 + MCP/工具调用端点 + 巡检 + 板 UI 静态服务 + 优雅关停 |
 | `executor.ts` | 执行者适配层：ExecutorAdapter **六席**（opencode/pi/zcode/claude 已验证；codex 契约+Windows 阻碍、gemini 契约+本机无 key=实验性）+ ExecutorRegistry（进程即生命）+ executorBrief（mcp/pi-extension 双面措辞）+ spawnHeadlessOpencode/Pi/Zcode/Claude（无头框定法，大副随舰队共用；win32 .cmd 垫片禁裸 spawn，JS 入口经 node；claude 无头必带 `--dangerously-skip-permissions`——默认权限模式拒一切工具，实测确认）+ 五家注入器（bound 逐键/整表合并+首动备份） |
 | `history.ts` | 会话历史只读读取器（零 token 板内弹窗）：zcode/opencode=sqlite 双表（同构 schema，node:sqlite readOnly）、pi/codex/claude=JSONL 各自解析；db 位 env 可覆盖 |
@@ -66,12 +67,15 @@ pnpm install && pnpm build      # esbuild 三产物（dist/cli.mjs + client.js +
 pnpm start                      # 起 daemon（默认 http://127.0.0.1:3970，开发态 tsx 直跑；大副外聘默认开）
 pnpm test / pnpm verify / pnpm live   # 测试 / 三段式验收门 / 实弹门（主环关大副防双发）
 STARDECK_LIVE_STAFF=1 pnpm live      # +大副相位（draft 自动成案 + 定时令到点派发，5 断言）
+STARDECK_LIVE_CONNECT=1 pnpm live    # +一行接入相位（opencode 真写盘+红线三查，4 断言）
 STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也须绿）
+cd desktop && npm install && npm run dev  # 桌面壳开发态（复用主仓 dist；electron 走本地缓存钉版）
+cd desktop && npm run dist               # 出 win NSIS 安装器（release/）
 ```
 
-- 实弹门外置前提：本机全局 opencode 已装且配好模型（`~/.config/opencode/opencode.json` 的 provider zai-coding-plan/glm-5.3——2026-10-20 z.ai 撤 glm-5.2 换 5.3 家族，配置已追加 `options.baseURL` 钉正端点+glm-5.3 条目，见环境坑）；可用 `STARDECK_MODEL` 覆盖。
+- 实弹门外置前提：本机全局 opencode 已装且配好模型（`~/.config/opencode/opencode.json` 的 provider zai-coding-plan/glm-5.3——2026-10-20 z.ai 撤 glm-5.2 换 5.3 家族，配置已追加 `options.baseURL` 钉正端点+glm-5.3 条目，见环境坑）；可用 `STARDECK_MODEL` 覆盖（**D30 舰长令：测试实弹一律 glm-5.3-flash 省 token**）。
 - 实弹门用隔离 stateDir（mkdtemp），跑完自清；PASS 10/10 才算交付。
-- 端口惯例：daemon 默认 3970；live 门 3971；UI 目检脚本用过 3973。
+- 端口惯例：daemon 默认 3970；live 门 3971；UI 目检脚本用过 3973；connect 测试 41710/41900；desktop 烟测 3992/3993。
 
 ## 验证体系（stop-manual-testing 纪律，继承 warroom）
 
@@ -106,6 +110,12 @@ STARDECK_VERIFY_MATRIX=1 pnpm verify # +旗面双跑矩阵（全旗 OFF 面也�
 - pnpm v10 默认拦构建脚本——本仓 package.json 已带 `pnpm.onlyBuiltDependencies: ["esbuild"]`，新装依赖若含 postinstall 需补白名单。
 - **verify 全量并行下真 daemon 链路测试偶发快败**（D29 实录：外接席/矩阵 ECONNRESET、任务未物化等，单跑恒绿）——spawn daemon 的测试端口底数必须全仓独占（`41xxx+pid%50` 同底数在 win32 双 daemon 共听串话，已改 proxy-external-seat 旗 OFF 面=41510）；遇败先单跑+复跑再判真回归，别急着改产品代码。
 - **happy-dom 渲染 harness 缺 ResizeObserver**（D29）——板坞测量件一挂即渲染崩（测试假白屏）；client-render.test.ts 已补桩，新组件用新浏览器全局时先查 harness。
+- **electron 二进制下载慢→先翻本地缓存**（D30）：`%LOCALAPPDATA%/electron/Cache` 里常已有 win32-x64 zip（本机 44.3.0 命中）——desktop/package.json 直接钉缓存版本，install.js 秒过；CN 网络备选 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`。
+- **Electron chromium 级开关须放 app 路径前面**（D30）：`electron.exe --remote-debugging-port=9224 .` 才生效，放后面成了应用自有 argv（CDP attach 拿不到页面）。
+- **.mjs 里手滑 TS 注解即炸**（D30）：`const f = (): void => {}` 在纯 JS 包=SyntaxError Unexpected token——desktop/ 是纯 JS 包，写完跑 `node --check`。
+- **CHANGELOG 有历史段位**（D30 注意）：文件里 0.3.0 是 warroom 时代遗留段、新版本节插文件头不覆写；整文件重写前先 `grep "^## \["` 看段位分布。
+- **本机 AppData 整条是 C:→D: junction**（D30 桌面壳三雷同源）：①ELECTRON_RUN_AS_NODE 下 import.meta.url=真身小写盘符（file:///d:/）而 argv 可给 junction 别名——cli isMain 恒假静默退 0，修=argv 侧 realpathSync+大小写归一比较；②Chromium ProcessSingleton 对 junction 化 userData 挂死/锁冲突（lock=false 或 0x20）——main.mjs 在 requestSingleInstanceLock 前 `app.setPath('userData', realpathSync(...))`；③历史探针遗孤进程握锁+lockfile 残留——排障先 `tasklist|grep stardeck` 全杀再删锁。**安装轮纪律：装前杀 stardeck.exe（NSIS 对运行中实例不替换文件）、装后杀 auto-run 实例（它握真实 stateDir）。**
+- **electron-builder extraResources 双布局**（D30）：daemon 静态资源候选是 dist 的**同级** public/（npm 包 files 同构）——pack 只拷 dist 会让安装版 GET / 落 API fallback（"no route: GET /"），必须连 public 一起收。
 
 ## 降级面与迭代候选（2026-09-01 更新）
 

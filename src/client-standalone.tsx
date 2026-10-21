@@ -192,12 +192,13 @@ function App(): ReturnType<typeof createElement> {
     }
     switchView('split')
   }, [switchView])
-  useEffect(() => {
-    fetch('/warroom/api/fleet').then(r => r.json()).then((f: { ok?: boolean; active?: FleetState['active']; seats?: FleetState['seats'] }) => {
-      if (f.ok === true && f.active !== undefined && f.seats !== undefined) setFleet({ active: f.active, seats: f.seats })
+  const loadFleet = useCallback((): void => {
+    fetch('/warroom/api/fleet').then(r => r.json()).then((f: { ok?: boolean; active?: FleetState['active']; seats?: FleetState['seats']; proxyLoop?: boolean }) => {
+      if (f.ok === true && f.active !== undefined && f.seats !== undefined) setFleet({ active: f.active, seats: f.seats, proxyLoop: f.proxyLoop })
     }).catch(() => { /* daemon 不在——仍放行进甲板（读投影会显示离线态） */ })
       .finally(() => { setFleetSettled(true) })
   }, [])
+  useEffect(() => { loadFleet() }, [loadFleet])
   const enter = useCallback((executor: string, model: string) => {
     setError('')
     setBindNote('')
@@ -219,7 +220,7 @@ function App(): ReturnType<typeof createElement> {
     return createElement('div', { style: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontFamily: 'sans-serif' } }, activeCopy().loading.connecting)
   }
   if ((phase === 'entry' || phase === 'switch') && fleet !== undefined) {
-    return createElement(fleetGate, { fleet, onEnter: enter, dismissible: phase === 'switch', onDismiss: () => { setPhase('board') }, error })
+    return createElement(fleetGate, { fleet, onEnter: enter, dismissible: phase === 'switch', onDismiss: () => { setPhase('board') }, error, onReprobe: loadFleet })
   }
   const bc = activeCopy().bridge
   // 三态切换药丸 + 设置钮 + 舰队胶囊（舰桥模式全收进同一条顶右控制簇——浮动
