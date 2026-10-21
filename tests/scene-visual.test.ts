@@ -32,7 +32,7 @@ test('D28 图景 UI 目检（真 daemon + Playwright：iframe sandbox + CSP + �
 
   const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
-    env: { ...process.env, STARDECK_PORT: String(PORT), STARDECK_STATE_DIR: stateDir, STARDECK_OPENCODE_DB: join(stateDir, 'oc.db') },
+    env: { ...process.env, STARDECK_PORT: String(PORT), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0', STARDECK_OPENCODE_DB: join(stateDir, 'oc.db') },
     stdio: 'ignore',
   })
   try {

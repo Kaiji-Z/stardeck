@@ -324,7 +324,7 @@ test('附着面：jump 端点 dry-run（真 daemon）——映射命中 409 缺�
   }
   daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
-    env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_OPENCODE_DB: ocDb },
+    env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0', STARDECK_OPENCODE_DB: ocDb },
     stdio: 'ignore',
   })
   // 等健康检查就绪（tsx 首编需数秒）。
