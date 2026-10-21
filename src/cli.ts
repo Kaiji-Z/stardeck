@@ -249,6 +249,7 @@ async function cmdCodexShim(options: CliOptions): Promise<void> {
 }
 
 // 主入口守卫：直接执行（node cli.ts / dist/cli.mjs）才分发命令——测试 import 取纯函数零副作用。
+// 两条非直接执行通路豁免见 bin/stardeck.mjs 的 STARDECK_BIN_ENTRY 转发标记。
 // win32 路径归一（D30 安装版实测）：argv 给的可能是 junction 别名（C:\Users\…\Programs
 // 指到 D 盘真身）而 import.meta.url 恒真身+盘符小写——realpath 归一后大小写不敏比较，
 // 否则桌面壳（ELECTRON_RUN_AS_NODE）拉 daemon 静默退 0。
@@ -258,9 +259,9 @@ try {
 } catch {
   entryHref = pathToFileURL(resolve(process.argv[1] ?? '')).href
 }
-const isMain = process.platform === 'win32'
+const isMain = process.env.STARDECK_BIN_ENTRY === '1' || (process.platform === 'win32'
   ? entryHref.toLowerCase() === import.meta.url.toLowerCase()
-  : entryHref === import.meta.url
+  : entryHref === import.meta.url)
 const { command, options } = isMain ? parseArgs(process.argv.slice(2)) : { command: '', options: {} as CliOptions }
 
 if (isMain) {
