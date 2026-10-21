@@ -328,3 +328,13 @@
 3. **死路治理的诚实口径**：全席缺席给「安装命令一键复制+重新探测」，不假装能绕过外勤依赖；内置 loop 指引只教 env（key 只走 env 永不入盘红线——UI 永不设输 key 面）。
 
 **坑录**：electron 二进制下载慢→查 %LOCALAPPDATA%/electron/Cache 本地缓存直接钉已有版本（44.3.0 缓存命中秒装）；electron 窗口开关是 chromium 级参数须放 app 路径**前面**；.mjs 里手滑 TS 注解（`()=>: void`）=SyntaxError Unexpected token；CHANGELOG 整文件重写前先查历史段位（本文件 0.3.0 是 warroom 时代遗留段位，新节插文件头不覆写）；测试全量并行下 connect 真 daemon 测试在矩阵 OFF 面会拿到签席 404（产品正确）——测试文件级显式 STARDECK_PROXY=1 回 ON，OFF 面 404 纪律由独立子进程测试钉死。
+
+## D31 看板基座 + 可拖拽悬浮球：聊天形态重构 + 设置归拢（2026-10-21，舰长三拍板）
+
+**拍板**：①代理舰长聊天改**悬浮球**形态——球可拖动（点按=开关窗、拖动=移位+位置持久化），聊天窗**贴球择向弹出**（球在右半→向左开、下半→向上开，拖动实时跟随），不做右缘抽屉；②窗口 UI 配置对齐 lookatstudy 中栏正典（AI 消息=扁平全宽 prose 非 SMS 气泡、80ch 行长纪律；舰长消息=右对齐小气泡 85% 上限非对称圆角；12/13.2/14/16px 字阶）；③**不要再分栏**——三态壳（聊天⇄分屏⇄看板）整体退役，看板恒为基座；④**设置唯一入口=看板设置抽屉**——迷你设置弹层退役，定夺授权段归队（皮肤/语言/明暗/字号/授权全在 SettingsDrawer）。
+
+**定案**：球位存右/下边距（resize 相对锚）；拖拽=pointer capture 三段（6px 阈值分流点击/拖动）；浮窗 style 由 ballPos state 推导（跟随=免费）；色板仍走皮肤 token（设置管色、此层只管结构与字阶——lookatstudy 的布局配置与其皮肤系统解耦采纳）。
+
+**理由**：对话是高频主路径，常驻整屏浪费；悬浮球+贴球浮窗让聊天成为「随手唤起」的轻件，看板回归指挥台本位。设置双面（迷你弹层+板抽屉）是 D29 以来最大的信号冲突源，一个面说尽一切。
+
+**坑录（实弹）**：daemon 静态资源吃 dist 构建产物——改源码不重 build 就跑 UI 目检=验证旧 bundle（PAGEERROR createElement is not defined 即此）；澄清问干双重编号（模型问句自带「1. 」前缀 + `<ol>` 再画一层）双处同修（bridge.tsx/bridge focus 页）+CSS list-style:none；管线指路 toast 的堆叠上下文压得过 z80 背板——行为层一刀（`body:has(.war-settings-backdrop) .war-map-hint{display:none}`）比继续追层级赢；球/浮窗挂 .war-root 须反制基类布局属性（chrome 竖排 P0 同源复发点）。

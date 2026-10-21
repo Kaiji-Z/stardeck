@@ -153,7 +153,10 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
     cardHead(bc.cardClarify, item.title, item.refId),
     createElement('ol', { className: 'war-clarify-q' },
       ...(clar?.questions ?? []).map((q, qi) => {
-        const stem = q.split(/(?=A[.、::]?\s)/)[0] ?? q
+        // 双重编号治（UI 目检实抓）：大副产的问句自带「1. 」前缀，<ol> 又画
+        // 一层列表号=「1. 1.」。stem 剥模型侧编号——序号语义由选项药丸的
+        // 1A/2B 拼装承担，列表标记由 CSS 收掉。
+        const stem = (q.split(/(?=A[.、::]?\s)/)[0] ?? q).replace(/^\d{1,2}[.、)]\s*/, '')
         const options = clar?.options?.[qi] ?? []
         return createElement('li', { key: qi },
           createElement('span', { className: 'war-clarify-stem' }, stem),
@@ -430,12 +433,8 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   }
 
   return createElement('div', { className: 'war-root war-bridge', 'data-bridge': '1' },
-    createElement('div', { className: 'war-bridge-head' },
-      createElement('span', { className: 'war-bridge-title' }, bc.title),
-      createElement('span', { className: 'war-bridge-motto' }, bc.motto),
-      // D29 critique：加速器不可见等于不存在——聊天头常驻一行键位提示。
-      createElement('span', { className: 'war-bridge-kbd' }, bc.kbdHint),
-    ),
+    // 头部（标题/格言/关闭）归壳层抽屉（client-standalone war-tg-head）——
+    // 本组件只管消息流+决策坞+输入面（2026-10-21 悬浮球改版：三态加速器退役）。
     createElement('div', {
       className: 'war-bridge-msgs', ref: msgsRef, 'data-bridge-msgs': '1', 'aria-live': 'polite',
       onScroll: () => {

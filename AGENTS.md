@@ -39,7 +39,7 @@
 | `prompts.ts`/`persona.ts`/`skill.ts`/`chain-note.ts` | 提示词资产单一源（快照门管辖；1:1） |
 | `goals.ts`/`relay.ts`/`wake.ts`/`quota.ts` | 宿主面结构接口（faces 注入；独立形态诚实降级路径的类型载体） |
 | `client/` | 板 UI 前端（views.tsx 三级布局/皮肤词典/星域/到访件…1:1，除 shell-entry 已由独立入口替代；V23 聚焦页增**会议室段**（data-stage=meeting，澄清时间轴+共识草稿常驻+成案中过程态，DESIGN D23 第四刀）；D26 reportBody 导出供舰桥消息体共用 md-lite 渲染+WarView 增 hashchange 深链监听）。**D26 舰桥**（2026-10-20）：`client/bridge.tsx`=聊天面（消息流+决策卡坞：澄清药丸/签发五项卡/验收证据卡，词汇复用 focusPage 词典；卡片为独立组件实例持各编辑态）。**i18n**（2026-09-02）：copy.ts=皮肤×语言双语层（setLang/subscribeLang 与皮肤轴共用监听；activeCopy 按两轴取典）+ copy-en.ts=war/plain 两份英典（键形与中文词典逐键对齐，tests/copy-lang.test.ts 锁完备性——缺键即 FAIL 不许静默回落）+ EN trek 词表派生第三皮肤；fleet-gate.tsx 自带双语门面文案；账本与提示词资产保持中文单一源（agent 面正典不随语言切换） |
-| `client-standalone.tsx` | 板 UI 独立入口（D26 三态壳）：**默认脸面=聊天窗**（bridge 面 ON 时），三态切换 聊天⇄分屏旁观⇄看板全屏（localStorage 持久；旗 OFF 回落 warView 整页老形态）+ 迷你设置弹层（皮肤/语言/明暗）+ lastSeen 离页落（原 shell-entry 职责） |
+| `client-standalone.tsx` | 板 UI 独立入口（D31 悬浮球改版）：**看板恒为基座** + 可拖拽舰桥悬浮球（点按=开关 Telegram 式聊天浮窗、拖动=移位+位置持久化；浮窗贴球择向弹出、拖动实时跟随；消息排版对齐 lookatstudy 中栏配置：AI 扁平全宽 prose/舰长右小气泡）+ 舰队胶囊；**设置唯一入口=看板设置抽屉**（皮肤/语言/明暗/字号/定夺授权全在 views.tsx SettingsDrawer）——三态壳/分屏/迷你设置弹层已退役；旗 OFF 无球纯看板；lastSeen 离页落 |
 | `units.ts`/`toml.ts`/`dossier.ts`/`activity.ts`/`report-capture.ts`/`v5spike.ts`/`types.ts`/`flags.ts` | 与插件仓 1:1（v5spike 留作宿主契约考古，路由缺省不注册） |
 | `steer.ts` | **pi RPC 客户端**（P0-1）：JSONL 手切帧（禁 readline——U+2028/29）+ prompt/steer/follow_up 帧 + response 按 id 关联 + agent_settled 收割；deliverViaRpc=续跑投递（板内答复/批注转达共用）；deliverViaOpencode=opencode 席 `run -s` 续跑（观察窗三态，D20） |
 | `codex-shim.ts` | **Responses→chat 垫片**（V19.13）：GLM 直驱 codex 的翻译面（SSE created→output_item.done→completed）+ 回环服（`stardeck codex-shim` 启动，仅绑 127.0.0.1，key 不入 codex 配置）；codexShimProviderArgs=适配器 `-c` 五旗 |

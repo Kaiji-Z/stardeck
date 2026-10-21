@@ -102,6 +102,9 @@ test('BridgePane 澄清卡：挂起澄清出选择题药丸，点选拼装 1A', 
   const r = await render({}, '等你答复')
   try {
     assert.ok(r.text().includes('等你答复'), '澄清卡标题在场')
+    // 双重编号回归（UI 目检实抓）：问句自带「1. 」前缀，<ol> 再画一层=「1. 1.」
+    // ——stem 剥模型侧编号后不该再出现连号。
+    assert.ok(!r.text().includes('1. 1.'), '问干无双重编号')
     const opt = r.buttons().find(b => (b.textContent ?? '').trim() === '工具箱仓')
     assert.ok(opt !== undefined, '选项药丸在场')
     opt!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))

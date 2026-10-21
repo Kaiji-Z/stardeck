@@ -13,7 +13,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
-import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, markTalking, regradeCommand, useWar, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice } from './data.ts'
+import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, markTalking, regradeCommand, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice } from './data.ts'
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
 import { visitDelta, type VisitDelta } from './visit.ts'
@@ -1702,7 +1702,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
             createElement('div', { className: 'war-subdetail-title' },
               isPendingRound ? fp.clarifyRound(r.round) : fp.meetingRoundDone(r.round)),
             createElement('ol', { className: 'war-clarify-q' }, ...r.questions.map((q, qi) => {
-              const stem = q.split(/(?=A[.、::]?\s)/)[0] ?? q
+              // 双重编号治（与 bridge.tsx 同刀）：模型问句自带「1. 」前缀，
+              // <ol> 再画一层=「1. 1.」。序号语义由 1A/2B 拼装承担。
+              const stem = (q.split(/(?=A[.、::]?\s)/)[0] ?? q).replace(/^\d{1,2}[.、)]\s*/, '')
               const options = r.options?.[qi] ?? []
               return createElement('li', { key: qi },
                 createElement('span', { className: 'war-clarify-stem' }, stem),
@@ -2915,6 +2917,25 @@ function SettingsDrawer(props: {
     try { localStorage.setItem('warroom-standalone-theme', v ? 'dark' : 'light') } catch { /* 隐私模式 */ }
   }
   const layer = useModalLayer(onClose, copy.title)
+  // 定夺授权（D27）归队（2026-10-21 设置归拢：独立壳迷你弹层退役，全设置唯一
+  // 面=看板设置抽屉）。代理舰长在役才有意义；降级态藏段不误导演长。授权对钮
+  // 沿用 critique7 等权纪律：不设 primary，禁用侧=当前态，状态句点名。
+  const { data } = useWar()
+  const bcopy = activeCopy().bridge
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authNote, setAuthNote] = useState<string | null>(null)
+  const authOn = data?.bridge?.enabled === true && data.bridge.verdictAuthorized === true
+  const proxyAway = data?.bridge?.enabled === true && data.bridge.proxy === false
+  const flipAuth = (granted: boolean): void => {
+    if (authBusy) return
+    setAuthBusy(true)
+    setAuthNote(null)
+    void setBridgeProxyVerdict(granted).then(out => {
+      setAuthBusy(false)
+      warBoardStore.refresh()
+      setAuthNote(out.ok ? (granted ? bcopy.authOn : bcopy.authOff) : (out.error ?? bcopy.actionFail))
+    })
+  }
   const skinBtn = (id: SkinId, label: string): ReactNode =>
     createElement('button', {
       key: id, type: 'button',
@@ -2981,6 +3002,13 @@ function SettingsDrawer(props: {
           createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { onFontScale(1) } }, copy.fontReset)),
         createElement('div', { className: 'war-settings-note' }, copy.fontHint),
         narrowActive ? createElement('div', { className: 'war-settings-note' }, copy.narrowNote) : null,
+        // 定夺授权段（独立形态+代理舰长在役才出）：舰长显式授予/收回代定夺。
+        standaloneChrome && !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, bcopy.authSection) : null,
+        standaloneChrome && !proxyAway ? createElement('div', { className: 'war-skin-row' },
+          createElement('button', { className: 'war-btn', type: 'button', disabled: authBusy || authOn, 'data-bridge-auth-grant': '1', onClick: () => { flipAuth(true) } }, bcopy.authGrant),
+          createElement('button', { className: 'war-btn', type: 'button', disabled: authBusy || !authOn, 'data-bridge-auth-revoke': '1', onClick: () => { flipAuth(false) } }, bcopy.authRevoke),
+        ) : null,
+        standaloneChrome && !proxyAway ? createElement('div', { className: 'war-settings-note', 'data-bridge-auth-state': '1', role: 'status' }, authNote ?? (authOn ? bcopy.authOn : bcopy.authOff)) : null,
         createElement('div', { className: 'war-settings-section' }, copy.behaviorSection),
         toggle(copy.hoverFamily, copy.hoverFamilyHint, hoverFamily, onToggleHoverFamily),
         toggle(copy.autoScroll, copy.autoScrollHint, autoScroll, onToggleAutoScroll),

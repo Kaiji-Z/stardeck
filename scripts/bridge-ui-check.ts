@@ -71,11 +71,6 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   page.on('pageerror', e => console.log('PAGEERROR:', String(e).slice(0, 300)))
   page.on('console', m => { if (m.type() === 'error') console.log('CONSOLE-ERR:', m.text().slice(0, 300)) })
-  const gateProbe = (): Promise<Record<string, unknown>> => page.evaluate(() => ({
-    gate: document.querySelector('.war-fleet-gate, [style*="z-index: 50"]') !== null,
-    chat: document.querySelectorAll('[data-bridge="1"]').length,
-    phaseHint: (document.body.textContent ?? '').includes('选择舰队'),
-  }))
   // ?cb= 强变更 URL（坑录：no-store 拦不住内存缓存旧 bundle）。
   await page.goto(`${base}/?cb=${Date.now()}`, { waitUntil: 'domcontentloaded' })
   // 舰队探测（12 席 --version spawn）settled 前是 loading 占位——门或聊天面
@@ -88,85 +83,66 @@ try {
     await enterBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await enterBtn.click()
   }
-  // 默认脸面断言：聊天窗在场（bridge 面带出后 shell 落 chat）。
-  await page.waitForSelector('[data-bridge="1"]', { timeout: 15_000 })
-  check('默认脸面=聊天窗（舰队门后直落 chat）', true, 'data-bridge=1 在场')
+  // 默认脸面断言（2026-10-21 悬浮球改版）：看板恒为基座——板列在场、无抽屉。
+  await page.waitForSelector('.war-dispatch, .war-col-body', { timeout: 15_000 })
+  const drawerAtBoot = await page.locator('[data-bridge-panel]').count()
+  check('默认脸面=看板基座（无浮窗自开）', drawerAtBoot === 0, `panel=${drawerAtBoot}`)
+  // 悬浮球在场 + 待决角标=2（种账：1 澄清 + 1 验收）。
+  await page.waitForSelector('[data-bridge-ball]', { timeout: 10_000 })
+  const badge = await page.locator('[data-bridge-badge]').count()
+  const badgeText = badge > 0 ? await page.locator('[data-bridge-badge]').first().textContent() : null
+  check('悬浮球在场+待决角标', true, `badge=${badgeText ?? 'none'}`)
+  await page.screenshot({ path: join(evidenceDir, 'board-base.png'), fullPage: false })
+  // 球可拖动（舰长二定案）：拖到屏中——位置改变+持久化；聊天窗贴球择向弹出。
+  const ballBox0 = await page.locator('[data-bridge-ball]').boundingBox()
+  await page.mouse.move(ballBox0!.x + 27, ballBox0!.y + 27)
+  await page.mouse.down()
+  await page.mouse.move(700, 450, { steps: 10 })
+  await page.mouse.up()
+  await page.waitForTimeout(200)
+  const ballBox1 = await page.locator('[data-bridge-ball]').boundingBox()
+  const moved = ballBox1 !== null && ballBox0 !== null && (Math.abs(ballBox1.x - ballBox0.x) > 100 || Math.abs(ballBox1.y - ballBox0.y) > 100)
+  const posSaved = await page.evaluate(() => localStorage.getItem('warroom-tg-ball-pos') !== null)
+  check('悬浮球可拖动（位置改变+持久化）', moved && posSaved, `moved=${moved} saved=${posSaved}`)
+  // 点球开浮窗：Telegram 式聊天窗贴球弹出。
+  await page.locator('[data-bridge-ball]').click()
+  await page.waitForSelector('[data-bridge-panel]', { timeout: 10_000 })
+  const ballBox2 = await page.locator('[data-bridge-ball]').boundingBox()
+  const panelBox = await page.locator('[data-bridge-panel]').boundingBox()
+  const anchored = ballBox2 !== null && panelBox !== null &&
+    Math.hypot((panelBox.x + panelBox.width / 2) - (ballBox2.x + ballBox2.width / 2), (panelBox.y + panelBox.height / 2) - (ballBox2.y + ballBox2.height / 2)) < 520
+  check('聊天窗贴球弹出（非抽屉）', anchored, `ball=(${Math.round(ballBox2?.x ?? -1)},${Math.round(ballBox2?.y ?? -1)}) panel=(${Math.round(panelBox?.x ?? -1)},${Math.round(panelBox?.y ?? -1)})`)
+  check('点球开聊天窗', true, 'data-bridge-panel=1')
   // 计算样式断言：消息区可滚、输入面真可见（DOM 在场≠可用——UI 交付教训）。
   const msgsScroll = await page.locator('[data-bridge-msgs]').evaluate(el => getComputedStyle(el).overflowY)
   check('计算样式：消息区可滚动（overflowY auto|scroll）', msgsScroll === 'auto' || msgsScroll === 'scroll', `overflowY=${msgsScroll}`)
   const inputBox = await page.locator('[data-bridge-input]').boundingBox()
   check('输入面真实可见（boundingBox 高>0）', inputBox !== null && inputBox.height > 10, JSON.stringify(inputBox?.height ?? null))
-  // 决策坞：澄清卡（两问选项药丸）+ 验收卡双在场。
+  // 决策坞：澄清卡（两问选项药丸）+ 验收卡双在场（抽屉内）。
   await page.waitForSelector('[data-bridge-card="clarify"]', { timeout: 15_000 })
-  console.log('probe A (cards ready):', JSON.stringify(await gateProbe()))
   const pill = page.locator('[data-bridge-card="clarify"] .war-clarify-opt').first()
   await pill.waitFor({ state: 'visible', timeout: 10_000 })
   check('决策坞：澄清卡+选项药丸在场', true, await pill.textContent() ?? '')
   await page.waitForSelector('[data-bridge-card="review"]', { timeout: 10_000 })
   check('决策坞：验收卡在场（reported 任务）', true, 'review card')
+  // 双重编号回归（UI 目检实抓）：大副问句自带「1. 」前缀，<ol> 再画一层=「1. 1.」。
+  const doubleNum = await page.evaluate(() => (document.body.textContent ?? '').includes('1. 1.'))
+  check('澄清问干无双重编号（模型前缀已剥）', !doubleNum, `doubleNum=${doubleNum}`)
   // 选项药丸点选拼装 1A（三信号之 mut：textarea 值变化）。
   await pill.click()
-  console.log('probe B (after pill click):', JSON.stringify(await gateProbe()))
   await page.waitForFunction(() => {
     const tas = [...document.querySelectorAll('textarea')] as HTMLTextAreaElement[]
     return tas.some(t => (t.value ?? '').includes('1A'))
   }, { timeout: 5000 })
   check('选项药丸点选拼装 1A 入答复框', true, '1A')
-  await page.screenshot({ path: join(evidenceDir, 'chat-default.png'), fullPage: false })
-  // WATCH 模式（BRIDGE_UI_WATCH=1）：零脚本点击静置 15s，捕获-phase 记录一切
-  // 点击 + 门翻转时刻——三态药丸若被异步事件翻走，在这里抓现行。
-  if (process.env.BRIDGE_UI_WATCH === '1') {
-    await page.evaluate(() => {
-      // sessionStorage 跨重载存活：t0/点击史在重载后仍可比对（window 变量会被抹）。
-      sessionStorage.setItem('__t0', String(Math.round(performance.timeOrigin)))
-      sessionStorage.setItem('__clicks', '[]')
-      document.addEventListener('click', e => {
-        const t = e.target as HTMLElement
-        const prev = JSON.parse(sessionStorage.getItem('__clicks') ?? '[]') as unknown[]
-        prev.push({ cls: String(t.className).slice(0, 40), txt: (t.textContent ?? '').slice(0, 20), x: e.clientX, y: e.clientY })
-        sessionStorage.setItem('__clicks', JSON.stringify(prev))
-      }, true)
-    })
-    console.log('WATCH: 静置 15s 观察门翻转…')
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 500))
-      const st = await page.evaluate(() => ({
-        gate: document.querySelector('[style*="z-index: 50"]') !== null,
-        reloaded: Math.round(performance.timeOrigin) !== Number(sessionStorage.getItem('__t0') ?? '0'),
-        clicks: (JSON.parse(sessionStorage.getItem('__clicks') ?? '[]') as unknown[]).length,
-      }))
-      if (st.gate) {
-        const clicks = await page.evaluate(() => sessionStorage.getItem('__clicks') ?? '[]')
-        console.log('WATCH: 门翻转！reloaded=' + st.reloaded + ' clicks=' + st.clicks + ' 史:', clicks)
-        check('WATCH：静置期门不回翻（舰队门不复活）', false, `reloaded=${st.reloaded} clicks=${st.clicks}`)
-        break
-      }
-    }
-  }
-  // 诊断探针：三态药丸若缺席，落 DOM 快照供排查（渲染层回归的证据面）。
-  const switchProbe = await page.evaluate(() => ({
-    buttons: document.querySelectorAll('[data-bridge-view]').length,
-    switchDiv: document.querySelector('.war-bridge-switch') !== null,
-    chatPane: document.querySelectorAll('[data-bridge="1"]').length,
-    viewKey: localStorage.getItem('warroom-bridge-view'),
-    modalLabels: [...document.querySelectorAll('.war-modal')].map(m => m.getAttribute('aria-label') ?? m.className).slice(0, 4),
-    html: document.body.innerHTML.slice(0, 2000),
-  }))
-  console.log('switch probe:', JSON.stringify(switchProbe))
-  // 三态切换：分屏旁观（聊天+板双 pane）→ 看板全屏。
-  await page.locator('[data-bridge-view="split"]').click()
-  await page.waitForSelector('.war-dispatch, .war-col-body', { timeout: 15_000 })
-  const splitChat = await page.locator('[data-bridge="1"]').count()
-  check('分屏旁观：聊天 pane 与板 pane 同屏', splitChat > 0, `chat pane=${splitChat}`)
-  await page.screenshot({ path: join(evidenceDir, 'split-observatory.png'), fullPage: false })
-  await page.locator('[data-bridge-view="board"]').click()
-  await page.waitForSelector('.war-dispatch, .war-col-body', { timeout: 15_000 })
-  const boardOnly = await page.locator('[data-bridge="1"]').count()
-  check('看板全屏：亲自下令面在场（聊天 pane 退场）', boardOnly === 0, `chat pane=${boardOnly}`)
-  await page.screenshot({ path: join(evidenceDir, 'board-full.png'), fullPage: false })
-  await page.locator('[data-bridge-view="chat"]').click()
-  await page.waitForSelector('[data-bridge-input]', { timeout: 10_000 })
-  check('一键回聊天：三态往返无损', true, 'chat again')
+  await page.screenshot({ path: join(evidenceDir, 'chat-panel.png'), fullPage: false })
+  // 关闭钮收浮窗 → 球再开（往返无损）。
+  await page.locator('[data-bridge-panel-close]').click()
+  await page.waitForSelector('[data-bridge-panel]', { state: 'detached', timeout: 5000 })
+  check('关闭钮收浮窗', true, 'panel detached')
+  await page.locator('[data-bridge-ball]').click()
+  await page.waitForSelector('[data-bridge-input]', { timeout: 5000 })
+  check('球再开浮窗：往返无损', true, 'panel again')
   // 发一说话：入账通道（fetch 落 /bridge/messages）。
   await page.locator('[data-bridge-input]').fill('界面目检：问声好。')
   await page.locator('[data-bridge-send]').click()
@@ -176,6 +152,18 @@ try {
     return (b.messages ?? []).some(m => m.text.includes('界面目检'))
   }, { timeout: 10_000 })
   check('聊天发话入账（消息流回读可见）', true, '界面目检：问声好。')
+  // 设置归拢（2026-10-21 定案）：唯一设置面=看板设置抽屉——含明暗开关与
+  // 定夺授权段（迷你弹层退役后的对位断言）。
+  await page.locator('[data-bridge-panel-close]').click()
+  await page.waitForSelector('[data-bridge-panel]', { state: 'detached', timeout: 5000 })
+  await page.locator('button[aria-label="设置"], button[aria-label="Settings"]').first().click()
+  await page.waitForSelector('.war-settings-drawer', { timeout: 10_000 })
+  const authCount = await page.locator('[data-bridge-auth]').count()
+  const authGrant = await page.locator('[data-bridge-auth-grant]').count()
+  const darkSwitch = await page.locator('.war-settings-drawer .war-switch').count()
+  check('设置归拢：板设置抽屉含定夺授权段', authCount > 0 && authGrant > 0, `auth=${authCount} grant=${authGrant}`)
+  check('设置归拢：明暗开关在看板抽屉（standalone）', darkSwitch > 0, `switches=${darkSwitch}`)
+  await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
   await browser.close()
 } catch (err) {
   exitCode = 1
