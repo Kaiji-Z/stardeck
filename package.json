@@ -1,6 +1,6 @@
 {
   "name": "stardeck",
-  "version": "0.7.0",
+  "version": "0.7.0-1",
   "packageManager": "pnpm@10.33.0",
   "description": "星舰甲板——和一位经理人对话，他驱动你的 agent 舰队：下令/战况/验收都在一个聊天窗；账本/验收/收官由系统核对，看板可展开旁观。",
   "type": "module",
