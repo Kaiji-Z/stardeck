@@ -123,17 +123,27 @@ const draftStore: {
   cards: Record<string, { five?: Record<string, string>; note?: string; text?: string }>
 } = { input: '', cards: {} }
 
-/** 澄清答复卡：选择题药丸（1A;2B 拼装与板会议室同款）+ 自由输入兜底。 */
+/** 澄清答复卡：选择题药丸点选即记入「已选」人话摘要（D31 批判 P1：拼装码
+ *  1A;2B 不再泄漏给舰长——裸码要求脑内维持编号映射，读屏念「1 A 分号」）。
+ *  拼装码仍在内部 state 合成（draftStore 草稿兼容），提交时与补充说明拼合
+ *  入账；自由输入走独立的补充说明框。 */
 function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
   const { item, cmd, busy, act } = props
   const bc = activeCopy().bridge
   const fp = activeCopy().focusPage
   const clar = cmd.clarification
   const [text, setText] = useState(() => draftStore.cards[item.refId]?.text ?? '')
+  const [note, setNote] = useState(() => draftStore.cards[item.refId]?.note ?? '')
   const setTextBoth = (v: string): void => {
     setText(v)
     const slot = draftStore.cards[item.refId] ?? {}
     slot.text = v
+    draftStore.cards[item.refId] = slot
+  }
+  const setNoteBoth = (v: string): void => {
+    setNote(v)
+    const slot = draftStore.cards[item.refId] ?? {}
+    slot.note = v
     draftStore.cards[item.refId] = slot
   }
   const pick = (qi: number, letter: string): void => {
@@ -145,9 +155,17 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
       return next
     })
   }
+  // 已选摘要：从拼装码解析回人话（1→日常工具箱仓；2→中文），坏码原样透传。
+  const chosen: string[] = []
+  for (const m of text.matchAll(/(\d{1,2})([A-Z]);/g)) {
+    const qi = parseInt(m[1]!, 10) - 1
+    const opt = clar?.options?.[qi]?.[m[2]!.charCodeAt(0) - 65]
+    chosen.push(opt !== undefined ? `${m[1]}→${opt}` : `${m[1]}${m[2]}`)
+  }
   const sendAnswer = (): void => {
-    if (text.trim() === '' || busy) return
-    act(item.refId, () => answerCommand(item.refId, text.trim(), 'bridge'))
+    const composed = `${text.trim()} ${note.trim()}`.trim()
+    if (composed === '' || busy) return
+    act(item.refId, () => answerCommand(item.refId, composed, 'bridge'))
   }
   return createElement('div', { className: 'war-bcard', 'data-bridge-card': 'clarify' },
     cardHead(bc.cardClarify, item.title, item.refId),
@@ -169,13 +187,16 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
             : null,
         )
       })),
+    chosen.length > 0
+      ? createElement('p', { className: 'war-clarify-note', 'data-bridge-chosen': '1', role: 'status' }, `${bc.chosenLabel}${chosen.join('；')}`)
+      : null,
     createElement('textarea', {
-      className: 'war-cd-answer war-bcard-input', rows: 2, placeholder: fp.answerPh, value: text,
-      onChange: e => { setTextBoth(String(e.target.value ?? '')) },
+      className: 'war-cd-answer war-bcard-input', rows: 2, placeholder: bc.clarifyNotePh, value: note,
+      onChange: e => { setNoteBoth(String(e.target.value ?? '')) },
       onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
     }),
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || text.trim() === '', 'data-bridge-act': 'answer', onClick: sendAnswer }, busy ? bc.actionBusy : fp.answerBtn)),
+      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || (text.trim() === '' && note.trim() === ''), 'data-bridge-act': 'answer', onClick: sendAnswer }, busy ? bc.actionBusy : fp.answerBtn)),
   )
 }
 

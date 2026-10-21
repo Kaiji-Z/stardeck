@@ -1150,7 +1150,7 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bcard-head{display:flex;align-items:center;gap:8px;min-width:0}
 .war-bcard-tag{flex:none;font-size:calc(11px*var(--war-fs));padding:1px 8px;border-radius:var(--war-r-pill);background:var(--war-well-bg);color:var(--war-text-1);white-space:nowrap}
 .war-bcard-title{flex:1;min-width:0;font-size:calc(13px*var(--war-fs));color:var(--war-text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.war-bcard-id{flex:none;font-size:calc(10px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bcard-id{flex:none;font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
 .war-bcard-input{width:100%;min-height:34px;resize:vertical;font-family:var(--war-font);font-size:calc(12px*var(--war-fs));color:var(--war-text-1);background:var(--war-well-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:5px 8px;outline:none;box-sizing:border-box}
 .war-bcard-input:focus-visible{outline:2px solid var(--war-focus);outline-offset:1px}
 .war-bcard-field{display:flex;flex-direction:column;gap:2px}
@@ -1171,7 +1171,7 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width:0;width:100%}
 /* D29 语调刀：【块】标记 chip（账本原文不动，呈现层给视觉身份）+跨日分隔条。 */
 .war-md-token{display:inline-block;padding:0 5px;border:1px solid var(--war-border-soft);border-radius:5px;background:var(--war-well-bg);color:var(--war-text-2);font-family:var(--war-font-code);font-size:.92em;line-height:1.5}
-.war-bmsg-day{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-3);padding:2px 10px;margin:4px 0;border-bottom:1px dashed var(--war-border-soft)}
+.war-bmsg-day{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-2);padding:2px 10px;margin:4px 0;border-bottom:1px dashed var(--war-border-soft)}
 .war-cmdtab-name{font-size:calc(12px*var(--war-fs));color:var(--war-text-1)}
 /* D29 critique：代理舰长在途指示——呼吸点+诚实标签（收到回话即被顶走）。 */
 .war-bmsg-typing{display:flex;align-items:center;gap:8px;background:transparent;border:1px dashed var(--war-border-soft);color:var(--war-text-2)}

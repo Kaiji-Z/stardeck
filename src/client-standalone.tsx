@@ -8,7 +8,7 @@
  * 门体在 client/fleet-gate.tsx；到访 lastSeen 离页落。
  * @module stardeck/client-standalone
  */
-import { createElement, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ensureWarStyles } from './client/styles.ts'
 import { warView, type ClientServicesFace } from './client/views.tsx'
@@ -91,9 +91,12 @@ function App(): ReturnType<typeof createElement> {
     window.addEventListener('resize', onResize)
     return () => { window.removeEventListener('resize', onResize) }
   }, [])
-  // 球拖拽：pointer capture 三段（down 记起点 / move 超 6px 判拖 / up 分流
-  // 点击=开关窗、拖动=落位持久化）。窗位由 ballPos 推导——拖动实时跟随。
+  // 球拖拽：pointer capture 三段（down 记起点 / move 超 6px 判拖 / up 落位持久化）。
+  // 开关窗走 onClick——鼠标拖放后的 click 用抑制旗吞掉；键盘 Enter/Space 只发
+  // click 不发 pointer 序列，天然落在同一开关通路上（D31 批判 P0：此前开关挂
+  // pointerup，键盘用户 Tab 到球后按 Enter 无反应=假可达）。
   const dragRef = useRef<{ sx: number; sy: number; or: number; ob: number; moved: boolean; last: BallPos } | null>(null)
+  const suppressClickRef = useRef(false)
   const onBallDown = (e: ReactPointerEvent<HTMLButtonElement>): void => {
     if (e.button !== 0) return
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -112,11 +115,26 @@ function App(): ReturnType<typeof createElement> {
   const onBallUp = (): void => {
     const d = dragRef.current
     dragRef.current = null
-    if (d === null) return
-    if (d.moved) {
-      setBallPos(clampPos(d.last))
-      try { localStorage.setItem(BALL_KEY, JSON.stringify(clampPos(d.last))) } catch { /* 隐私模式 */ }
-    } else setChatOpen(v => !v)
+    if (d === null || !d.moved) return
+    suppressClickRef.current = true
+    setBallPos(clampPos(d.last))
+    try { localStorage.setItem(BALL_KEY, JSON.stringify(clampPos(d.last))) } catch { /* 隐私模式 */ }
+  }
+  const onBallClick = (): void => {
+    if (suppressClickRef.current) { suppressClickRef.current = false; return }
+    setChatOpen(v => !v)
+  }
+  // 键盘移位（拖拽的替代通路）：焦点在球上时方向键步进 24px，即时持久化。
+  const onBallKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>): void => {
+    const step: Record<string, [number, number]> = { ArrowLeft: [24, 0], ArrowRight: [-24, 0], ArrowUp: [0, 24], ArrowDown: [0, -24] }
+    const d = step[e.key]
+    if (d === undefined) return
+    e.preventDefault()
+    setBallPos(p => {
+      const next = clampPos({ right: p.right + d[0]!, bottom: p.bottom + d[1]! })
+      try { localStorage.setItem(BALL_KEY, JSON.stringify(next)) } catch { /* 隐私模式 */ }
+      return next
+    })
   }
   // 决策待决数（球面角标）：有请示压着时舰长不用开窗也知道。
   const pending = bridgeOn && data !== null ? collectInbox(data.commands, data.tasks).length : 0
@@ -171,6 +189,7 @@ function App(): ReturnType<typeof createElement> {
         'aria-label': bc.title, title: bc.title,
         style: { right: ballPos.right, bottom: ballPos.bottom },
         onPointerDown: onBallDown, onPointerMove: onBallMove, onPointerUp: onBallUp,
+        onClick: onBallClick, onKeyDown: onBallKeyDown,
       },
         createElement('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
           createElement('path', { d: BALL_STAR, fill: 'var(--war-run-strong, #3b82f6)' })),

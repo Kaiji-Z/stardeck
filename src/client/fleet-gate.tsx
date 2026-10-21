@@ -74,7 +74,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     brand: 'STARDECK · 星舰甲板',
     title: '选择舰队',
     lead: 'stardeck：你下一句大白话命令，AI 大副把它变成任务书，AI 外勤在隔离工作区执行并交证据，你只管验收。',
-    sub: '选定本次出勤的舰队——之后新任务都交它执行（在役任务不受影响，顶右胶囊可随时换）。',
+    sub: '选定本次出勤的舰队——之后新任务都交它执行（在役任务不受影响，右下胶囊可随时换）。',
     modelLabel: '模型（可选，按舰队语义）',
     modelDefault: '留空 = 沿用该舰队自身默认模型',
     modelPh: {

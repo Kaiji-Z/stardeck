@@ -610,6 +610,10 @@ export interface WarCopy {
     knockBtn: string
     /** 打回理由占位（验收卡——打回必附言，与签发卡驳回纪律对齐）。 */
     knockNotePh: string
+    /** 澄清卡已选摘要前缀（人话回显——拼装码不泄漏给舰长，D31 批判 P1）。 */
+    chosenLabel: string
+    /** 澄清卡补充说明占位（与药丸点选并存，提交时与拼装码合成）。 */
+    clarifyNotePh: string
     /** 发送后等待期常驻指示（代理舰长在途）。 */
     processing: string
     /** 键盘加速器可见暗示（聊天头）。 */
@@ -1220,6 +1224,8 @@ export const warCopy: WarCopy = {
     openFocus: '打开聚焦页',
     knockBtn: '打回',
     knockNotePh: '打回理由（必填——外勤小队按这个改）',
+    chosenLabel: '已选：',
+    clarifyNotePh: '补充说明（可选，也可直接点选项）',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1821,6 +1827,8 @@ export const plainCopy: WarCopy = {
     openFocus: '打开详情页',
     knockBtn: '打回',
     knockNotePh: '打回理由（必填——执行方按这个改）',
+    chosenLabel: '已选：',
+    clarifyNotePh: '补充说明（可选，也可直接点选项）',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',

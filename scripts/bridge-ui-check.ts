@@ -104,6 +104,13 @@ try {
   const moved = ballBox1 !== null && ballBox0 !== null && (Math.abs(ballBox1.x - ballBox0.x) > 100 || Math.abs(ballBox1.y - ballBox0.y) > 100)
   const posSaved = await page.evaluate(() => localStorage.getItem('warroom-tg-ball-pos') !== null)
   check('悬浮球可拖动（位置改变+持久化）', moved && posSaved, `moved=${moved} saved=${posSaved}`)
+  // 键盘可达（D31 批判 P0）：焦点球 + Enter 开窗——不再是 pointer-only 死键。
+  await page.locator('[data-bridge-ball]').focus()
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('[data-bridge-panel]', { timeout: 5000 })
+  check('球键盘可达：Enter 开聊天窗', true, 'keyboard enter')
+  await page.locator('[data-bridge-panel-close]').click()
+  await page.waitForSelector('[data-bridge-panel]', { state: 'detached', timeout: 5000 })
   // 点球开浮窗：Telegram 式聊天窗贴球弹出。
   await page.locator('[data-bridge-ball]').click()
   await page.waitForSelector('[data-bridge-panel]', { timeout: 10_000 })
@@ -128,13 +135,11 @@ try {
   // 双重编号回归（UI 目检实抓）：大副问句自带「1. 」前缀，<ol> 再画一层=「1. 1.」。
   const doubleNum = await page.evaluate(() => (document.body.textContent ?? '').includes('1. 1.'))
   check('澄清问干无双重编号（模型前缀已剥）', !doubleNum, `doubleNum=${doubleNum}`)
-  // 选项药丸点选拼装 1A（三信号之 mut：textarea 值变化）。
+  // 选项药丸点选：已选摘要人话回显（D31 批判 P1——拼装码不泄漏给舰长）。
   await pill.click()
-  await page.waitForFunction(() => {
-    const tas = [...document.querySelectorAll('textarea')] as HTMLTextAreaElement[]
-    return tas.some(t => (t.value ?? '').includes('1A'))
-  }, { timeout: 5000 })
-  check('选项药丸点选拼装 1A 入答复框', true, '1A')
+  await page.waitForSelector('[data-bridge-chosen]', { timeout: 5000 })
+  const chosenText = await page.locator('[data-bridge-chosen]').textContent()
+  check('选项药丸点选：已选摘要人话回显', (chosenText ?? '').includes('工具箱仓'), chosenText ?? 'empty')
   await page.screenshot({ path: join(evidenceDir, 'chat-panel.png'), fullPage: false })
   // 关闭钮收浮窗 → 球再开（往返无损）。
   await page.locator('[data-bridge-panel-close]').click()

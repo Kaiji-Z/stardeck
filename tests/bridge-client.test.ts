@@ -109,10 +109,12 @@ test('BridgePane 澄清卡：挂起澄清出选择题药丸，点选拼装 1A', 
     assert.ok(opt !== undefined, '选项药丸在场')
     opt!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await new Promise(res => setTimeout(res, 30))
-    // 点选后答复框带 1A（拼装语义）——从 DOM 找澄清卡内的 textarea。
+    // 人话回显（D31 批判 P1）：已选摘要出「1→选项原文」，拼装码不进任何可见输入框。
+    const chosen = document.querySelector('[data-bridge-chosen]')
+    assert.ok(chosen !== null, '已选摘要在场')
+    assert.ok((chosen.textContent ?? '').includes('已选') && (chosen.textContent ?? '').includes('工具箱仓'), `摘要人话：${chosen.textContent}`)
     const tas = [...document.querySelectorAll('textarea')] as HTMLTextAreaElement[]
-    const answer = tas.find(t => (t.value ?? '').includes('1A'))
-    assert.ok(answer !== undefined, `选项拼装 1A 入答复框：${tas.map(t => t.value).join('|')}`)
+    assert.ok(tas.every(t => !(t.value ?? '').includes('1A')), `拼装码不泄漏进输入框：${tas.map(t => t.value).join('|')}`)
   } finally { r.unmount() }
 })
 
