@@ -66,7 +66,7 @@ try {
     return out.result
   }
 
-  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     // 主环 STARDECK_STAFF=0：本相位由脚本直呼 war_publish（确定性执行者链）——
     // 大副若同时在线会对同一 draft 命令二次发布。大副链走可选相位（下方）。
@@ -187,7 +187,7 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
   let daemon2: ChildProcess | undefined
   let staffStateKept = false
   try {
-    daemon2 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+    daemon2 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -613,7 +613,7 @@ if (liveExecutor === 'codex' || liveExecutor === 'pi' || liveExecutor === 'zcode
   let daemon3: ChildProcess | undefined
   let kept = false
   try {
-    daemon3 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+    daemon3 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
       cwd: repoRoot,
       env: {
         ...process.env, STARDECK_CONFIG: join(stateDir3, 'config.json'), STARDECK_STATE_DIR: stateDir3, STARDECK_WAR_ROOT: warRoot3, STARDECK_PORT: String(PORT3),
@@ -784,7 +784,7 @@ if (process.env.STARDECK_LIVE_CONNECT === '1') {
   const home3 = mkdtempSync(join(tmpdir(), 'stardeck-live-connhome-'))
   let daemon3: ChildProcess | undefined
   try {
-    daemon3 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+    daemon3 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
       cwd: repoRoot,
       env: {
         ...process.env,

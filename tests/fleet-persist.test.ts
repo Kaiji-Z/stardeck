@@ -81,7 +81,7 @@ test('落盘：真 daemon 重启往返——绑定 pi 重启后仍在', { timeou
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_CONFIG: cfgPath, STARDECK_STATE_DIR: stateDir, STARDECK_PORT: String(port), STARDECK_STAFF: '0' }
   const startDaemon = (): ChildProcess =>
-    spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], { cwd: repoRoot, env, stdio: 'ignore' })
+    spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })
   const waitUp = async (): Promise<void> => {
     for (let i = 0; i < 60; i++) {
       await new Promise(r => setTimeout(r, 500))

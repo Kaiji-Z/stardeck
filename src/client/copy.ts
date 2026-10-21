@@ -1282,7 +1282,6 @@ export const plainCopy: WarCopy = {
     clarifyBtn: '去对话',
     reviewHint: '结果已核好，等你过目',
     reviewBtn: '去看结果',
-    reviewBtn: '去看结果',
     retryHint: '有失败的，等你定',
     retryBtn: '去看失败',
     scheduledHint: time => `定时 · ${time} 自动开始（到点前不转给规划 Agent）`,

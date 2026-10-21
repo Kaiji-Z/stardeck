@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
-import { browserOpenCommand } from '../src/cli.ts'
+import { isIsolatedRun, browserOpenCommand } from '../src/cli.ts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -34,10 +34,16 @@ test('CLI：browserOpenCommand 三平台形状（纯）', () => {
   assert.deepEqual(browserOpenCommand('http://x/', 'linux'), { cmd: 'xdg-open', args: ['http://x/'] })
 })
 
+test('CLI：隔离态守卫——STARDECK_CONFIG/STARDECK_HOME 覆盖即禁自动开壳面（browser 窗口风暴+开始菜单坏链回归）', () => {
+  assert.equal(isIsolatedRun({}), false)
+  assert.equal(isIsolatedRun({ STARDECK_CONFIG: join('C:', 'tmp', 'iso', 'config.json') }), true)
+  assert.equal(isIsolatedRun({ STARDECK_HOME: join('C:', 'tmp', 'iso') }), true)
+})
+
 test('CLI：/shutdown 端点优雅停服——daemon 进程限时内真退', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-cli-stop-'))
   const port = 41270 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: join(dir, 'state'), STARDECK_STAFF: '0' },
     stdio: 'ignore',
@@ -63,7 +69,7 @@ test('CLI：/shutdown 端点优雅停服——daemon 进程限时内真退', { t
 test('CLI：status 子命令对真 daemon 输出形状', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-cli-status-'))
   const port = 41330 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: join(dir, 'state'), STARDECK_STAFF: '0' },
     stdio: 'ignore',

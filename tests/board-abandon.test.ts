@@ -23,7 +23,7 @@ async function boot(): Promise<Dir> {
   const stateDir = join(dir, 'state')
   mkdirSync(join(stateDir, 'campaigns'), { recursive: true })
   const port = 41030 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0' },
     stdio: 'ignore',
@@ -77,7 +77,7 @@ test('撤令：approved 命令诚实拒绝（撤销语义归任务链）+ 未知
   const { writeFileSync } = await import('node:fs')
   writeFileSync(join(stateDir, 'directives.jsonl'), lines.join('\n') + '\n', 'utf8')
   const port = 41030 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0' },
     stdio: 'ignore',

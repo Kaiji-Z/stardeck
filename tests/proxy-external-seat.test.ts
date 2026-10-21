@@ -71,7 +71,7 @@ test('真 daemon：签席→order→reply 收割入账；伪造 token 403；伪�
   const port = 41110 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_BRIDGE: '1', STARDECK_PROXY: '1' }
-  const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], { cwd: repoRoot, env, stdio: 'ignore' })
+  const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })
   try {
     let up = false
     for (let i = 0; i < 60 && !up; i++) {
@@ -147,7 +147,7 @@ test('真 daemon：代理/舰桥旗 OFF——外接席三端点 404（默认面�
   const port = 41510 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_BRIDGE: '0', STARDECK_PROXY: '0' }
-  const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], { cwd: repoRoot, env, stdio: 'ignore' })
+  const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })
   try {
     let up = false
     for (let i = 0; i < 60 && !up; i++) {

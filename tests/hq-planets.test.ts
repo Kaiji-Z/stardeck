@@ -55,7 +55,7 @@ test('HQ 注册门：注册端点三态 + 板投影带出（真 daemon）', asyn
     rmSync(stateDir, { recursive: true, force: true, maxRetries: 3 })
     rmSync(realDir, { recursive: true, force: true, maxRetries: 3 })
   })
-  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0' },
     stdio: 'ignore',

@@ -30,7 +30,7 @@ test('D28 图景 UI 目检（真 daemon + Playwright：iframe sandbox + CSP + �
   writeFileSync(join(stateDir, 'artifacts', 'scene-check1.html'),
     '<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>舰队晨报</title><style>body{margin:0;padding:20px;background:#0d1117;color:#d6dde6}h1{font-size:19px}</style></head><body><h1>舰队晨报</h1><p>三条线并进，一条待你验收。</p></body></html>', 'utf8')
 
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(PORT), STARDECK_STATE_DIR: stateDir, STARDECK_OPENCODE_DB: join(stateDir, 'oc.db') },
     stdio: 'ignore',

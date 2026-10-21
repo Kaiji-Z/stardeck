@@ -84,7 +84,7 @@ test('backfill：真 daemon 启动集成——老键经启动补齐后 /attach/e
   ].join('\n') + '\n', 'utf8')
   writeFileSync(join(stateDir, 'logs', 'staff-staff-mtjpzz.log'), '{"type":"step_start","sessionID":"ses_backfilled1"}\n', 'utf8')
   const port = 40970 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0' },
     stdio: 'ignore',

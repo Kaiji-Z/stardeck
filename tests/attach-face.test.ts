@@ -322,7 +322,7 @@ test('附着面：jump 端点 dry-run（真 daemon）——映射命中 409 缺�
     db.prepare('INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?, ?)').run('p2', 'm2', 'ses_probe001', 201, 201, JSON.stringify({ type: 'text', text: '任务已交证' }))
     db.close()
   }
-  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_OPENCODE_DB: ocDb },
     stdio: 'ignore',

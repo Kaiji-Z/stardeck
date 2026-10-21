@@ -102,7 +102,7 @@ process.stdin.on('end', () => process.exit(0))
     'staff-e2e': { executor: 'pi', sessionId: 'sess-planrej', workspacePath: ws, capturedAt: now },
   }), 'utf8')
   const port = 41210 + (process.pid % 50)
-  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start'], {
+  const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     // 旗面矩阵下（全旗 OFF 的对照跑）本测试会被继承的 !staff-plan 干掉——
     // plan 路由旗控 404。这里测的是计划驳回链路本身，不是旗门：显式钉 staff-plan

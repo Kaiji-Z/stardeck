@@ -128,6 +128,15 @@ export function shortcutPlan(
   }
 }
 
+/** 隔离态判据（D30 双实弹抓的）：STARDECK_CONFIG/STARDECK_HOME 任一被覆盖=
+ *  测试/CI 隔离跑——开箱自动化面（start 就绪自动开浏览器+首跑自动建快捷方式）
+ *  一律不碰用户壳环境。browser 窗口风暴（verify 全量测试弹十几个窗口）与开始
+ *  菜单坏链（隔离 config 被判首跑，lnk 指进临时安装目录）同一根因：隔离环境
+ *  不设防。显式 `open` 子命令不受此限——用户点名要看。 */
+export function isIsolatedRun(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.STARDECK_CONFIG !== undefined || env.STARDECK_HOME !== undefined
+}
+
 /** 创建快捷方式（impure 执行面）。打包态入口=bin/stardeck.mjs；开发态（tsx 直跑
  *  src/cli.ts）返回 ok:false 教学错误——dev 不建快捷方式。 */
 export function createShortcut(
@@ -309,12 +318,12 @@ if (isMain) {
 }
 
 /** 起 daemon（前台）+ 开箱面（D30：start 默认就绪后拉浏览器；首跑自动建快捷
- *  方式——配置文件缺席即首跑判据）+ 信号优雅关停。 */
+ *  方式——配置文件缺席即首跑判据；隔离态两面全禁，见 isIsolatedRun）+ 信号优雅关停。 */
 function runDaemon(command: string, options: CliOptions): void {
   const firstRun = !existsSync(configFilePath())
   const handle = startDaemon(options)
-  if (command === 'open' || !options.noOpen) waitHealthyAndOpen(handle.base)
-  if (firstRun && !options.noApp) {
+  if (command === 'open' || (!options.noOpen && !isIsolatedRun())) waitHealthyAndOpen(handle.base)
+  if (firstRun && !options.noApp && !isIsolatedRun()) {
     const out = createShortcut()
     if (out.ok) console.log(`[stardeck] 首跑——已建快捷方式：${out.path}（下次双击图标即达；--no-app 关闭此行为）`)
   }
