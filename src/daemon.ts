@@ -757,9 +757,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           onTextDelta: d => { proxyLive.text += d; proxyLive.seq += 1 },
         })
         if (out.text === '') throw new Error('本轮无终答文本')
+        // B6 修（D33 bug 表）：先入账后清 live——同一 SSE 帧携 rev+live:''，
+        // 客户端一次换页（终答顶替打字机），无空窗无重复。
+        await applyProxyReply('proxy-loop', out.text)
         proxyLive.text = ''
         proxyLive.seq += 1
-        await applyProxyReply('proxy-loop', out.text)
         console.log(`[stardeck] 代理舰长 loop 回话入账（${out.text.length} 字，${out.steps} 步/工具 ${out.toolCalls} 次）`)
         return
       } catch (err) {

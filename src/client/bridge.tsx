@@ -202,7 +202,10 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
     createElement('textarea', {
       className: 'war-cd-answer war-bcard-input', rows: 2, placeholder: bc.clarifyNotePh, value: note,
       onChange: e => { setNoteBoth(String(e.target.value ?? '')) },
-      onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
+      // B3 同律：Enter 发答复、Shift 换行。
+      onKeyDown: e => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendAnswer() }
+      },
     }),
     createElement('div', { className: 'war-bcard-actions' },
       createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || (text.trim() === '' && note.trim() === ''), 'data-bridge-act': 'answer', onClick: sendAnswer }, busy ? bc.actionBusy : fp.answerBtn)),
@@ -473,7 +476,10 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       },
     },
       error !== null && messages === null ? createElement('p', { className: 'war-bridge-err' }, bc.loadFail) : null,
-      messages !== null && messages.length === 0 ? createElement('p', { className: 'war-bridge-welcome' }, bc.welcome) : null,
+      messages !== null && messages.length === 0
+        ? createElement('p', { className: 'war-bridge-welcome' }, bc.welcome,
+            createElement('span', { className: 'war-bridge-welcome-motto' }, bc.motto))
+        : null,
       // D29 语调刀：跨日分隔条——HH:MM 时间戳不孤读，隔天回看有锚。
       ...(() => {
         const out: ReactNode[] = []
@@ -511,6 +517,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         : inbox.map(dockCard),
     ),
     createElement('div', { className: 'war-bridge-input' },
+      error !== null ? createElement('p', { className: 'war-bridge-offline', role: 'alert', 'data-bridge-offline': '1' }, bc.offlineBanner) : null,
       actionNote !== null ? createElement('p', { className: 'war-bridge-err', role: 'alert' }, actionNote) : null,
       sendNote !== '' ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, sendNote) : null,
       proxyAway ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-proxy-away': '1' }, bc.proxyAway) : null,
@@ -522,7 +529,10 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
           draftStore.input = v
           setInput(v)
         },
-        onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void send() } },
+        // B3 修（Telegram 语法）：Enter 直发、Shift+Enter 换行（Ctrl/Cmd+Enter 兼容保留）。
+        onKeyDown: e => {
+          if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
+        },
       }),
       createElement('div', { className: 'war-bridge-sendrow' },
         createElement('button', { className: 'war-btn primary', type: 'button', disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),

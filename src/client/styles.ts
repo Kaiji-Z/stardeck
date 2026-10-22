@@ -1138,7 +1138,13 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 .war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-well-bg)}
-.war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:44%;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:44%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scroll-snap-type:y proximity}
+/* B2 修（D33 bug 表）：滚动吸附卡边界——动作钮永不与卡头分离（孤按钮悬空=误触终局风险）。 */
+.war-bridge-dock .war-bcard{scroll-snap-align:start}
+/* B5 断网 banner：常驻黄条（恢复自清）。 */
+.war-bridge-offline{margin:0;padding:5px 10px;border:1px solid var(--war-fail-border,var(--war-border));border-radius:var(--war-r-md);background:color-mix(in srgb,var(--war-fail,#b45309) 8%,transparent);color:var(--war-fail,#b45309);font-size:calc(12px*var(--war-fs))}
+/* B4：格言降级为欢迎语第二行（弱化小字，完整可读不截断）。 */
+.war-bridge-welcome-motto{display:block;margin-top:4px;font-size:calc(12px*var(--war-fs));color:var(--war-text-3)}
 .war-bridge-dock[data-bridge-dock='empty']{max-height:none}
 .war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em}
 .war-bcard{border:1px solid var(--war-border);border-radius:8px;background:var(--war-card-bg);padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--war-shadow-1)}

@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { appendDirectiveEvent } from '../src/directives.ts'
 import { appendEvent } from '../src/events.ts'
+import { appendBridgeEvent } from '../src/bridge.ts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 const PORT = Number(process.env.BRIDGE_UI_PORT ?? 3973)
@@ -48,7 +49,8 @@ try {
   appendDirectiveEvent(stateDir, { type: 'directive_clarification_requested', ts: now, directiveId: 'cmd-ui-clar', questions: ['1. 工具箱指哪个仓？A 日常工具箱仓 / B 你帮我定', '2. 格言要英文还是中文？A 中文 / B 英文 / C 你帮我定'], options: [['日常工具箱仓', '你帮我定'], ['中文', '英文', '你帮我定']] })
   appendEvent(stateDir, { type: 'task_created', ts: now, campaignId: 'task-ui-1', title: '给 README 加安装一节', brief: 'b', acceptance: 'a', priority: 'normal' })
   appendEvent(stateDir, { type: 'task_submitted', ts: now, campaignId: 'task-ui-1', from: 'oc-exec-1', report: '安装一节已补：三步命令 + 前置条件清单。' })
-  console.log(`种账完毕：clarify cmd-ui-clar + reported task-ui-1（stateDir=${stateDir}）`)
+  appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: now, text: '收到——先看账面再答。', commandRefs: ['cmd-ui-clar'] })
+  console.log(`种账完毕：clarify cmd-ui-clar + reported task-ui-1 + agent 话轮带 refs（stateDir=${stateDir}）`)
 
   daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
@@ -125,6 +127,9 @@ try {
   check('计算样式：消息区可滚动（overflowY auto|scroll）', msgsScroll === 'auto' || msgsScroll === 'scroll', `overflowY=${msgsScroll}`)
   const inputBox = await page.locator('[data-bridge-input]').boundingBox()
   check('输入面真实可见（boundingBox 高>0）', inputBox !== null && inputBox.height > 10, JSON.stringify(inputBox?.height ?? null))
+  // D33 B4：头部副行=动态状态（格言已迁空态欢迎语，短状态永不截断）。
+  const statusText = await page.locator('[data-bridge-status]').first().textContent()
+  check('B4：头部动态状态行（在线/离役）', (statusText ?? '').length > 0 && (statusText ?? '').includes('在线'), statusText ?? 'missing')
   // 决策坞：澄清卡（两问选项药丸）+ 验收卡双在场（抽屉内）。
   await page.waitForSelector('[data-bridge-card="clarify"]', { timeout: 15_000 })
   const pill = page.locator('[data-bridge-card="clarify"] .war-clarify-opt').first()
@@ -135,6 +140,13 @@ try {
   // 双重编号回归（UI 目检实抓）：大副问句自带「1. 」前缀，<ol> 再画一层=「1. 1.」。
   const doubleNum = await page.evaluate(() => (document.body.textContent ?? '').includes('1. 1.'))
   check('澄清问干无双重编号（模型前缀已剥）', !doubleNum, `doubleNum=${doubleNum}`)
+  // D33 B2：决策坞滚动吸附卡边界——动作钮永不与卡头分离。
+  const snapGeo = await page.locator('.war-bridge-dock').evaluate(el => {
+    const dock = getComputedStyle(el)
+    const card = el.querySelector('.war-bcard')
+    return { snap: dock.scrollSnapType, align: card === null ? 'none' : getComputedStyle(card).scrollSnapAlign }
+  })
+  check('B2：决策坞滚动吸附（snap 启用+卡对齐 start）', snapGeo.snap !== 'none' && snapGeo.snap.includes('y') && snapGeo.align.includes('start'), JSON.stringify(snapGeo))
   // 选项药丸点选：已选摘要人话回显（D31 批判 P1——拼装码不泄漏给舰长）。
   await pill.click()
   await page.waitForSelector('[data-bridge-chosen]', { timeout: 5000 })
@@ -157,9 +169,42 @@ try {
     return (b.messages ?? []).some(m => m.text.includes('界面目检'))
   }, { timeout: 10_000 })
   check('聊天发话入账（消息流回读可见）', true, '界面目检：问声好。')
+  // D33 B3：Enter 直发（Telegram 语法）。
+  await page.locator('[data-bridge-input]').fill('回车直发：第二轮。')
+  await page.locator('[data-bridge-input]').press('Enter')
+  await page.waitForFunction(async () => {
+    const r = await fetch('/warroom/api/bridge/messages')
+    const b = await r.json() as { messages?: Array<{ text: string }> }
+    return (b.messages ?? []).some(m => m.text.includes('回车直发'))
+  }, { timeout: 10_000 })
+  check('B3：Enter 直发入账', true, 'enter send')
+  const clearedVal = await page.locator('[data-bridge-input]').inputValue()
+  check('B3：Enter 发送后输入框清空', clearedVal === '', JSON.stringify(clearedVal))
+  // D33 B1：点穿聚焦页浮窗保持开（种子战报卡带「打开聚焦页」钮）。
+  const refBtn = page.locator('.war-bref').first()
+  if (await refBtn.count() > 0) {
+    await refBtn.click()
+    await page.waitForTimeout(300)
+    const panelStill = await page.locator('[data-bridge-panel]').count()
+    const hashNow = await page.evaluate(() => location.hash)
+    check('B1：点穿聚焦页浮窗保持开', panelStill === 1, `panel=${panelStill} hash=${hashNow}`)
+  } else {
+    check('B1：点穿聚焦页浮窗保持开', false, 'war-bref 缺席（种子不足）')
+  }
+  // B1 点穿后聚焦页模态开在浮窗之上——先 Esc 收模态再继续（否则盖住后续点击）。
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+  // D33 B7：双击球复位默认位（此前拖拽测试已把球拖到屏中）。
+  await page.locator('[data-bridge-panel-close]').click()
+  await page.waitForSelector('[data-bridge-panel]', { state: 'detached', timeout: 5000 })
+  const bAway = await page.locator('[data-bridge-ball]').boundingBox()
+  await page.locator('[data-bridge-ball]').dblclick()
+  await page.waitForTimeout(300)
+  const bHome = await page.locator('[data-bridge-ball]').boundingBox()
+  const homeOk = bHome !== null && Math.abs(bHome.x - (1440 - 18 - 54)) < 8 && Math.abs(bHome.y - (900 - 18 - 54)) < 8
+  check('B7：双击球复位默认位', homeOk, `away=(${Math.round(bAway?.x ?? -1)},${Math.round(bAway?.y ?? -1)}) home=(${Math.round(bHome?.x ?? -1)},${Math.round(bHome?.y ?? -1)})`)
   // 设置归拢（2026-10-21 定案）：唯一设置面=看板设置抽屉——含明暗开关与
   // 定夺授权段（迷你弹层退役后的对位断言）。
-  await page.locator('[data-bridge-panel-close]').click()
   await page.waitForSelector('[data-bridge-panel]', { state: 'detached', timeout: 5000 })
   await page.locator('button[aria-label="设置"], button[aria-label="Settings"]').first().click()
   await page.waitForSelector('.war-settings-drawer', { timeout: 10_000 })

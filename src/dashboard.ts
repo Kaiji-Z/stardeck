@@ -1237,7 +1237,7 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
               const frame: { rev: string; live?: string } = { rev }
               if (liveSeq !== lastLiveSeq && live !== null) {
                 lastLiveSeq = liveSeq
-                if (live.text !== '') frame.live = live.text
+                frame.live = live.text // B6：空串也带——客户端据此清打字机（字段缺席=陈旧残留）
               }
               last = rev
               sse.write(`data: ${JSON.stringify(frame)}\n\n`)

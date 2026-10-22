@@ -29,6 +29,7 @@ try { Object.defineProperty(globalThis, 'navigator', { value: win.navigator, con
 // ── fetch 路由 stub ──
 const calls: Array<{ url: string; body?: unknown }> = []
 let bridgeFixture: Record<string, unknown> = { ok: true, messages: [], revision: 'r1' }
+let bridgeFail = false // B5 断网回归：拒答 bridge 端点模拟失联
 let boardFixture: Record<string, unknown> = {
   ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r1',
   commands: [], tasks: [], threads: [], roster: [], rosterErrors: [],
@@ -39,7 +40,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promis
   let body: unknown
   if (init?.body !== undefined) { try { body = JSON.parse(String(init.body)) } catch { body = String(init.body) } }
   calls.push({ url, body })
-  if (url.includes('/warroom/api/bridge/messages')) return jsonResponse(bridgeFixture)
+  if (url.includes('/warroom/api/bridge/messages')) { if (bridgeFail) throw new Error('offline') ; return jsonResponse(bridgeFixture) }
   if (url.includes('/warroom/api/board')) return jsonResponse(boardFixture)
   if (url.includes('/warroom/api/commands/answer')) return jsonResponse({ ok: true, note: 'ok' })
   if (url.includes('/warroom/api/commands/plan')) return jsonResponse({ ok: true })
@@ -290,4 +291,49 @@ test('D29 草稿跨挂载：输入→卸载→重挂，输入不丢（切视图�
     const ta2 = r2.textareaAt('data-bridge-input')!
     assert.equal(ta2.value, '这道命令要跨视图活下去', '重挂后草稿原样回来')
   } finally { r2.unmount() }
+})
+
+
+test('B3 回归：Enter 直发（无 Shift）——POST 落 /bridge/messages；Shift+Enter 只换行不发', async () => {
+  const before = calls.filter(c => c.url.includes('/warroom/api/bridge/messages') && c.body !== undefined).length
+  const r = await render({}, '想做什么直接说')
+  try {
+    const ta = r.textareaAt('data-bridge-input')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(ta, 'Enter 直发回归')
+    ta.dispatchEvent(new win.Event('input', { bubbles: true }))
+    await new Promise(res => setTimeout(res, 30))
+    // Shift+Enter：不发送
+    ta.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }))
+    await new Promise(res => setTimeout(res, 50))
+    let after = calls.filter(c => c.url.includes('/warroom/api/bridge/messages') && c.body !== undefined).length
+    assert.equal(after, before, 'Shift+Enter 不触发 POST')
+    // Enter：发送
+    ta.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await new Promise(res => setTimeout(res, 80))
+    after = calls.filter(c => c.url.includes('/warroom/api/bridge/messages') && c.body !== undefined).length
+    assert.equal(after, before + 1, 'Enter 触发一次 POST')
+  } finally { r.unmount() }
+})
+
+test('B5 回归：bridge 端点失联 → 常驻断网 banner（恢复自清）', async () => {
+  bridgeFail = true
+  const r = await render({}, '舰桥失联')
+  try {
+    assert.ok(r.text().includes('舰桥失联——正在自动重试'), '断网 banner 常驻在场')
+    const banner = document.querySelector('[data-bridge-offline]')
+    assert.ok(banner !== null, 'banner 锚点在场')
+  } finally {
+    r.unmount()
+    bridgeFail = false
+    await new Promise(res => setTimeout(res, 50))
+  }
+})
+
+test('B4 回归：空态欢迎语含格言（完整可读，不再截断于头部）', async () => {
+  bridgeFixture = { ok: true, messages: [], revision: 'r1' }
+  const r = await render({}, '想做什么直接说')
+  try {
+    assert.ok(r.text().includes('舰队的事他兜着'), '格言降级到欢迎语第二行（完整文本）')
+  } finally { r.unmount() }
 })

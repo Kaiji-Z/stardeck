@@ -139,8 +139,9 @@ function App(): ReturnType<typeof createElement> {
   // 决策待决数（球面角标）：有请示压着时舰长不用开窗也知道。
   const pending = bridgeOn && data !== null ? collectInbox(data.commands, data.tasks).length : 0
   // 点穿聚焦页：窗收起 + 板面 hash 深链（warView 自带 hashchange 监听）。
+  // B1 修（D33 bug 表）：点穿聚焦页浮窗保持开——核对证据回来不用重新点球
+  // 滚流（板在窗下自行更新，hash 深链照设）。
   const openBoard = useCallback((commandId?: string): void => {
-    setChatOpen(false)
     if (commandId !== undefined && commandId !== '') {
       try { location.hash = `#war-cmd-${commandId}` } catch { /* 隐私模式 */ }
     }
@@ -190,6 +191,12 @@ function App(): ReturnType<typeof createElement> {
         style: { right: ballPos.right, bottom: ballPos.bottom },
         onPointerDown: onBallDown, onPointerMove: onBallMove, onPointerUp: onBallUp,
         onClick: onBallClick, onKeyDown: onBallKeyDown,
+        // B7 修：双击复位默认位——拖丢的球一次手势回角。
+        onDoubleClick: () => {
+          const home = clampPos({ right: 18, bottom: 18 })
+          setBallPos(home)
+          try { localStorage.setItem(BALL_KEY, JSON.stringify(home)) } catch { /* 隐私模式 */ }
+        },
       },
         createElement('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
           createElement('path', { d: BALL_STAR, fill: 'var(--war-run-strong, #3b82f6)' })),
@@ -203,7 +210,8 @@ function App(): ReturnType<typeof createElement> {
         createElement('div', { className: 'war-tg-head' },
           createElement('div', { className: 'war-tg-head-text' },
             createElement('span', { className: 'war-tg-title' }, bc.title),
-            createElement('span', { className: 'war-tg-motto' }, bc.motto)),
+            // B4 修（D33 bug 表）：头部副行=动态状态（格言移空态欢迎语，420px 永不截断）。
+            createElement('span', { className: 'war-tg-motto', 'data-bridge-status': data?.bridge?.proxy === false ? 'off' : 'on' }, data?.bridge?.proxy === false ? bc.statusOff : bc.statusOn)),
           createElement('button', { className: 'war-btn war-tg-close', type: 'button', 'aria-label': activeCopy().settings.close, 'data-bridge-panel-close': '1', onClick: () => { setChatOpen(false) } }, '✕')),
         createElement('div', { className: 'war-tg-body' }, createElement(BridgePane, { onOpenBoard: openBoard })),
       )

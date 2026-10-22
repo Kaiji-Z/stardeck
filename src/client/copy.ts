@@ -616,6 +616,11 @@ export interface WarCopy {
     clarifyNotePh: string
     /** D32 打字机：在途回话的 meta 标签。 */
     liveTyping: string
+    /** B5 断网 banner（常驻至恢复）。 */
+    offlineBanner: string
+    /** B4 头部状态行。 */
+    statusOn: string
+    statusOff: string
     /** 发送后等待期常驻指示（代理舰长在途）。 */
     processing: string
     /** 键盘加速器可见暗示（聊天头）。 */
@@ -1229,6 +1234,9 @@ export const warCopy: WarCopy = {
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选，也可直接点选项）',
     liveTyping: '正在输入…',
+    offlineBanner: '舰桥失联——正在自动重试',
+    statusOn: '代理舰长在线',
+    statusOff: '代理舰长离役（降级）',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1833,6 +1841,9 @@ export const plainCopy: WarCopy = {
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选，也可直接点选项）',
     liveTyping: '正在输入…',
+    offlineBanner: '舰桥失联——正在自动重试',
+    statusOn: '代理舰长在线',
+    statusOff: '代理舰长离役（降级）',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',
