@@ -621,6 +621,15 @@ export interface WarCopy {
     /** B4 头部状态行。 */
     statusOn: string
     statusOff: string
+    /** D33 段2：loop 工具步骤 label（机械名→舰长语）。 */
+    toolBoard: string
+    toolDigest: string
+    toolLedger: string
+    /** D33 段2：消息复制钮+已复制回执。 */
+    copyBtn: string
+    copiedNote: string
+    /** D33 段2：未读分隔条。 */
+    newSince: string
     /** 发送后等待期常驻指示（代理舰长在途）。 */
     processing: string
     /** 键盘加速器可见暗示（聊天头）。 */
@@ -1237,6 +1246,12 @@ export const warCopy: WarCopy = {
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
     statusOff: '代理舰长离役（降级）',
+    toolBoard: '读板投影',
+    toolDigest: '读待决摘要',
+    toolLedger: '读账本切片',
+    copyBtn: '复制',
+    copiedNote: '已复制',
+    newSince: '以下为新动静',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1844,6 +1859,12 @@ export const plainCopy: WarCopy = {
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
     statusOff: '代理舰长离役（降级）',
+    toolBoard: '读板投影',
+    toolDigest: '读待决摘要',
+    toolLedger: '读账本切片',
+    copyBtn: '复制',
+    copiedNote: '已复制',
+    newSince: '以下为新动静',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',

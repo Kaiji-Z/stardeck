@@ -261,7 +261,7 @@ export interface DashboardDeps {
   localWorkspaces?: () => Array<{ workspaceId: string; path: string; title: string; sessionCount: number }> | null
   /** D32 流式上屏（只读快照）：内置 loop 打字机缓冲（seq 变化=有新字）。
    *  缺席时 SSE 帧保持 rev-only（纯路由测试可省略）。 */
-  proxyLive?: () => { seq: number; text: string }
+  proxyLive?: () => { seq: number; text: string; tools: Array<{ label: string; done: boolean }> }
   /** V18 HQ 工作区注册弹窗：宿主 workspace.list（只读；缺席如实报 null）。 */
   listWorkspaces?: () => Promise<Array<{ workspaceId: string; path: string; title: string; sessionCount: number }> | null>
   /** V18 注册时把真实目录幂等收编进宿主 registry（best-effort，失败不阻塞）。 */
@@ -1234,10 +1234,11 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
             const live = deps.proxyLive?.()
             const liveSeq = live?.seq ?? -1
             if (rev !== last || liveSeq !== lastLiveSeq) {
-              const frame: { rev: string; live?: string } = { rev }
+              const frame: { rev: string; live?: string; liveTools?: Array<{ label: string; done: boolean }> } = { rev }
               if (liveSeq !== lastLiveSeq && live !== null) {
                 lastLiveSeq = liveSeq
                 frame.live = live.text // B6：空串也带——客户端据此清打字机（字段缺席=陈旧残留）
+                if (live.tools.length > 0) frame.liveTools = live.tools // D33 段2：工具步骤 chip
               }
               last = rev
               sse.write(`data: ${JSON.stringify(frame)}\n\n`)

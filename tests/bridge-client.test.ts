@@ -337,3 +337,30 @@ test('B4 回归：空态欢迎语含格言（完整可读，不再截断于头�
     assert.ok(r.text().includes('舰队的事他兜着'), '格言降级到欢迎语第二行（完整文本）')
   } finally { r.unmount() }
 })
+
+
+test('段2 回归：toolStepLabelOf 映射（read_board/digest/ledger→舰长语；未知名透传）', async () => {
+  const { toolStepLabelOf } = await import('../src/client/bridge.tsx')
+  assert.equal(toolStepLabelOf('read_board'), '读板投影')
+  assert.equal(toolStepLabelOf('read_digest'), '读待决摘要')
+  assert.equal(toolStepLabelOf('read_ledger'), '读账本切片')
+  assert.equal(toolStepLabelOf('read_unknown'), 'read_unknown')
+})
+
+test('段2 回归：agent 消息带复制钮 + 未读分隔条（lastSeen 锚后首条 agent 消息前插）', async () => {
+  try { localStorage.setItem('warroom-last-seen', '2026-10-20T00:00:00.000Z') } catch { /* n/a */ }
+  bridgeFixture = { ok: true, messages: [
+    { id: 'm1', kind: 'agent', ts: '2026-10-19T08:00:00.000Z', text: '旧话轮' },
+    { id: 'm2', kind: 'agent', ts: '2026-10-21T08:00:00.000Z', text: '新话轮：舰队自转中' },
+  ], revision: 'r2' }
+  const r = await render({}, '新话轮：舰队自转中')
+  try {
+    assert.ok(r.text().includes('以下为新动静'), '未读分隔条在场（lastSeen 后首条 agent 消息前）')
+    const copyBtns = document.querySelectorAll('[data-bridge-copy]')
+    assert.ok(copyBtns.length >= 2, `agent 消息各有复制钮（得 ${copyBtns.length}）`)
+  } finally {
+    r.unmount()
+    bridgeFixture = { ok: true, messages: [], revision: 'r1' }
+    try { localStorage.removeItem('warroom-last-seen') } catch { /* n/a */ }
+  }
+})

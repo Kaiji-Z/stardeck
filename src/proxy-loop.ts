@@ -40,6 +40,9 @@ export interface ProxyLoopDeps {
   /** 只读投影闭包（daemon 传入——与 MCP 座席面 read_* 同源同数据）。 */
   reads: { board: () => Promise<unknown>; digest: () => Promise<unknown>; ledger: () => Promise<unknown> }
   onTextDelta?: (delta: string) => void
+  /** D33 段2（lookatstudy tool-call part 同形）：工具步骤透明化——start=模型发起
+   *  调用、done=结果返回。UI 内联 chip 呈现，让「它在查账」可见。 */
+  onToolStep?: (toolName: string, phase: 'start' | 'done') => void
   /** 整轮看门狗毫秒（缺省 180s——超时 abort，调用侧降级）。 */
   watchdogMs?: number
 }
@@ -90,6 +93,10 @@ export async function runProxyLoop(order: string, env: ProxyLoopEnv, deps: Proxy
     if (part.type === 'text-delta') {
       text += part.text
       deps.onTextDelta?.(part.text)
+    } else if (part.type === 'tool-call') {
+      deps.onToolStep?.(part.toolName, 'start')
+    } else if (part.type === 'tool-result') {
+      deps.onToolStep?.(part.toolName, 'done')
     } else if (part.type === 'error') {
       throw part.error instanceof Error ? part.error : new Error(String(part.error))
     }

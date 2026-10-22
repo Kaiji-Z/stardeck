@@ -18,6 +18,7 @@ import { reportBody } from './views.tsx'
 class BridgeStore {
   private snapshot: BridgeChatMessage[] | null = null
   private live = '' // D32 打字机：内置 loop 在途文本（SSE {live} 帧驱动，终答入账即清）
+  private liveTools: Array<{ label: string; done: boolean }> = [] // D33 段2：本轮工具步骤
   private error: string | null = null
   private timer: ReturnType<typeof setInterval> | undefined
   private source: EventSource | undefined
@@ -42,6 +43,7 @@ class BridgeStore {
 
   getSnapshot = (): BridgeChatMessage[] | null => this.snapshot
   getLive = (): string => this.live
+  getLiveTools = (): Array<{ label: string; done: boolean }> => this.liveTools
   getError = (): string | null => this.error
   refresh = (): void => { void this.tick() }
 
@@ -51,10 +53,14 @@ class BridgeStore {
       const es = new EventSource('/warroom/api/events')
       es.onmessage = (ev: MessageEvent<string>) => {
         try {
-          const frame = JSON.parse(ev.data) as { rev?: string; live?: string }
+          const frame = JSON.parse(ev.data) as { rev?: string; live?: string; liveTools?: Array<{ label: string; done: boolean }> }
           let changed = false
           if (frame.live !== undefined && frame.live !== this.live) {
             this.live = frame.live
+            changed = true
+          }
+          if (frame.liveTools !== undefined && frame.liveTools !== this.liveTools) {
+            this.liveTools = frame.liveTools
             changed = true
           }
           if (frame.rev !== undefined && frame.rev !== this.lastRev) {
@@ -92,11 +98,21 @@ class BridgeStore {
 
 export const bridgeStore = new BridgeStore()
 
-function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null; live: string } {
+function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null; live: string; liveTools: Array<{ label: string; done: boolean }> } {
   const messages = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getSnapshot, bridgeStore.getSnapshot)
   const error = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getError, bridgeStore.getError)
   const live = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLive, bridgeStore.getLive)
-  return { messages, error, live }
+  const liveTools = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLiveTools, bridgeStore.getLiveTools)
+  return { messages, error, live, liveTools }
+}
+
+/** D33 段2：loop 工具机械名→舰长语（与 copy 词典同源；导出供单测钉映射）。 */
+export function toolStepLabelOf(name: string): string {
+  const bc = activeCopy().bridge
+  if (name === 'read_board') return bc.toolBoard
+  if (name === 'read_digest') return bc.toolDigest
+  if (name === 'read_ledger') return bc.toolLedger
+  return name
 }
 
 function hhmm(iso: string): string {
@@ -346,7 +362,7 @@ function RetryCard(props: CardProps & { task: BoardTask }): ReactNode {
 export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }): ReactNode {
   const { onOpenBoard } = props
   const { data } = useWar()
-  const { messages, error, live } = useBridge()
+  const { messages, error, live, liveTools } = useBridge()
   useSyncExternalStore(subscribeSkin, skinId)
   useSyncExternalStore(subscribeLang, langId)
   const bc = activeCopy().bridge
@@ -359,10 +375,17 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const lineageOf = (taskId: string): BoardCommand | null => commands.find(c => c.taskId === taskId) ?? null
   const inbox = collectInbox(commands, tasks).slice(0, 4)
   const [input, setInput] = useState(() => draftStore.input)
+  // D33 段2：未读分隔锚——离页落的 warroom-last-seen（挂载时读一次，会话内不漂）。
+  const lastSeenTs = useRef<string>('')
+  if (lastSeenTs.current === '') {
+    try { lastSeenTs.current = localStorage.getItem('warroom-last-seen') ?? '' } catch { /* 隐私模式 */ }
+  }
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sendNote, setSendNote] = useState('')
   const [busyRef, setBusyRef] = useState<string | null>(null)
   const [actionNote, setActionNote] = useState<string | null>(null)
+  const [awayFromBottom, setAwayFromBottom] = useState(false)
   const msgsRef = useRef<HTMLDivElement | null>(null)
   // D29 critique P1：阅读位置保护——只在已近底时跟随新消息；往上翻历史不再被
   // 15s 轮询拽回底部。发送后强制回底（自己的消息自己看得见）。
@@ -434,6 +457,16 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       m.kind === 'agent'
         ? createElement('div', { className: 'war-bmsg-body' }, reportBody(m.text))
         : createElement('div', { className: 'war-bmsg-body war-bmsg-plain' }, m.text),
+      m.kind === 'agent'
+        ? createElement('button', {
+            className: 'war-btn war-bmsg-copy', type: 'button', 'data-bridge-copy': String(i),
+            onClick: () => {
+              void (navigator.clipboard?.writeText(m.text) ?? Promise.resolve()).catch(() => {})
+              setCopiedId(String(i))
+              setTimeout(() => { setCopiedId(null) }, 1500)
+            },
+          }, copiedId === String(i) ? bc.copiedNote : bc.copyBtn)
+        : null,
       m.kind === 'agent' && m.commandRefs !== undefined && m.commandRefs.length > 0 && onOpenBoard !== undefined
         ? createElement('div', { className: 'war-bmsg-refs' },
             createElement('span', { className: 'war-bmsg-chips' }, ...m.commandRefs.map((c, j) => openFocusBtn(c, `c-${j}`))))
@@ -472,20 +505,39 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       className: 'war-bridge-msgs', ref: msgsRef, 'data-bridge-msgs': '1', 'aria-live': 'polite',
       onScroll: () => {
         const el = msgsRef.current
-        if (el !== null) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+        if (el !== null) {
+          nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+          setAwayFromBottom(!nearBottomRef.current)
+        }
       },
     },
+    // D33 段2（lookatstudy ChevronDown 同形）：非近底时回底浮钮。
+    awayFromBottom
+      ? createElement('button', {
+          className: 'war-btn war-jump-bottom', type: 'button', 'aria-label': '回到底部', 'data-bridge-jump': '1',
+          onClick: () => {
+            const el = msgsRef.current
+            if (el !== null) { nearBottomRef.current = true; setAwayFromBottom(false); el.scrollTop = el.scrollHeight }
+          },
+        }, '▼')
+      : null,
       error !== null && messages === null ? createElement('p', { className: 'war-bridge-err' }, bc.loadFail) : null,
       messages !== null && messages.length === 0
         ? createElement('p', { className: 'war-bridge-welcome' }, bc.welcome,
             createElement('span', { className: 'war-bridge-welcome-motto' }, bc.motto))
         : null,
       // D29 语调刀：跨日分隔条——HH:MM 时间戳不孤读，隔天回看有锚。
+      // D33 段2：未读分隔——lastSeen 之后首条消息前插锚（lookatstudy 增量锚同义）。
       ...(() => {
         const out: ReactNode[] = []
         let lastDay = ''
+        let newMarked = false
         let i = 0
         for (const m of messages ?? []) {
+          if (!newMarked && lastSeenTs.current !== '' && m.ts > lastSeenTs.current && (m.kind === 'agent' || m.kind === 'system')) {
+            out.push(createElement('div', { key: `new-${m.ts}`, className: 'war-bmsg-new' }, bc.newSince))
+            newMarked = true
+          }
           const day = m.ts.slice(0, 10)
           if (day !== '' && day !== lastDay) {
             const d = Date.parse(m.ts)
@@ -500,10 +552,14 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       })(),
       // D32 打字机：内置 loop 在途文本逐字上屏（SSE {live} 帧），终答入账后被
       // 真消息顶替；光标呼吸在 CSS（::after）。无在途文本时回落处理中指示。
-      live !== ''
+      live !== '' || liveTools.length > 0
         ? createElement('div', { className: 'war-bmsg war-bmsg-agent war-bmsg-live', 'data-bridge-live': '1' },
             createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${bc.liveTyping}`),
-            createElement('div', { className: 'war-bmsg-body' }, reportBody(live)))
+            liveTools.length > 0
+              ? createElement('div', { className: 'war-bmsg-tools', 'data-bridge-tools': '1' },
+                  ...liveTools.map((t, j) => createElement('span', { key: `t-${j}`, className: `war-bmsg-tool${t.done ? ' done' : ''}` }, `${t.done ? '✓' : '⚙'} ${toolStepLabelOf(t.label)}`)))
+              : null,
+            live !== '' ? createElement('div', { className: 'war-bmsg-body' }, reportBody(live)) : null)
         : messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
           ? createElement('div', { className: 'war-bmsg war-bmsg-typing', 'data-bridge-typing': '1' },
               createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, '●●●'),

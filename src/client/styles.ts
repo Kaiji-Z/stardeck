@@ -1184,6 +1184,17 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-bmsg-live{max-width:100%;border:none;background:transparent;padding:2px 0;border-radius:0;box-shadow:none}
 .war-bmsg-live .war-bmsg-body::after{content:'▍';margin-left:2px;color:var(--war-run-strong,var(--war-border-hover));animation:war-typing 1.2s ease-in-out infinite}
 @media (prefers-reduced-motion: reduce){.war-bmsg-live .war-bmsg-body::after{animation:none}}
+/* D33 段2（lookatstudy 移植）：工具步骤 chip / 回底浮钮 / 时间戳弱化 / 未读分隔 / 复制钮 */
+.war-bmsg-tools{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+.war-bmsg-tool{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:999px;border:1px solid var(--war-border-soft);background:var(--war-well-bg);color:var(--war-text-2);font-size:calc(11px*var(--war-fs));font-family:var(--war-font-code)}
+.war-bmsg-tool.done{color:var(--war-text-1);border-color:var(--war-border)}
+.war-tg-panel .war-bmsg-meta{opacity:.45;transition:opacity .15s ease}
+.war-tg-panel .war-bmsg:hover .war-bmsg-meta{opacity:1}
+.war-bmsg-new{align-self:center;font-size:calc(11px*var(--war-fs));color:var(--war-run-strong,var(--war-text-2));padding:2px 12px;margin:4px 0;border-bottom:1px solid color-mix(in srgb,var(--war-run-strong) 45%,transparent);letter-spacing:.06em}
+.war-bmsg-copy{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;opacity:.55}
+.war-bmsg-copy:hover{opacity:1}
+.war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;box-shadow:var(--war-shadow-2)}
+.war-bridge{position:relative}
 /* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
  * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
  * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=
