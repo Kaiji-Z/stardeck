@@ -2796,9 +2796,6 @@ const CMD_TAB_ICONS: Record<CmdTab, string> = { active: '▶', settled: '✓', a
 function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: CmdTab) => void; tabCounts: Record<CmdTab, number>; children: ReactNode[] }): ReactNode {
   const { onCompose, tab, onTab, tabCounts, children } = props
   const ref = useRef<HTMLDivElement | null>(null)
-  // D29 critique：空板比例倒挂治理——当前页签无卡时坞塌缩成细条（＋+页签一行），
-  // 不再让 218px 的空架子占半屏空看板的底部；有卡恢复全高。
-  const empty = children.length === 0
   useEffect(() => {
     const el = ref.current
     if (el === null) return
@@ -2852,7 +2849,7 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
     cards.forEach((c, i) => { c.tabIndex = i === next ? 0 : -1 })
     cards[next]!.focus()
   }
-  return createElement('div', { className: `war-dispatch${empty ? ' war-dispatch-empty' : ''}`, role: 'region', 'aria-label': activeCopy().dispatch.label },
+  return createElement('div', { className: 'war-dispatch', role: 'region', 'aria-label': activeCopy().dispatch.label },
     createElement('button', {
       className: 'war-dispatch-add',
       type: 'button',
@@ -2877,8 +2874,6 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
         createElement('span', { className: 'war-cmdtab-name' }, activeCopy().cmdTabs[t]),
       ))),
     createElement('div', { className: 'war-dispatch-track', ref, onKeyDown: onTrackKey }, ...children),
-    // D29 critique：空板不再是无名图标哑谜——塌缩条上常驻一句下一步。
-    empty ? createElement('span', { className: 'war-dispatch-empty-hint' }, activeCopy().dispatch.emptyHint) : null,
   )
 }
 

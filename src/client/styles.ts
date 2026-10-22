@@ -292,11 +292,6 @@ body[data-ds-dark-theme] .war-root{
  * V24.1 补：定高随 --war-fs 走（1.35 字号实弹：五行行高涨 35%，固定 218px
  * 把卡底动作行裁掉——布局定高乘字号系数，1.0 时数值不变）。 */
 .war-dispatch{flex:0 0 auto;display:flex;gap:10px;align-items:stretch;height:calc(218px*var(--war-fs));margin:0 10px 10px;padding:10px;border:1px solid var(--war-border);border-radius:var(--war-r-lg);background:var(--war-dock-bg);box-shadow:var(--war-dock-inset)}
-/* D29 critique：空板比例倒挂治理——当前页签无卡时坞塌缩成细条（＋+页签一行）。 */
-.war-dispatch-empty{height:auto;min-height:0;padding:6px 10px}
-.war-dispatch-empty .war-dispatch-track{display:none}
-/* D29 批三：塌缩态页签名不再藏（塌缩条放得下）；空板下一步提示。 */
-.war-dispatch-empty-hint{font-size:calc(12px*var(--war-fs));color:var(--war-text-3);align-self:center;white-space:nowrap}
 .war-dispatch-track{flex:1 1 auto;min-width:0;display:flex;gap:10px;align-items:flex-start;padding:10px 2px 12px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin}
 .war-dispatch-track.can-scroll{mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.35));-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.35))}
 .war-dispatch .war-command-card{flex:0 0 320px;min-width:0}
