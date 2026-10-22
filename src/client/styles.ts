@@ -1163,9 +1163,7 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-standalone-board{background:var(--war-canvas)}
 /* 板根在 flex 包装内 shrink-to-fit——卡少时整板收窄留右侧死白（终版截图实证
  * 1440 宽下内容止于 963）；根容器吃满可用宽。 */
-/* D31 悬浮球改版后旧 272px 顶右让位内衬退役，板面首次全宽拉伸——D29 调校的
- * 构图比例散架（调度条横摊、卡列留白）。内容列限宽居中恢复调校比例，画布底色仍全幅。 */
-body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width:0;width:100%;max-width:1200px;margin-inline:auto}
+body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width:0;width:100%}
 /* D29 语调刀：【块】标记 chip（账本原文不动，呈现层给视觉身份）+跨日分隔条。 */
 .war-md-token{display:inline-block;padding:0 5px;border:1px solid var(--war-border-soft);border-radius:5px;background:var(--war-well-bg);color:var(--war-text-2);font-family:var(--war-font-code);font-size:.92em;line-height:1.5}
 .war-bmsg-day{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-2);padding:2px 10px;margin:4px 0;border-bottom:1px dashed var(--war-border-soft)}
