@@ -97,8 +97,8 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     reprobe: '装好了，重新探测',
     copied: '已复制',
     copyFail: '复制失败——请手动选中命令复制',
-    loopReady: '内置代理舰长已就绪（STARDECK_PROXY_LOOP=1）——聊天窗由内置 loop 担任（模型走 Z_AI_* 环境变量）；舰队外勤仍需上方任一席。',
-    loopHint: '一个 CLI 都不想装也可以先聊：设环境变量 STARDECK_PROXY_LOOP=1 与 Z_AI_BASE_URL / Z_AI_API_KEY 后重启 stardeck，聊天窗的代理舰长由内置 loop 担任。',
+    loopReady: '内置代理舰长已就绪（Z_AI_* 环境变量已配）——聊天窗由内置 loop 担任，打字机流式回话；舰队外勤仍需上方任一席。',
+    loopHint: '一个 CLI 都不想装也可以先聊：设环境变量 Z_AI_BASE_URL / Z_AI_API_KEY 后重启 stardeck，聊天窗的代理舰长由内置 loop 担任（流式回话）；设 STARDECK_PROXY_LOOP=0 可切回 CLI 席。',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -129,8 +129,8 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     reprobe: 'Installed — re-scan',
     copied: 'Copied',
     copyFail: 'Copy failed — please select and copy the command manually',
-    loopReady: 'Built-in proxy captain is ready (STARDECK_PROXY_LOOP=1) — the chat window runs on the built-in loop (model via Z_AI_* env); field missions still need a seat above.',
-    loopHint: 'No CLI at all? You can still chat: set STARDECK_PROXY_LOOP=1 plus Z_AI_BASE_URL / Z_AI_API_KEY environment variables and restart stardeck — the chat captain runs on the built-in loop.',
+    loopReady: 'Built-in proxy captain is ready (Z_AI_* env configured) — the chat window runs on the built-in loop with streaming replies; field missions still need a seat above.',
+    loopHint: 'No CLI at all? You can still chat: set Z_AI_BASE_URL / Z_AI_API_KEY environment variables and restart stardeck — the chat captain runs on the built-in loop with streaming (STARDECK_PROXY_LOOP=0 switches back to the CLI seat).',
   },
 }
 

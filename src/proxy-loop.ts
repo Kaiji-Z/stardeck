@@ -9,8 +9,10 @@
  * spawn 席同一预算纪律）。看门狗=整轮 AbortSignal.timeout（首 token/步间停摆一律
  * 掐）。流式：onTextDelta 回调（打字机入屏是可选刀，本刀只供日志/未来 UI）。
  *
- * 供给：OpenAI 兼容面（z.ai GLM）。旗：STARDECK_PROXY_LOOP=1 且 Z_AI_* 齐才
- * enabled——缺件=未开（调用侧诚实走舰队席并交代，不静默）。
+ * 供给：OpenAI 兼容面（z.ai GLM）。旗语义（D32 翻默认，舰长拍板「打开项目
+ * 即最佳聊天体验」）：Z_AI_* 齐即 enabled——内置 loop 成为聊天窗默认扮演者；
+ * STARDECK_PROXY_LOOP=0 显式关（回落舰队 CLI 席）；无 key=未开（诚实走舰队席，
+ * 不静默）。
  * @module stardeck/proxy-loop
  */
 import { streamText, tool, stepCountIs, type ToolSet } from 'ai'
@@ -24,13 +26,14 @@ export interface ProxyLoopEnv {
   model: string
 }
 
-/** 旗面解析（纯）：三件齐才 enabled（旗+基址+key）。基址去尾斜杠（z.ai 惯例
+/** 旗面解析（纯）：基址+key 齐即 enabled（D32 翻默认——BYOK loop 是聊天窗
+ *  首选扮演者），STARDECK_PROXY_LOOP=0 显式关。基址去尾斜杠（z.ai 惯例
  *  URL 常带 /；openai-compatible 拼路径不吃双斜杠）。 */
 export function proxyLoopEnvOf(env: NodeJS.ProcessEnv): ProxyLoopEnv {
   const baseUrl = (env.Z_AI_BASE_URL ?? '').trim().replace(/\/+$/, '')
   const apiKey = (env.Z_AI_API_KEY ?? '').trim()
   const model = (env.STARDECK_PROXY_LOOP_MODEL ?? 'glm-5.3').trim()
-  return { enabled: env.STARDECK_PROXY_LOOP === '1' && baseUrl !== '' && apiKey !== '', baseUrl, apiKey, model }
+  return { enabled: baseUrl !== '' && apiKey !== '' && env.STARDECK_PROXY_LOOP !== '0', baseUrl, apiKey, model }
 }
 
 export interface ProxyLoopDeps {

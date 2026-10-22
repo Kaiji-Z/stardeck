@@ -230,6 +230,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   const proxySeatIds = new Set<string>(loadProxySeats(stateDir).map(s => s.seatId))
   const proxyGateBless = new Set<string>()
   let proxyVerdictRuntime = config.proxyVerdict
+  // D32 流式上屏：内置 loop 的打字机缓冲（onTextDelta 增量、入账/失手即清）。
+  // SSE 帧随 seq 变化推送 {live}——会话态不进账本，读投影纪律不破。
+  const proxyLive = { seq: 0, text: '' }
   const tools = warTools({
     store,
     stateDir,
@@ -292,6 +295,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           console.log(`[stardeck] 舰长${granted ? '授权' : '收回'}代理舰长代定夺（运行态，重启回落 OFF）`)
         },
       },
+      // D32 流式上屏：SSE 帧随 live.seq 变化推 {live} 打字机文本。
+      proxyLive: () => ({ seq: proxyLive.seq, text: proxyLive.text }),
       shutdown: () => { triggerShutdown() },
       // K17 计划判定回推（独立形态替位）：pi 席经 RPC 续跑投 follow_up（与板内答复
       // 同通道）；非 pi/失败 best-effort 跳过——驳回理由已入 fold，重拟工单必带。
@@ -740,18 +745,26 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       proxySpawning = true
       try {
         const order = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
+        proxyLive.text = ''
+        proxyLive.seq += 1
         const out = await runProxyLoop(order, loopEnv, {
           reads: {
             board: async () => ({ commands: directiveProjection(stateDir), tasks: boardProjection(stateDir) }),
             digest: () => bridgeDigest(stateDir),
             ledger: () => ledgerSlice(stateDir),
           },
+          // D32 打字机：增量推进 live 缓冲——SSE 帧随 seq 推 {live}，浮窗逐字上屏。
+          onTextDelta: d => { proxyLive.text += d; proxyLive.seq += 1 },
         })
         if (out.text === '') throw new Error('本轮无终答文本')
+        proxyLive.text = ''
+        proxyLive.seq += 1
         await applyProxyReply('proxy-loop', out.text)
         console.log(`[stardeck] 代理舰长 loop 回话入账（${out.text.length} 字，${out.steps} 步/工具 ${out.toolCalls} 次）`)
         return
       } catch (err) {
+        proxyLive.text = ''
+        proxyLive.seq += 1
         console.warn(`[stardeck] 代理舰长 loop 失手——本轮降级舰队席：${err instanceof Error ? err.message : String(err)}`)
         appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts: new Date().toISOString(), noticeKind: 'retry', dedupKey: `proxyloop:${Date.now().toString(36)}`, text: '内置 loop 本轮失手（详见作战日志）——改由舰队席应答。' })
       } finally {

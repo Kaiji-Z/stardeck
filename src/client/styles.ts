@@ -1174,6 +1174,10 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-typing-label{font-size:calc(12px*var(--war-fs))}
 @keyframes war-typing{0%,100%{opacity:.35}50%{opacity:1}}
 @media (prefers-reduced-motion: reduce){.war-typing-dots{animation:none;opacity:.7}}
+/* D32 流式打字机：在途回话逐字上屏（光标呼吸），终答入账后被真消息顶替。 */
+.war-bmsg-live{max-width:100%;border:none;background:transparent;padding:2px 0;border-radius:0;box-shadow:none}
+.war-bmsg-live .war-bmsg-body::after{content:'▍';margin-left:2px;color:var(--war-run-strong,var(--war-border-hover));animation:war-typing 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.war-bmsg-live .war-bmsg-body::after{animation:none}}
 /* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
  * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
  * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=

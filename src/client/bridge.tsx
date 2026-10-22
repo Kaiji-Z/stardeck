@@ -17,6 +17,7 @@ import { reportBody } from './views.tsx'
 /** 频道消息 store：与 WarBoardStore 同纪律（SSE rev 驱动 + 15s 兜底轮询）。 */
 class BridgeStore {
   private snapshot: BridgeChatMessage[] | null = null
+  private live = '' // D32 打字机：内置 loop 在途文本（SSE {live} 帧驱动，终答入账即清）
   private error: string | null = null
   private timer: ReturnType<typeof setInterval> | undefined
   private source: EventSource | undefined
@@ -40,6 +41,7 @@ class BridgeStore {
   }
 
   getSnapshot = (): BridgeChatMessage[] | null => this.snapshot
+  getLive = (): string => this.live
   getError = (): string | null => this.error
   refresh = (): void => { void this.tick() }
 
@@ -49,11 +51,17 @@ class BridgeStore {
       const es = new EventSource('/warroom/api/events')
       es.onmessage = (ev: MessageEvent<string>) => {
         try {
-          const rev = (JSON.parse(ev.data) as { rev?: string }).rev
-          if (rev !== undefined && rev !== this.lastRev) {
-            this.lastRev = rev
+          const frame = JSON.parse(ev.data) as { rev?: string; live?: string }
+          let changed = false
+          if (frame.live !== undefined && frame.live !== this.live) {
+            this.live = frame.live
+            changed = true
+          }
+          if (frame.rev !== undefined && frame.rev !== this.lastRev) {
+            this.lastRev = frame.rev
             void this.tick()
           }
+          if (changed) for (const l of this.listeners) l()
         } catch { /* malformed frame — poll covers */ }
       }
       this.source = es
@@ -84,10 +92,11 @@ class BridgeStore {
 
 export const bridgeStore = new BridgeStore()
 
-function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null } {
+function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null; live: string } {
   const messages = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getSnapshot, bridgeStore.getSnapshot)
   const error = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getError, bridgeStore.getError)
-  return { messages, error }
+  const live = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLive, bridgeStore.getLive)
+  return { messages, error, live }
 }
 
 function hhmm(iso: string): string {
@@ -334,7 +343,7 @@ function RetryCard(props: CardProps & { task: BoardTask }): ReactNode {
 export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }): ReactNode {
   const { onOpenBoard } = props
   const { data } = useWar()
-  const { messages, error } = useBridge()
+  const { messages, error, live } = useBridge()
   useSyncExternalStore(subscribeSkin, skinId)
   useSyncExternalStore(subscribeLang, langId)
   const bc = activeCopy().bridge
@@ -358,7 +367,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   useEffect(() => {
     const el = msgsRef.current
     if (el !== null && nearBottomRef.current) el.scrollTop = el.scrollHeight
-  }, [messages])
+  }, [messages, live])
   // D29 critique：成功提示照旧自清；**失败提示常驻**——「操作失败」与「已发送」
   // 同寿 6 秒的话，慢读者看到的是「什么都没发生」。失败只在下一次动作时清。
   useEffect(() => {
@@ -483,13 +492,17 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         }
         return out
       })(),
-      // D29 critique P1：等待死区治理——末条是舰长话轮=代理舰长在途，常驻
-      // 处理中指示（回话即被消息流顶走）。15s 轮询+SSE 双路驱动，无需额外状态。
-      messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
-        ? createElement('div', { className: 'war-bmsg war-bmsg-typing', 'data-bridge-typing': '1' },
-            createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, '●●●'),
-            createElement('span', { className: 'war-typing-label' }, bc.processing))
-        : null,
+      // D32 打字机：内置 loop 在途文本逐字上屏（SSE {live} 帧），终答入账后被
+      // 真消息顶替；光标呼吸在 CSS（::after）。无在途文本时回落处理中指示。
+      live !== ''
+        ? createElement('div', { className: 'war-bmsg war-bmsg-agent war-bmsg-live', 'data-bridge-live': '1' },
+            createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${bc.liveTyping}`),
+            createElement('div', { className: 'war-bmsg-body' }, reportBody(live)))
+        : messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
+          ? createElement('div', { className: 'war-bmsg war-bmsg-typing', 'data-bridge-typing': '1' },
+              createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, '●●●'),
+              createElement('span', { className: 'war-typing-label' }, bc.processing))
+          : null,
     ),
     createElement('div', { className: 'war-bridge-dock', 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty' },
       createElement('div', { className: 'war-bridge-dockhead' }, bc.dockTitle),

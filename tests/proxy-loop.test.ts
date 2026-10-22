@@ -11,11 +11,12 @@ import { createServer, type Server } from 'node:http'
 import { test } from 'node:test'
 import { proxyLoopEnvOf, runProxyLoop } from '../src/proxy-loop.ts'
 
-test('旗面解析（纯）：三件齐才 enabled；尾斜杠剥掉；模型可覆写', () => {
-  assert.equal(proxyLoopEnvOf({}).enabled, false, '缺省关')
-  assert.equal(proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '1' }).enabled, false, '无 key 不开')
-  assert.equal(proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '1', Z_AI_BASE_URL: 'https://x', Z_AI_API_KEY: 'k' }).enabled, true)
-  const on = proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '1', Z_AI_BASE_URL: 'https://x/', Z_AI_API_KEY: ' k ', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3-air' })
+test('旗面解析（纯）：key 齐即默认开（D32 翻默认）、0 显式关；尾斜杠剥掉；模型可覆写', () => {
+  assert.equal(proxyLoopEnvOf({}).enabled, false, '无 key 不开')
+  assert.equal(proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '1' }).enabled, false, '无 key 不开（旗也救不了）')
+  assert.equal(proxyLoopEnvOf({ Z_AI_BASE_URL: 'https://x', Z_AI_API_KEY: 'k' }).enabled, true, 'key 齐即默认开（无需旗）')
+  assert.equal(proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '0', Z_AI_BASE_URL: 'https://x', Z_AI_API_KEY: 'k' }).enabled, false, '0 显式关（回落舰队席）')
+  const on = proxyLoopEnvOf({ Z_AI_BASE_URL: 'https://x/', Z_AI_API_KEY: ' k ', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3-air' })
   assert.equal(on.baseUrl, 'https://x', '尾斜杠剥掉')
   assert.equal(on.apiKey, 'k', 'key trim')
   assert.equal(on.model, 'glm-5.3-air', '模型可覆写')

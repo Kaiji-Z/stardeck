@@ -614,6 +614,8 @@ export interface WarCopy {
     chosenLabel: string
     /** 澄清卡补充说明占位（与药丸点选并存，提交时与拼装码合成）。 */
     clarifyNotePh: string
+    /** D32 打字机：在途回话的 meta 标签。 */
+    liveTyping: string
     /** 发送后等待期常驻指示（代理舰长在途）。 */
     processing: string
     /** 键盘加速器可见暗示（聊天头）。 */
@@ -1226,6 +1228,7 @@ export const warCopy: WarCopy = {
     knockNotePh: '打回理由（必填——外勤小队按这个改）',
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选，也可直接点选项）',
+    liveTyping: '正在输入…',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1829,6 +1832,7 @@ export const plainCopy: WarCopy = {
     knockNotePh: '打回理由（必填——执行方按这个改）',
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选，也可直接点选项）',
+    liveTyping: '正在输入…',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',

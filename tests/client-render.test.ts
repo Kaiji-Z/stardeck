@@ -802,7 +802,7 @@ test('D30 死路治理：全席缺席→安装引导卡（复制钮+重新探测
   reprobe!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
   await new Promise(resolve => setTimeout(resolve, 30))
   assert.equal(reprobes, 1, '点击触发重探')
-  assert.ok((guide!.textContent ?? '').includes('STARDECK_PROXY_LOOP=1'), '零 CLI 内置 loop 指引在场（proxyLoop=false）')
+  assert.ok((guide!.textContent ?? '').includes('Z_AI_BASE_URL'), '零 CLI 内置 loop 指引在场（proxyLoop=false——配 env 即上场）')
   r.unmount()
   const r2 = await render(createElement(fleetGate, {
     fleet: { active: { executor: 'opencode', model: '' }, seats: seats as never, proxyLoop: true },

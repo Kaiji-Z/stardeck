@@ -196,7 +196,8 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
         // codex 席入口按席给定（STARDECK_EXECUTOR_BIN 是全局逃生阀——会误伤
         // 主环 opencode，故走独立变量只在本相位 daemon 生效）。
         ...(staffFleetLive === 'codex' && process.env.STARDECK_LIVE_CODEX_BIN ? { STARDECK_EXECUTOR_BIN: process.env.STARDECK_LIVE_CODEX_BIN } : {}),
-        ...(process.env.STARDECK_LIVE_PROXYLOOP === '1' ? { STARDECK_PROXY_LOOP: '1' } : {}),
+        // D32 翻默认后 key 在即 loop 默认上场——CLI 相位（proxy 等）需显式关才不被抢占。
+        ...(process.env.STARDECK_LIVE_PROXYLOOP === '1' ? { STARDECK_PROXY_LOOP: '1' } : { STARDECK_PROXY_LOOP: '0' }),
         ...(process.env.STARDECK_MODEL !== undefined ? {} : { STARDECK_MODEL: staffFleetLive === 'pi' ? 'zai/glm-5.3' : 'zai-coding-plan/glm-5.3' }),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
