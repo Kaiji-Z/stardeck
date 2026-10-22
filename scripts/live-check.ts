@@ -496,6 +496,14 @@ if (process.env.STARDECK_LIVE_STAFF === '1') {
         return line !== undefined && line !== '' ? (JSON.parse(line) as { directiveId?: string }).directiveId : undefined
       })
       check('D29 内置 loop：【命令】块成卡（issuedBy=proxy-loop）', typeof loopCmd === 'string', String(loopCmd))
+      // D33 段3：模型配置窗口 live 面——POST 切模型（flash 按舰长令）+ 存 key（隔离
+      // stateDir 的 config 域内，跑完自清）→ /fleet loopModel/loopKeySource 回读一致。
+      const lcPost = await post2('/warroom/api/loop-config', { model: 'glm-5.3-flash', apiKey: process.env.Z_AI_API_KEY ?? '' }) as { saved?: { ok?: boolean; keySource?: string } }
+      check('D33 模型配置：POST 切模型+存 key → config 相位', lcPost.saved?.ok === true && lcPost.saved?.keySource === 'config', JSON.stringify(lcPost.saved ?? {}))
+      const fleetLoop = await fetch(`${base2}/warroom/api/fleet`).then(r => r.json()) as { loopModel?: string; loopKeySource?: string }
+      check('D33 模型配置：/fleet loopModel+loopKeySource 回读一致', fleetLoop.loopModel === 'glm-5.3-flash' && fleetLoop.loopKeySource === 'config', `model=${fleetLoop.loopModel} src=${fleetLoop.loopKeySource}`)
+      const probe = await fetch(`${base2}/warroom/api/loop-test`, { method: 'POST' }).then(r => r.json()) as { probe?: { ok?: boolean; latencyMs?: number; error?: string } }
+      check('D33 模型配置：测试连接（真网关探测）', probe.probe?.ok === true, probe.probe?.ok === true ? `${probe.probe?.latencyMs}ms` : String(probe.probe?.error))
     }
 
     // ── D29 外接坐席相位（STARDECK_LIVE_PROXYSEAT=1）：live-check 亲自扮外挂

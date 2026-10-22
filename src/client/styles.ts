@@ -1195,6 +1195,10 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-bmsg-copy:hover{opacity:1}
 .war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;box-shadow:var(--war-shadow-2)}
 .war-bridge{position:relative}
+/* D33 段3：对话模型配置段（抽屉内）。 */
+.war-loopcfg{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.war-loopcfg-field{display:flex;flex-direction:column;gap:2px}
+.war-loopcfg .war-bcard-input{min-height:30px}
 /* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
  * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
  * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=

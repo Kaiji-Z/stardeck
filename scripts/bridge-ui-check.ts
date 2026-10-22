@@ -213,6 +213,14 @@ try {
   const darkSwitch = await page.locator('.war-settings-drawer .war-switch').count()
   check('设置归拢：板设置抽屉含定夺授权段', authCount > 0 && authGrant > 0, `auth=${authCount} grant=${authGrant}`)
   check('设置归拢：明暗开关在看板抽屉（standalone）', darkSwitch > 0, `switches=${darkSwitch}`)
+  // D33 段3：对话模型配置段（预设/自定义/基址/key 掩码/来源行/测试连接/保存）。
+  const loopcfg = await page.locator('[data-loopcfg]').count()
+  const testBtn = await page.locator('[data-loopcfg-test]').count()
+  const srcLine = await page.locator('[data-loopcfg-source]').first().getAttribute('data-loopcfg-source')
+  check('段3：对话模型配置段在场', loopcfg > 0 && testBtn > 0, `section=${loopcfg} testBtn=${testBtn} keySource=${srcLine}`)
+  await page.evaluate(async () => { await fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.3-highspeed' }) }) })
+  const fleetLoop = await page.evaluate(async () => await (await fetch('/warroom/api/fleet')).json()) as { loopModel?: string; loopKeySource?: string }
+  check('段3：loop-config POST 即时生效（/fleet 回读）', fleetLoop.loopModel === 'glm-5.3-highspeed', `loopModel=${fleetLoop.loopModel} keySource=${fleetLoop.loopKeySource}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
   await browser.close()
 } catch (err) {

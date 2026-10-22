@@ -630,6 +630,25 @@ export interface WarCopy {
     copiedNote: string
     /** D33 段2：未读分隔条。 */
     newSince: string
+    /** D33 段3：对话模型配置段。 */
+    modelSection: string
+    modelFlash: string
+    modelFull: string
+    modelHighspeed: string
+    modelCustom: string
+    baseUrlLabel: string
+    keyLabel: string
+    keyPh: string
+    keyPhSaved: string
+    keyClear: string
+    keySourceConfig: string
+    keySourceEnv: string
+    keySourceNone: string
+    testBtn: string
+    testOk: (ms: number) => string
+    testFail: (e: string) => string
+    saveBtn: string
+    savedNote: string
     /** 发送后等待期常驻指示（代理舰长在途）。 */
     processing: string
     /** 键盘加速器可见暗示（聊天头）。 */
@@ -1252,6 +1271,24 @@ export const warCopy: WarCopy = {
     copyBtn: '复制',
     copiedNote: '已复制',
     newSince: '以下为新动静',
+    modelSection: '对话模型（内置 loop）',
+    modelFlash: 'glm-5.3-flash（省 token）',
+    modelFull: 'glm-5.3（全量）',
+    modelHighspeed: 'glm-5.3-highspeed（高速）',
+    modelCustom: '自定义 id',
+    baseUrlLabel: 'API 基址（OpenAI 兼容）',
+    keyLabel: 'API key（只存本机 config.json，不进仓库不进日志）',
+    keyPh: '粘贴 key（sk-…）',
+    keyPhSaved: '已保存——输入以更换',
+    keyClear: '清除已存 key',
+    keySourceConfig: 'key 来源：本机配置',
+    keySourceEnv: 'key 来源：环境变量',
+    keySourceNone: '未配 key（环境变量或此处输入二选一）',
+    testBtn: '测试连接',
+    testOk: (ms: number) => `连接正常（${ms}ms）`,
+    testFail: (e: string) => `连接失败：${e}`,
+    saveBtn: '保存',
+    savedNote: '已保存（即时生效）',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1865,6 +1902,24 @@ export const plainCopy: WarCopy = {
     copyBtn: '复制',
     copiedNote: '已复制',
     newSince: '以下为新动静',
+    modelSection: '对话模型（内置 loop）',
+    modelFlash: 'glm-5.3-flash（省 token）',
+    modelFull: 'glm-5.3（全量）',
+    modelHighspeed: 'glm-5.3-highspeed（高速）',
+    modelCustom: '自定义 id',
+    baseUrlLabel: 'API 基址（OpenAI 兼容）',
+    keyLabel: 'API key（只存本机 config.json，不进仓库不进日志）',
+    keyPh: '粘贴 key（sk-…）',
+    keyPhSaved: '已保存——输入以更换',
+    keyClear: '清除已存 key',
+    keySourceConfig: 'key 来源：本机配置',
+    keySourceEnv: 'key 来源：环境变量',
+    keySourceNone: '未配 key（环境变量或此处输入二选一）',
+    testBtn: '测试连接',
+    testOk: (ms: number) => `连接正常（${ms}ms）`,
+    testFail: (e: string) => `连接失败：${e}`,
+    saveBtn: '保存',
+    savedNote: '已保存（即时生效）',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',

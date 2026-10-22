@@ -2878,6 +2878,71 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
 }
 
 
+/** D33 段3：对话模型配置段（独立形态）。自取数（GET/POST loop-config + 测试连接），
+ *  key 只进 daemon（掩码/来源呈现，永不回显本体）。 */
+function LoopConfigSection(): ReactNode {
+  const bc = activeCopy().bridge
+  const [model, setModel] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [keyInput, setKeyInput] = useState('')
+  const [keySource, setKeySource] = useState<'config' | 'env' | 'none'>('none')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const refresh = (): void => {
+    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; baseUrl?: string; keySource?: 'config' | 'env' | 'none' }) => {
+      if (typeof d.model === 'string') setModel(d.model)
+      if (typeof d.baseUrl === 'string') setBaseUrl(d.baseUrl)
+      if (d.keySource !== undefined) setKeySource(d.keySource)
+    }).catch(() => { /* daemon 不在——来源行照实 none */ })
+  }
+  useEffect(refresh, [])
+  const presets: Array<[string, string]> = [[bc.modelFlash, 'glm-5.3-flash'], [bc.modelFull, 'glm-5.3'], [bc.modelHighspeed, 'glm-5.3-highspeed']]
+  const save = (patch: Record<string, string>): void => {
+    setBusy(true)
+    void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
+      .then(r => r.json()).then((d: { saved?: { ok?: boolean; error?: string; keySource?: 'config' | 'env' | 'none' } }) => {
+        setBusy(false)
+        setNote(d.saved?.ok === true ? bc.savedNote : (d.saved?.error ?? bc.testFail('save')))
+        if (d.saved?.keySource !== undefined) setKeySource(d.saved.keySource)
+      }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
+  }
+  const test = (): void => {
+    setBusy(true)
+    void fetch('/warroom/api/loop-test', { method: 'POST' }).then(r => r.json()).then((d: { probe?: { ok?: boolean; latencyMs?: number; error?: string } }) => {
+      setBusy(false)
+      setNote(d.probe?.ok === true ? bc.testOk(d.probe.latencyMs ?? 0) : bc.testFail(d.probe?.error ?? 'unknown'))
+    }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
+  }
+  return createElement('div', { className: 'war-loopcfg', 'data-loopcfg': '1' },
+    createElement('div', { className: 'war-settings-section' }, bc.modelSection),
+    createElement('div', { className: 'war-skin-row' },
+      ...presets.map(([label, id]) => createElement('button', {
+        key: id, type: 'button', className: `war-skin-opt${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
+        onClick: () => { setModel(id) },
+      }, label))),
+    createElement('label', { className: 'war-loopcfg-field' },
+      createElement('span', { className: 'war-bcard-flabel' }, bc.modelCustom),
+      createElement('input', { type: 'text', className: 'war-bcard-input', value: model, 'data-loopcfg-model': '1', onChange: e => { setModel(String(e.target.value ?? '')) } })),
+    createElement('label', { className: 'war-loopcfg-field' },
+      createElement('span', { className: 'war-bcard-flabel' }, bc.baseUrlLabel),
+      createElement('input', { type: 'text', className: 'war-bcard-input', value: baseUrl, 'data-loopcfg-base': '1', onChange: e => { setBaseUrl(String(e.target.value ?? '')) } })),
+    createElement('label', { className: 'war-loopcfg-field' },
+      createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
+      createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } })),
+    keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null,
+    createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
+    createElement('div', { className: 'war-bcard-actions' },
+      createElement('button', { type: 'button', className: 'war-btn primary', disabled: busy, 'data-loopcfg-save': '1', onClick: () => {
+        const patch: Record<string, string> = { model, baseUrl }
+        if (keyInput !== '') patch.apiKey = keyInput
+        save(patch)
+        setKeyInput('')
+      } }, bc.saveBtn),
+      createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-loopcfg-test': '1', onClick: test }, bc.testBtn)),
+    note !== '' ? createElement('p', { className: 'war-settings-note', role: 'status', 'data-loopcfg-note': '1' }, note) : null,
+  )
+}
+
 /** V9.2 设置抽屉（岛 ⚙）：皮肤 / 图例 / 看板行为开关 / 连接状态。右侧滑入，
  * 不遮岛不推列；开关落 localStorage——纯展示层偏好，不碰账本（读投影红线）。 */
 function SettingsDrawer(props: {
@@ -2997,6 +3062,8 @@ function SettingsDrawer(props: {
           createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { onFontScale(1) } }, copy.fontReset)),
         createElement('div', { className: 'war-settings-note' }, copy.fontHint),
         narrowActive ? createElement('div', { className: 'war-settings-note' }, copy.narrowNote) : null,
+        // D33 段3：对话模型配置（独立形态）——key 掩码/来源呈现，本体永不回显。
+        standaloneChrome ? createElement(LoopConfigSection) : null,
         // 定夺授权段（独立形态+代理舰长在役才出）：舰长显式授予/收回代定夺。
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, bcopy.authSection) : null,
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-skin-row' },

@@ -636,7 +636,21 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
       w.end(JSON.stringify(body))
     }
     try {
-      if (r.method === 'GET' && pathname === '/warroom/api/board') {
+      if (r.method === 'GET' && pathname === '/warroom/api/loop-config' && deps.loopConfig !== undefined) {
+        send(200, { ok: true, ...deps.loopConfig.get() })
+        return
+      } else if (r.method === 'POST' && pathname === '/warroom/api/loop-config' && deps.loopConfig !== undefined) {
+        const raw = JSON.parse(await readBody(r) || '{}') as { model?: unknown; baseUrl?: unknown; apiKey?: unknown }
+        const patch: { model?: string; baseUrl?: string; apiKey?: string } = {}
+        if (typeof raw.model === 'string') patch.model = raw.model.trim()
+        if (typeof raw.baseUrl === 'string') patch.baseUrl = raw.baseUrl.trim().replace(/\/+$/, '')
+        if (typeof raw.apiKey === 'string') patch.apiKey = raw.apiKey.trim()
+        send(200, { ok: true, saved: deps.loopConfig.save(patch) })
+        return
+      } else if (r.method === 'POST' && pathname === '/warroom/api/loop-test' && deps.loopConfig !== undefined) {
+        send(200, { ok: true, probe: await deps.loopConfig.test() })
+        return
+      } else if (r.method === 'GET' && pathname === '/warroom/api/board') {
         send(200, {
           ok: true,
           active: deps.store.get().active,

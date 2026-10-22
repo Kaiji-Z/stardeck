@@ -160,3 +160,63 @@ export function persistFleetBinding(executor: string, model: string): { ok: true
   }
   return { ok: true }
 }
+
+
+/** D33 段3：内置 loop 供给段（config.json 顶层 `loop` 键）。key 落盘范围仅此一处
+ *  （舰长 2026-10-22 拍板放宽：key 只存本机 config——永不入仓/不进日志/不出 daemon）。 */
+export interface LoopConfig {
+  model: string
+  baseUrl: string
+  apiKey: string
+}
+
+const EMPTY_LOOP: LoopConfig = { model: '', baseUrl: '', apiKey: '' }
+
+export function readLoopConfig(): LoopConfig {
+  const path = configFilePath()
+  if (!existsSync(path)) return { ...EMPTY_LOOP }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { loop?: Partial<LoopConfig> }
+    const l = parsed.loop ?? {}
+    return {
+      model: typeof l.model === 'string' ? l.model : '',
+      baseUrl: typeof l.baseUrl === 'string' ? l.baseUrl : '',
+      apiKey: typeof l.apiKey === 'string' ? l.apiKey : '',
+    }
+  } catch {
+    return { ...EMPTY_LOOP }
+  }
+}
+
+/** loop 段写入（patch 浅合并；空串 apiKey=清除）。同 persistFleetBinding 家法：
+ *  坏 JSON 拒绝覆盖 + tmp+rename 原子 + best-effort。 */
+export function writeLoopConfig(patch: Partial<LoopConfig>): { ok: true; loop: LoopConfig } | { ok: false; error: string } {
+  const path = configFilePath()
+  let base: Record<string, unknown> = {}
+  if (existsSync(path)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, error: `配置文件不是 JSON 对象（${path}）——拒绝覆盖` }
+      }
+      base = { ...(parsed as Record<string, unknown>) }
+    } catch {
+      return { ok: false, error: `配置文件损坏（${path}）——拒绝覆盖` }
+    }
+  }
+  const prev = readLoopConfig()
+  const next: LoopConfig = {
+    model: patch.model !== undefined ? patch.model : prev.model,
+    baseUrl: patch.baseUrl !== undefined ? patch.baseUrl : prev.baseUrl,
+    apiKey: patch.apiKey !== undefined ? patch.apiKey : prev.apiKey,
+  }
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    const tmp = `${path}.tmp-${Date.now().toString(36)}`
+    writeFileSync(tmp, `${JSON.stringify({ ...base, loop: next }, null, 2)}\n`, 'utf8')
+    renameSync(tmp, path)
+  } catch (err) {
+    return { ok: false, error: `loop 配置落盘失败（${err instanceof Error ? err.message : String(err)}）——运行态已生效，重启回落` }
+  }
+  return { ok: true, loop: next }
+}

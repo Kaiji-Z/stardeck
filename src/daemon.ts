@@ -30,7 +30,8 @@ import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
 import { issueProxySeat, seatByToken, loadProxySeats } from './proxy-seats.ts'
-import { runProxyLoop, proxyLoopEnvOf } from './proxy-loop.ts'
+import { runProxyLoop, proxyLoopEnvOf, mergeLoopEnv } from './proxy-loop.ts'
+import { readLoopConfig, writeLoopConfig, type LoopConfig } from './config.ts'
 import { renderScene, type SceneContext } from './scene.ts'
 import type { CampaignState } from './types.ts'
 
@@ -234,6 +235,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // SSE 帧随 seq 变化推送 {live}——会话态不进账本，读投影纪律不破。
   // D33 段2：tools=本轮工具步骤（label+done），lookatstudy tool-call part 同形。
   const proxyLive = { seq: 0, text: '', tools: [] as Array<{ label: string; done: boolean }> }
+  // D33 段3：loop 供给运行态（config.loop 段优先，env 回落；窗口 POST 即时翻新）。
+  const loopCfg: LoopConfig = readLoopConfig()
+  const effectiveLoopEnv = () => mergeLoopEnv(process.env, loopCfg)
   const tools = warTools({
     store,
     stateDir,
@@ -298,6 +302,32 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       },
       // D32 流式上屏：SSE 帧随 live.seq 变化推 {live} 打字机文本。
       proxyLive: () => ({ seq: proxyLive.seq, text: proxyLive.text, tools: proxyLive.tools }),
+      // D33 段3：模型配置窗口面。key 永不出 daemon——回执只带来源与有无。
+      loopConfig: {
+        get: () => {
+          const eff = effectiveLoopEnv()
+          return { model: eff.model, baseUrl: eff.baseUrl, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env') }
+        },
+        save: (patch: Partial<LoopConfig>) => {
+          if (patch.model !== undefined) loopCfg.model = patch.model
+          if (patch.baseUrl !== undefined) loopCfg.baseUrl = patch.baseUrl
+          if (patch.apiKey !== undefined) loopCfg.apiKey = patch.apiKey
+          const out = writeLoopConfig(loopCfg)
+          const eff = effectiveLoopEnv()
+          return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
+        },
+        test: async () => {
+          const eff = effectiveLoopEnv()
+          if (eff.apiKey === '') return { ok: false, error: '未配 key（环境变量或本机配置二选一）' }
+          const t0 = Date.now()
+          try {
+            const res = await fetch(`${eff.baseUrl}/models`, { headers: { authorization: `Bearer ${eff.apiKey}` }, signal: AbortSignal.timeout(8_000) })
+            return res.ok ? { ok: true, latencyMs: Date.now() - t0 } : { ok: false, error: `HTTP ${res.status}` }
+          } catch (err) {
+            return { ok: false, error: err instanceof Error ? err.message : String(err) }
+          }
+        },
+      },
       shutdown: () => { triggerShutdown() },
       // K17 计划判定回推（独立形态替位）：pi 席经 RPC 续跑投 follow_up（与板内答复
       // 同通道）；非 pi/失败 best-effort 跳过——驳回理由已入 fold，重拟工单必带。
@@ -741,8 +771,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
     // D29 内置 loop 支线（resume 让路——CLI 会话还热就先续跑）：旗开且 key 齐
     // 则本轮由 loop 应答（零 spawn、秒级）；失手/空答诚实降级——落一条战报后
     // 继续走舰队席 spawn 兜底，行为永不依赖 loop 成活；下轮 tick 照常重试 loop。
-    if (proxyLoopEnvOf(process.env).enabled) {
-      const loopEnv = proxyLoopEnvOf(process.env)
+    if (effectiveLoopEnv().enabled) {
+      const loopEnv = effectiveLoopEnv()
       proxySpawning = true
       try {
         const order = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
@@ -885,7 +915,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         }
         if (key === 'GET /warroom/api/fleet') {
           // D30 开箱面：proxyLoop 随门面下发——全席缺席时门给「内置 loop」诚实指引。
-          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin), proxyLoop: proxyLoopEnvOf(process.env).enabled })
+          const effLoop = effectiveLoopEnv()
+          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin), proxyLoop: effLoop.enabled, loopModel: effLoop.model, loopKeySource: effLoop.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env') })
         }
         if (key === 'POST /warroom/api/fleet') {
           const body = JSON.parse(await readBody(req)) as { executor?: unknown; model?: unknown }
@@ -1060,6 +1091,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         sendJson(res, 404, { ok: false, error: `no route: ${key}` })
       } catch (err) {
         if (err instanceof HttpBodyError) return sendJson(res, err.status, { ok: false, error: err.message })
+        // D33 段3 实弹加固：路由已出线后抛错（晚到的异步错）——补日志不补写头
+        //（双写头=进程级炸 ERR_HTTP_HEADERS_SENT，一个坏请求杀整个 daemon）。
+        if (res.headersSent) { console.error(`[stardeck] 晚到异常（已响应 ${key}，丢弃补写）:`, err instanceof Error ? err.message : String(err)); return }
         sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     })()

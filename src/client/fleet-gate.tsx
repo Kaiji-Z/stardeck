@@ -98,7 +98,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     copied: '已复制',
     copyFail: '复制失败——请手动选中命令复制',
     loopReady: '内置代理舰长已就绪（Z_AI_* 环境变量已配）——聊天窗由内置 loop 担任，打字机流式回话；舰队外勤仍需上方任一席。',
-    loopHint: '一个 CLI 都不想装也可以先聊：设环境变量 Z_AI_BASE_URL / Z_AI_API_KEY 后重启 stardeck，聊天窗的代理舰长由内置 loop 担任（流式回话）；设 STARDECK_PROXY_LOOP=0 可切回 CLI 席。',
+    loopHint: '一个 CLI 都不想装也可以先聊：进板后在 设置→对话模型 里配好（或设环境变量 Z_AI_BASE_URL / Z_AI_API_KEY），聊天窗的代理舰长由内置 loop 担任（流式回话）。',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -130,7 +130,7 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     copied: 'Copied',
     copyFail: 'Copy failed — please select and copy the command manually',
     loopReady: 'Built-in proxy captain is ready (Z_AI_* env configured) — the chat window runs on the built-in loop with streaming replies; field missions still need a seat above.',
-    loopHint: 'No CLI at all? You can still chat: set Z_AI_BASE_URL / Z_AI_API_KEY environment variables and restart stardeck — the chat captain runs on the built-in loop with streaming (STARDECK_PROXY_LOOP=0 switches back to the CLI seat).',
+    loopHint: 'No CLI at all? You can still chat: configure it under Settings → Chat model after entering the board (or set Z_AI_BASE_URL / Z_AI_API_KEY env vars) — the chat captain runs on the built-in loop with streaming.',
   },
 }
 

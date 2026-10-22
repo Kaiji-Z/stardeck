@@ -36,6 +36,17 @@ export function proxyLoopEnvOf(env: NodeJS.ProcessEnv): ProxyLoopEnv {
   return { enabled: baseUrl !== '' && apiKey !== '' && env.STARDECK_PROXY_LOOP !== '0', baseUrl, apiKey, model }
 }
 
+/** D33 段3：config.loop 段与 env 的合并（纯）——config 优先（窗口刚改的先生效），
+ *  env 回落，两处皆无=未配。硬关旗 STARDECK_PROXY_LOOP=0 恒压一切。 */
+export function mergeLoopEnv(env: NodeJS.ProcessEnv, cfg: { model: string; baseUrl: string; apiKey: string }): ProxyLoopEnv {
+  return proxyLoopEnvOf({
+    ...env,
+    Z_AI_BASE_URL: cfg.baseUrl !== '' ? cfg.baseUrl : env.Z_AI_BASE_URL,
+    Z_AI_API_KEY: cfg.apiKey !== '' ? cfg.apiKey : env.Z_AI_API_KEY,
+    STARDECK_PROXY_LOOP_MODEL: cfg.model !== '' ? cfg.model : env.STARDECK_PROXY_LOOP_MODEL,
+  })
+}
+
 export interface ProxyLoopDeps {
   /** 只读投影闭包（daemon 传入——与 MCP 座席面 read_* 同源同数据）。 */
   reads: { board: () => Promise<unknown>; digest: () => Promise<unknown>; ledger: () => Promise<unknown> }
