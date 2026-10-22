@@ -17,7 +17,7 @@ import { BridgePane } from './client/bridge.tsx'
 import { collectInbox } from './client/inbox.ts'
 import { useWar } from './client/data.ts'
 import { activeCopy } from './client/copy.ts'
-import { clampPanelSize, storedPanelSize, type PanelSize } from './client/panel-size.ts'
+import { clampPanelSize, storedPanelSize, PANEL_KEY, PANEL_MIN_W, PANEL_MIN_H, type PanelSize } from './client/panel-size.ts'
 
 ensureWarStyles()
 
