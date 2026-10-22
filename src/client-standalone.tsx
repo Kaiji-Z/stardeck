@@ -17,6 +17,7 @@ import { BridgePane } from './client/bridge.tsx'
 import { collectInbox } from './client/inbox.ts'
 import { useWar } from './client/data.ts'
 import { activeCopy } from './client/copy.ts'
+import { clampPanelSize, storedPanelSize, type PanelSize } from './client/panel-size.ts'
 
 ensureWarStyles()
 
@@ -39,24 +40,7 @@ const BALL_SIZE = 54
 const BALL_KEY = 'warroom-tg-ball-pos'
 const GAP = 12
 // D33 舰长令：浮窗可自主调整大小（resize 手柄+持久化）；默认放大到 460×680。
-const PANEL_KEY = 'warroom-tg-panel-size'
-const PANEL_MIN_W = 360
-const PANEL_MIN_H = 420
-
-/** 浮窗尺寸（w/h，钳在视口与最小值内）。 */
-type PanelSize = { w: number; h: number }
-function clampPanelSize(v: { w: number; h: number }): PanelSize {
-  const w = Math.min(Math.max(PANEL_MIN_W, Math.round(v.w)), Math.max(PANEL_MIN_W, window.innerWidth - 16))
-  const h = Math.min(Math.max(PANEL_MIN_H, Math.round(v.h)), Math.max(PANEL_MIN_H, window.innerHeight - 16))
-  return { w, h }
-}
-function storedPanelSize(): PanelSize {
-  try {
-    const v = JSON.parse(localStorage.getItem(PANEL_KEY) ?? '') as PanelSize
-    if (typeof v?.w === 'number' && typeof v?.h === 'number' && v.w > 0 && v.h > 0) return clampPanelSize(v)
-  } catch { /* 缺省/坏值 → 默认 */ }
-  return clampPanelSize({ w: 460, h: 680 })
-}
+// 钳制/持久化纯逻辑在 client/panel-size.ts（可单测）。
 
 /** 球位=右/下边距（resize 相对锚，比绝对 x/y 抗窗口变化）。 */
 type BallPos = { right: number; bottom: number }
