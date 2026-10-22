@@ -628,6 +628,17 @@ export interface WarCopy {
     /** D33 段2：消息复制钮+已复制回执。 */
     copyBtn: string
     copiedNote: string
+    /** P2 修（D33 critique 复评）：复制失败诚实回执+回底钮双语 aria。 */
+    copyFailNote: string
+    jumpBottom: string
+    /** P1 修（D33 critique 终评）：验收卡证据摘要行+跨日分隔条拆键（EN 面不再旁路）。 */
+    checksPass: (passed: number, total: number) => string
+    checksNone: string
+    testsExit: (code: number) => string
+    deliverables: (n: number) => string
+    dayLabel: (month: number, day: number) => string
+    /** P1 修（D33 critique A 终轮）：坞可下滚时的底部浮提示。 */
+    dockMoreHint: string
     /** D33 段2：未读分隔条。 */
     newSince: string
     /** D33 段3：对话模型配置段。 */
@@ -1245,7 +1256,7 @@ export const warCopy: WarCopy = {
     roleYou: '舰长',
     roleManager: '代理舰长',
     roleSystem: '战报',
-    inputPh: '跟代理舰长说点什么……（Ctrl+Enter 发送）',
+    inputPh: '跟代理舰长说点什么……（Enter 发送 · Shift+Enter 换行）',
     send: '发送',
     sending: '发送中…',
     sentNote: '已入账——代理舰长下一轮回话（约 15 秒起档）。',
@@ -1260,7 +1271,7 @@ export const warCopy: WarCopy = {
     knockBtn: '打回',
     knockNotePh: '打回理由（必填——外勤小队按这个改）',
     chosenLabel: '已选：',
-    clarifyNotePh: '补充说明（可选，也可直接点选项）',
+    clarifyNotePh: '补充说明（可选——Enter 发送 · Shift+Enter 换行）',
     liveTyping: '正在输入…',
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
@@ -1270,6 +1281,14 @@ export const warCopy: WarCopy = {
     toolLedger: '读账本切片',
     copyBtn: '复制',
     copiedNote: '已复制',
+    copyFailNote: '复制失败——浏览器未授权剪贴板',
+    jumpBottom: '回到底部',
+    dockMoreHint: '下滑查看更多待办 ↓',
+    checksPass: (p, n) => `${p}/${n} 项验收核对通过`,
+    checksNone: '无机械核对项',
+    testsExit: (code) => `测试退出码 ${code}`,
+    deliverables: (n) => `交付物 ${n} 件`,
+    dayLabel: (m, d) => `${m}月${d}日`,
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
     modelFlash: 'glm-5.3-flash（省 token）',
@@ -1289,6 +1308,7 @@ export const warCopy: WarCopy = {
     testFail: (e: string) => `连接失败：${e}`,
     saveBtn: '保存',
     savedNote: '已保存（即时生效）',
+    presetSavedNote: '模型已切换并保存（即时生效）——基址/key 改动仍以「保存」为准',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1876,7 +1896,7 @@ export const plainCopy: WarCopy = {
     roleYou: '我',
     roleManager: '代理管家',
     roleSystem: '通知',
-    inputPh: '说点什么……（Ctrl+Enter 发送）',
+    inputPh: '说点什么……（Enter 发送 · Shift+Enter 换行）',
     send: '发送',
     sending: '发送中…',
     sentNote: '已入账——下一轮回话（约 15 秒起档）。',
@@ -1891,7 +1911,7 @@ export const plainCopy: WarCopy = {
     knockBtn: '打回',
     knockNotePh: '打回理由（必填——执行方按这个改）',
     chosenLabel: '已选：',
-    clarifyNotePh: '补充说明（可选，也可直接点选项）',
+    clarifyNotePh: '补充说明（可选——Enter 发送 · Shift+Enter 换行）',
     liveTyping: '正在输入…',
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
@@ -1901,6 +1921,14 @@ export const plainCopy: WarCopy = {
     toolLedger: '读账本切片',
     copyBtn: '复制',
     copiedNote: '已复制',
+    copyFailNote: '复制失败——浏览器未授权剪贴板',
+    jumpBottom: '回到底部',
+    dockMoreHint: '下滑查看更多待办 ↓',
+    checksPass: (p, n) => `${p}/${n} 项验收核对通过`,
+    checksNone: '无机械核对项',
+    testsExit: (code) => `测试退出码 ${code}`,
+    deliverables: (n) => `交付物 ${n} 件`,
+    dayLabel: (m, d) => `${m}月${d}日`,
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
     modelFlash: 'glm-5.3-flash（省 token）',
@@ -1920,6 +1948,7 @@ export const plainCopy: WarCopy = {
     testFail: (e: string) => `连接失败：${e}`,
     saveBtn: '保存',
     savedNote: '已保存（即时生效）',
+    presetSavedNote: '模型已切换并保存（即时生效）——基址/key 改动仍以「保存」为准',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',

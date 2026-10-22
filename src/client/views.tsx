@@ -2897,18 +2897,20 @@ function LoopConfigSection(): ReactNode {
   }
   useEffect(refresh, [])
   const presets: Array<[string, string]> = [[bc.modelFlash, 'glm-5.3-flash'], [bc.modelFull, 'glm-5.3'], [bc.modelHighspeed, 'glm-5.3-highspeed']]
-  const save = (patch: Record<string, string>): void => {
+  const save = (patch: Record<string, string>, okNote: string = bc.savedNote): void => {
     setBusy(true)
     void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
       .then(r => r.json()).then((d: { saved?: { ok?: boolean; error?: string; keySource?: 'config' | 'env' | 'none' } }) => {
         setBusy(false)
-        setNote(d.saved?.ok === true ? bc.savedNote : (d.saved?.error ?? bc.testFail('save')))
+        setNote(d.saved?.ok === true ? okNote : (d.saved?.error ?? bc.testFail('save')))
         if (d.saved?.keySource !== undefined) setKeySource(d.saved.keySource)
       }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
   }
   const test = (): void => {
     setBusy(true)
-    void fetch('/warroom/api/loop-test', { method: 'POST' }).then(r => r.json()).then((d: { probe?: { ok?: boolean; latencyMs?: number; error?: string } }) => {
+    // P1 修（D33 critique A 八轮）：测「舰长所见」——带当前字段覆盖（未保存先测
+    // 不再报旧配置）；key 框留空=测已存 key。
+    void fetch('/warroom/api/loop-test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model, baseUrl, ...(keyInput !== '' ? { apiKey: keyInput } : {}) }) }).then(r => r.json()).then((d: { probe?: { ok?: boolean; latencyMs?: number; error?: string } }) => {
       setBusy(false)
       setNote(d.probe?.ok === true ? bc.testOk(d.probe.latencyMs ?? 0) : bc.testFail(d.probe?.error ?? 'unknown'))
     }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
@@ -2918,7 +2920,10 @@ function LoopConfigSection(): ReactNode {
     createElement('div', { className: 'war-skin-row' },
       ...presets.map(([label, id]) => createElement('button', {
         key: id, type: 'button', className: `war-skin-opt${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
-        onClick: () => { setModel(id) },
+        // P1 修（D33 critique A）：preset 即点即生效（同抽屉皮肤/语言药丸同约）——
+        // 只落 model 键（daemon 侧 patch 只并所给字段），半截输入的 key 不受牵连；
+        // 回执点名只存了模型（防「已保存」盖住未存的基址/key——复评 P1 修）。
+        onClick: () => { setModel(id); save({ model: id }, bc.presetSavedNote) },
       }, label))),
     createElement('label', { className: 'war-loopcfg-field' },
       createElement('span', { className: 'war-bcard-flabel' }, bc.modelCustom),
@@ -3031,6 +3036,9 @@ function SettingsDrawer(props: {
         createElement('span', { className: 'war-settings-title' }, copy.title),
         createElement('button', { className: 'war-btn', onClick: onClose }, copy.close)),
       createElement('div', { className: 'war-settings-body' },
+        // P1 修（D33 critique A 七轮）：对话模型段提到抽屉首位——配置模型是 Operate
+        // 主任务，沉底被折叠线切掉保存/测试钮=「存没存不可见」。
+        standaloneChrome ? createElement(LoopConfigSection) : null,
         createElement('div', { className: 'war-settings-section' }, copy.skinSection),
         createElement('div', { className: 'war-skin-row' },
           skinBtn('trek', copy.skinTrek),
@@ -3062,8 +3070,6 @@ function SettingsDrawer(props: {
           createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { onFontScale(1) } }, copy.fontReset)),
         createElement('div', { className: 'war-settings-note' }, copy.fontHint),
         narrowActive ? createElement('div', { className: 'war-settings-note' }, copy.narrowNote) : null,
-        // D33 段3：对话模型配置（独立形态）——key 掩码/来源呈现，本体永不回显。
-        standaloneChrome ? createElement(LoopConfigSection) : null,
         // 定夺授权段（独立形态+代理舰长在役才出）：舰长显式授予/收回代定夺。
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, bcopy.authSection) : null,
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-skin-row' },

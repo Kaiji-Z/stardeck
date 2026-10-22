@@ -326,7 +326,7 @@ function ReviewCard(props: CardProps & { task: BoardTask }): ReactNode {
       ? createElement('div', { className: 'war-bcard-body' }, reportBody(last.text.slice(0, 600)))
       : createElement('p', { className: 'war-bcard-hint' }, fp.historyEmpty),
     createElement('div', { className: 'war-bcard-evi' },
-      `${checks.length > 0 ? `${passed}/${checks.length} 项验收核对通过` : '无机械核对项'}${ev?.tests !== undefined ? ` · 测试退出码 ${ev.tests.exitCode}` : ''}${task.deliverables.length > 0 ? ` · 交付物 ${task.deliverables.length} 件` : ''}`),
+      `${checks.length > 0 ? bc.checksPass(passed, checks.length) : bc.checksNone}${ev?.tests !== undefined ? ` · ${bc.testsExit(ev.tests.exitCode)}` : ''}${task.deliverables.length > 0 ? ` · ${bc.deliverables(task.deliverables.length)}` : ''}`),
     createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: bc.knockNotePh, value: knockNote, 'data-bridge-knock-note': '1', onChange: e => { setKnockNoteBoth(String(e.target.value ?? '')) } }),
     createElement('div', { className: 'war-bcard-actions' },
       createElement('button', { className: `war-btn${confirming ? ' war-btn-warn' : ' primary'}`, type: 'button', disabled: busy, 'data-bridge-act': 'accept', title: confirming ? fp.acceptConfirm : fp.acceptTitle, onClick: accept }, busy ? bc.actionBusy : confirming ? fp.acceptConfirm : fp.acceptBtn),
@@ -373,7 +373,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const proxyAway = data?.bridge?.enabled === true && data.bridge.proxy === false
   // 任务 → 源命令（战报/验收卡点穿聚焦页用）。
   const lineageOf = (taskId: string): BoardCommand | null => commands.find(c => c.taskId === taskId) ?? null
-  const inbox = collectInbox(commands, tasks).slice(0, 4)
+  const inbox = collectInbox(commands, tasks)
   const [input, setInput] = useState(() => draftStore.input)
   // D33 段2：未读分隔锚——离页落的 warroom-last-seen（挂载时读一次，会话内不漂）。
   const lastSeenTs = useRef<string>('')
@@ -387,6 +387,22 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const [actionNote, setActionNote] = useState<string | null>(null)
   const [awayFromBottom, setAwayFromBottom] = useState(false)
   const msgsRef = useRef<HTMLDivElement | null>(null)
+  // P1 修（D33 critique A）：决策坞截断可见性——可下滚时底部渐隐提示（默认态
+  // 半行字不再读作渲染故障）。挂载/收件箱变化时量一次，滚动中跟量。
+  const dockRef = useRef<HTMLDivElement | null>(null)
+  const [dockMore, setDockMore] = useState(false)
+  useEffect(() => {
+    const el = dockRef.current
+    if (el === null) return
+    // 测量挂 ResizeObserver：浮窗 resize 改变坞高时渐隐提示跟着真实（终评 P2：
+    // 只在 inbox 变化量测，resize 后提示态失真）。harness 无 RO 时退化为一次性测量。
+    const measure = (): void => setDockMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [inbox])
   // D29 critique P1：阅读位置保护——只在已近底时跟随新消息；往上翻历史不再被
   // 15s 轮询拽回底部。发送后强制回底（自己的消息自己看得见）。
   const nearBottomRef = useRef(true)
@@ -461,11 +477,14 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         ? createElement('button', {
             className: 'war-btn war-bmsg-copy', type: 'button', 'data-bridge-copy': String(i),
             onClick: () => {
-              void (navigator.clipboard?.writeText(m.text) ?? Promise.resolve()).catch(() => {})
-              setCopiedId(String(i))
-              setTimeout(() => { setCopiedId(null) }, 1500)
+              // P2 修（D33 critique 复评）：复制失败诚实回执——不再无条件报「已复制」。
+              const done = (): void => { setCopiedId(String(i)); setTimeout(() => { setCopiedId(null) }, 1500) }
+              const fail = (): void => { setCopiedId(`fail-${i}`); setTimeout(() => { setCopiedId(null) }, 2600) }
+              const p = navigator.clipboard?.writeText(m.text)
+              if (p === undefined) { fail(); return }
+              void p.then(done, fail)
             },
-          }, copiedId === String(i) ? bc.copiedNote : bc.copyBtn)
+          }, copiedId === String(i) ? bc.copiedNote : copiedId === `fail-${i}` ? bc.copyFailNote : bc.copyBtn)
         : null,
       m.kind === 'agent' && m.commandRefs !== undefined && m.commandRefs.length > 0 && onOpenBoard !== undefined
         ? createElement('div', { className: 'war-bmsg-refs' },
@@ -498,7 +517,25 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     return item.kind === 'review' ? createElement(ReviewCard, { key: item.refId, ...cardProps, task }) : createElement(RetryCard, { key: item.refId, ...cardProps, task })
   }
 
-  return createElement('div', { className: 'war-root war-bridge', 'data-bridge': '1' },
+  // P1 修（D33 critique A 五轮）：回底浮钮的 --war-dock-h 只在板子树赋值，浮窗内
+  // 回落 0px=按钮压在输入带/发送钮上截走点击——实测「决策坞+提示条+输入区」
+  // 总高写入本子树变量（按钮浮在消息区，须让开整个底栈）。
+  const bridgeRootRef = useRef<HTMLDivElement | null>(null)
+  const inputBandRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const root = bridgeRootRef.current
+    const band = inputBandRef.current
+    const dock = dockRef.current
+    if (root === null || band === null) return
+    const apply = (): void => { root.style.setProperty('--war-dock-h', `${(dock?.offsetHeight ?? 0) + band.offsetHeight}px`) }
+    apply()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(apply)
+    ro.observe(band)
+    if (dock !== null) ro.observe(dock)
+    return () => ro.disconnect()
+  }, [error, sendNote, actionNote, proxyAway, inbox, dockMore])
+  return createElement('div', { className: 'war-root war-bridge', 'data-bridge': '1', ref: bridgeRootRef },
     // 头部（标题/格言/关闭）归壳层抽屉（client-standalone war-tg-head）——
     // 本组件只管消息流+决策坞+输入面（2026-10-21 悬浮球改版：三态加速器退役）。
     createElement('div', {
@@ -514,7 +551,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     // D33 段2（lookatstudy ChevronDown 同形）：非近底时回底浮钮。
     awayFromBottom
       ? createElement('button', {
-          className: 'war-btn war-jump-bottom', type: 'button', 'aria-label': '回到底部', 'data-bridge-jump': '1',
+          className: 'war-btn war-jump-bottom', type: 'button', 'aria-label': bc.jumpBottom, 'data-bridge-jump': '1',
           onClick: () => {
             const el = msgsRef.current
             if (el !== null) { nearBottomRef.current = true; setAwayFromBottom(false); el.scrollTop = el.scrollHeight }
@@ -542,7 +579,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
           if (day !== '' && day !== lastDay) {
             const d = Date.parse(m.ts)
             const dt = Number.isFinite(d) ? new Date(d) : null
-            out.push(createElement('div', { key: `day-${m.ts}`, className: 'war-bmsg-day' }, dt !== null ? `${dt.getMonth() + 1}月${dt.getDate()}日` : day))
+            out.push(createElement('div', { key: `day-${m.ts}`, className: 'war-bmsg-day' }, dt !== null ? bc.dayLabel(dt.getMonth() + 1, dt.getDate()) : day))
             lastDay = day
           }
           out.push(msgRow(m, i))
@@ -566,13 +603,24 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
               createElement('span', { className: 'war-typing-label' }, bc.processing))
           : null,
     ),
-    createElement('div', { className: 'war-bridge-dock', 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty' },
+    createElement('div', {
+      className: 'war-bridge-dock', 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty',
+      ref: dockRef,
+      onScroll: () => {
+        const el = dockRef.current
+        if (el !== null) setDockMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
+      },
+    },
       createElement('div', { className: 'war-bridge-dockhead' }, bc.dockTitle),
       inbox.length === 0
         ? createElement('p', { className: 'war-bcard-hint' }, bc.dockEmpty)
         : inbox.map(dockCard),
+      dockMore ? createElement('div', { key: 'dock-fade', className: 'war-bridge-dock-fade', 'aria-hidden': 'true', 'data-bridge-dock-fade': '1' }) : null,
     ),
-    createElement('div', { className: 'war-bridge-input' },
+    // P1 修（D33 critique A 六轮）：可下滚提示占独立布局条（坞与输入带之间）——
+    // 浮层药丸两轮实评都压可读正文，占位条零重叠且滚到底即消失。
+    dockMore ? createElement('div', { className: 'war-bridge-dock-hintbar', 'data-bridge-dock-more': '1', 'aria-hidden': 'true' }, bc.dockMoreHint) : null,
+    createElement('div', { className: 'war-bridge-input', ref: inputBandRef },
       error !== null ? createElement('p', { className: 'war-bridge-offline', role: 'alert', 'data-bridge-offline': '1' }, bc.offlineBanner) : null,
       actionNote !== null ? createElement('p', { className: 'war-bridge-err', role: 'alert' }, actionNote) : null,
       sendNote !== '' ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, sendNote) : null,

@@ -103,9 +103,12 @@ test('真 daemon：loop-config 三端点 + /fleet 回读 + key 永不出线', { 
     const t1 = await fetch(`${base}/warroom/api/loop-test`, { method: 'POST' }).then(r => r.json()) as { probe: { ok: boolean; latencyMs?: number; error?: string } }
     assert.equal(t1.probe.ok, true, `测试连接过（${t1.probe.error ?? `${t1.probe.latencyMs}ms`}）`)
     assert.ok(typeof t1.probe.latencyMs === 'number')
-    // config.json 落盘核验（key 在本机 config 域内）
-    const disk = JSON.parse(readFileSync(join(stateDir, 'config.json'), 'utf8')) as { loop?: { apiKey?: string } }
-    assert.equal(disk.loop?.apiKey, 'sk-loop-test', 'key 只落本机 config')
+    // P1 修（critique A 八轮）回归：body 覆盖=测所见不测已存——坏基址覆盖探活必败，
+    // 且不落盘（config.json 基址不被覆盖值污染）。
+    const t2 = await fetch(`${base}/warroom/api/loop-test`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseUrl: 'http://127.0.0.1:1' }) }).then(r => r.json()) as { probe: { ok: boolean; error?: string } }
+    assert.equal(t2.probe.ok, false, '覆盖坏基址=诚实报败')
+    const diskPre = JSON.parse(readFileSync(join(stateDir, 'config.json'), 'utf8')) as { loop?: { apiKey?: string } }
+    assert.equal(diskPre.loop?.apiKey, 'sk-loop-test', 'key 只落本机 config')
   } catch (err) {
     console.error('DAEMON_STDERR_DUMP:', errDump.slice(-1500))
     throw err

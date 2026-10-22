@@ -316,12 +316,16 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           const eff = effectiveLoopEnv()
           return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
         },
-        test: async () => {
+        test: async (overrides?: { model?: string; baseUrl?: string; apiKey?: string }) => {
+          // P1 修（D33 critique A 八轮）：测「舰长所见」——表单半截输入未保存时
+          // 覆盖探测（不落盘），否则测已存配置。空串/缺省=该字段回落已存值。
           const eff = effectiveLoopEnv()
-          if (eff.apiKey === '') return { ok: false, error: '未配 key（环境变量或本机配置二选一）' }
+          const baseUrl = (overrides?.baseUrl !== undefined && overrides.baseUrl !== '' ? overrides.baseUrl : eff.baseUrl).trim().replace(/\/+$/, '')
+          const apiKey = overrides?.apiKey !== undefined && overrides.apiKey !== '' ? overrides.apiKey.trim() : eff.apiKey
+          if (apiKey === '') return { ok: false, error: '未配 key（环境变量或本机配置二选一）' }
           const t0 = Date.now()
           try {
-            const res = await fetch(`${eff.baseUrl}/models`, { headers: { authorization: `Bearer ${eff.apiKey}` }, signal: AbortSignal.timeout(8_000) })
+            const res = await fetch(`${baseUrl}/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(8_000) })
             return res.ok ? { ok: true, latencyMs: Date.now() - t0 } : { ok: false, error: `HTTP ${res.status}` }
           } catch (err) {
             return { ok: false, error: err instanceof Error ? err.message : String(err) }

@@ -1138,7 +1138,12 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 .war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-well-bg)}
-.war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:44%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scroll-snap-type:y proximity}
+.war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:52%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scroll-snap-type:y proximity;position:relative;scroll-padding-top:30px}
+/* P1 修（D33 critique A）：坞可下滚时底部渐隐+浮 pills——默认窗里被截的卡读得出「下面还有」。
+   实弹教训：snap 初始吸附把首卡头滚进 sticky 段头（不透明底）底下=「卡没头」——scroll-padding 让吸附位让开段头。 */
+.war-bridge-dock-fade{position:sticky;bottom:-8px;height:30px;margin-top:-30px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--war-canvas))}
+/* 可下滚提示=独立布局条（坞/输入带之间）——零重叠，滚到底随 dockMore 消失。 */
+.war-bridge-dock-hintbar{flex:0 0 auto;text-align:center;font-size:calc(10px*var(--war-fs));color:var(--war-text-2);padding:2px 0 3px;border-top:1px solid var(--war-border-soft);background:var(--war-canvas);letter-spacing:.04em}
 /* B2 修（D33 bug 表）：滚动吸附卡边界——动作钮永不与卡头分离（孤按钮悬空=误触终局风险）。 */
 .war-bridge-dock .war-bcard{scroll-snap-align:start}
 /* B5 断网 banner：常驻黄条（恢复自清）。 */
@@ -1146,7 +1151,7 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 /* B4：格言降级为欢迎语第二行（弱化小字，完整可读不截断）。 */
 .war-bridge-welcome-motto{display:block;margin-top:4px;font-size:calc(12px*var(--war-fs));color:var(--war-text-3)}
 .war-bridge-dock[data-bridge-dock='empty']{max-height:none}
-.war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em}
+.war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em;position:sticky;top:0;background:var(--war-canvas);padding:4px 0;z-index:1}
 .war-bcard{border:1px solid var(--war-border);border-radius:8px;background:var(--war-card-bg);padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--war-shadow-1)}
 .war-bcard-head{display:flex;align-items:center;gap:8px;min-width:0}
 .war-bcard-tag{flex:none;font-size:calc(11px*var(--war-fs));padding:1px 8px;border-radius:var(--war-r-pill);background:var(--war-well-bg);color:var(--war-text-1);white-space:nowrap}
@@ -1251,7 +1256,7 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-tg-panel .war-bridge-msgs{padding:14px 18px;gap:14px}
 .war-tg-panel .war-bridge-dock{padding:10px 18px}
 .war-tg-panel .war-bridge-input{padding:10px 18px 14px}
-.war-tg-panel .war-bridge-ta{min-height:44px}
+.war-tg-panel .war-bridge-ta{min-height:44px;resize:none}
 
 
 `

@@ -648,7 +648,13 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         send(200, { ok: true, saved: deps.loopConfig.save(patch) })
         return
       } else if (r.method === 'POST' && pathname === '/warroom/api/loop-test' && deps.loopConfig !== undefined) {
-        send(200, { ok: true, probe: await deps.loopConfig.test() })
+        // P1 修（D33 critique A 八轮）：body 可携所见字段覆盖（未保存先测）——
+        // 空 body=测已存配置。
+        const raw = JSON.parse(await readBody(r) || '{}') as { baseUrl?: unknown; apiKey?: unknown }
+        const overrides: { baseUrl?: string; apiKey?: string } = {}
+        if (typeof raw.baseUrl === 'string') overrides.baseUrl = raw.baseUrl
+        if (typeof raw.apiKey === 'string') overrides.apiKey = raw.apiKey
+        send(200, { ok: true, probe: await deps.loopConfig.test(overrides) })
         return
       } else if (r.method === 'GET' && pathname === '/warroom/api/board') {
         send(200, {

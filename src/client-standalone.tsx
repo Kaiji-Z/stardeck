@@ -111,6 +111,20 @@ function App(): ReturnType<typeof createElement> {
     window.addEventListener('resize', onResize)
     return () => { window.removeEventListener('resize', onResize) }
   }, [])
+  // P2 修（D33 critique A 复评）：Esc 收浮窗（同仓设置抽屉/聚焦模态已有 Esc——
+  // 同一双标）；模态/抽屉在场时让位（它们自带 Esc 处理，避免一按双关）。
+  useEffect(() => {
+    if (!chatOpen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      if (document.querySelector('.war-settings-backdrop, .war-modal') !== null) return
+      const target = e.target as HTMLElement | null
+      if (target !== null && target.closest('.war-settings-backdrop, .war-modal') !== null) return
+      setChatOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [chatOpen])
   // 球拖拽：pointer capture 三段（down 记起点 / move 超 6px 判拖 / up 落位持久化）。
   // 开关窗走 onClick——鼠标拖放后的 click 用抑制旗吞掉；键盘 Enter/Space 只发
   // click 不发 pointer 序列，天然落在同一开关通路上（D31 批判 P0：此前开关挂
