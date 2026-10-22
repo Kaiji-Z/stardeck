@@ -2872,9 +2872,9 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
         onClick: () => { onTab(t) },
       },
         createElement('span', { className: 'war-cmdtab-ico', 'aria-hidden': 'true' }, CMD_TAB_ICONS[t]),
-        // D29 critique：hover 独占治理——**在选页签**显全名（V17.8 不显计数的
-        // 定案不动；未选页签仍图标，减视觉噪声的同时给当前位置一个名字）。
-        tab === t ? createElement('span', { className: 'war-cmdtab-name' }, activeCopy().cmdTabs[t]) : null,
+        // D31 舰长复核：三页签恒显全名——「未选仅图标」的防噪定案在真数据里
+        // 辨识度不济（批判线「识别而非回忆」扣分项），三个短词常驻不构成噪声。
+        createElement('span', { className: 'war-cmdtab-name' }, activeCopy().cmdTabs[t]),
       ))),
     createElement('div', { className: 'war-dispatch-track', ref, onKeyDown: onTrackKey }, ...children),
     // D29 critique：空板不再是无名图标哑谜——塌缩条上常驻一句下一步。
