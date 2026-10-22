@@ -70,8 +70,33 @@ test('【命令】块解析：多块逐条、空块/超长弃收、其他结构�
   assert.equal(out.dropped, 2, '空块+超长各计一次弃收')
 })
 
-test('【命令】块解析：单轮上限 5 条——超出部分弃收防幻觉风暴', () => {
-  const text = Array.from({ length: PROXY_COMMAND_BLOCKS_CAP + 2 }, (_, i) => `【命令】\n第 ${i} 号命令`).join('\n')
+test('【命令】块解析（D33 live 回归）：头缀散文行尾、体在下一行——照样成令', () => {
+  // 2026-10-23 实弹原样：glm-5.3-flash 把【命令】缀在「……我再补一道。」行尾，
+  // 旧解析 `/^【命令】\s*$/` 整行锚定吃不到——拟令超时判 FAIL。
+  const text = [
+    '命令要点：只做落文件本身，验收标准写死（根目录 + 含指定串），不加前几道考题的 check.js 实跑环节——要加的话说一声，我再补一道。【命令】',
+    '!!直接做：在任务工作区根创建 loop-live.txt（内容包含字符串 stardeck-loop-live）。仅此一文件：不写校验脚本、不改工作区其他文件、不引入任何依赖。',
+    '',
+    '命令已按最小范围立好——只有落文件本身。',
+  ].join('\n')
+  const out = proxyCommandBlocksOf(text)
+  assert.equal(out.commands.length, 1, '散文行尾的头照样开块')
+  assert.ok(out.commands[0]!.startsWith('!!直接做'), '命令体从下一行起（散文前缀不入体）')
+  assert.ok(!out.commands[0]!.includes('命令要点'), '前导散文不入命令体')
+  assert.equal(out.dropped, 0)
+})
+
+test('【命令】块解析（方差族）：头+空白+体同行——开块且体首行就地取', () => {
+  const inline = proxyCommandBlocksOf('【命令】 !!直接做：在工作区根创建 a.txt。')
+  assert.equal(inline.commands.length, 1, '头+空格+体同行照样成令')
+  assert.ok(inline.commands[0]!.startsWith('!!直接做'))
+  const noSpace = proxyCommandBlocksOf('【命令】是什么格式？')
+  assert.equal(noSpace.commands.length, 0, '行首引用无空白不算块')
+  const mention = proxyCommandBlocksOf('要下令先落【命令】块再走。')
+  assert.equal(mention.commands.length, 0, '行中提及带后缀不算块')
+})
+
+test('【命令】块解析：单轮上限 5 条——超出部分弃收防幻觉风暴', () => {  const text = Array.from({ length: PROXY_COMMAND_BLOCKS_CAP + 2 }, (_, i) => `【命令】\n第 ${i} 号命令`).join('\n')
   const out = proxyCommandBlocksOf(text)
   assert.equal(out.commands.length, PROXY_COMMAND_BLOCKS_CAP)
   assert.equal(out.dropped, 2)

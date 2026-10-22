@@ -551,7 +551,10 @@ export function proxyOrderFor(chat: StaffChatOrder, opts: { verdictAuthorized?: 
 
 /** 代理舰长块骨架：【命令】/【图景】（无参）或【定夺】/管理块（带参）头行，
  * 正文至下一块头/文末。头行容忍 markdown 强调包裹（`**【命令】**`——glm-5.3
- * 风格变体，实弹教训在档）。 */
+ * 风格变体，实弹教训在档）。【命令】头行另容忍两种同族方差（解析从宽，
+ * live 实弹教训：flash 把头缀在散文行尾）：①头落在散文行尾、命令体在下一行
+ * ——散文前缀弃入回话不入命令体；②头+空白+命令体同行（「【命令】是什么」
+ * 这类行首引用无空白不算）。其余块头保持行首锚定不放宽。 */
 type ProxyBlockKind = '命令' | '定夺' | '图景' | '撤令' | '重派' | '定时令停' | '绑席'
 interface RawProxyBlock { kind: ProxyBlockKind; arg?: string; verdict?: '通过' | '打回'; lines: string[] }
 
@@ -564,17 +567,19 @@ function parseProxyBlocks(text: string): RawProxyBlock[] {
   let cur: RawProxyBlock | undefined
   for (const raw of text.split(/\r?\n/)) {
     const line = stripEmphasisLine(raw.trim())
-    const command = /^【命令】\s*$/.test(line)
+    const command = /【命令】\s*$/.test(line)
+    const commandInline = command ? null : /^【命令】\s+(\S.*)$/.exec(line)
+    const isCommand = command || commandInline !== null
     const scene = /^【图景】\s*$/.test(line)
     const verdict = /^【定夺】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*(通过|打回)\s*$/.exec(line)
     const abandon = /^【撤令】[（(]((?:cmd-)?[A-Za-z0-9._-]+)[)）]\s*$/.exec(line)
     const retry = /^【重派】[（(]((?:\d{4}\d{2}\d{2}-)?[A-Za-z0-9._-]+)[)）]\s*$/.exec(line)
     const halt = /^【定时令】[（(]((?:cmd-)?[A-Za-z0-9._-]+)[)）]\s*停\s*$/.exec(line)
     const bind = /^【绑席】[（(]([A-Za-z0-9_-]+)[)）]\s*$/.exec(line)
-    if (command || scene || verdict !== null || abandon !== null || retry !== null || halt !== null || bind !== null) {
+    if (isCommand || scene || verdict !== null || abandon !== null || retry !== null || halt !== null || bind !== null) {
       if (cur !== undefined) out.push(cur)
-      cur = command
-        ? { kind: '命令', lines: [] }
+      cur = isCommand
+        ? { kind: '命令', lines: commandInline !== null ? [commandInline[1]] : [] }
         : scene
           ? { kind: '图景', lines: [] }
           : verdict !== null
