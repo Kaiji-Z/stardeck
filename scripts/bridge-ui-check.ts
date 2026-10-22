@@ -122,6 +122,20 @@ try {
     Math.hypot((panelBox.x + panelBox.width / 2) - (ballBox2.x + ballBox2.width / 2), (panelBox.y + panelBox.height / 2) - (ballBox2.y + ballBox2.height / 2)) < 520
   check('聊天窗贴球弹出（非抽屉）', anchored, `ball=(${Math.round(ballBox2?.x ?? -1)},${Math.round(ballBox2?.y ?? -1)}) panel=(${Math.round(panelBox?.x ?? -1)},${Math.round(panelBox?.y ?? -1)})`)
   check('点球开聊天窗', true, 'data-bridge-panel=1')
+  // D33 舰长令：浮窗可自主调整大小——resize 手柄真拖放 + 尺寸持久化。
+  const canResize = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).resize)
+  check('浮窗可调大小（resize=both）', canResize === 'both', canResize)
+  const pb0 = await page.locator('[data-bridge-panel]').boundingBox()
+  if (pb0 !== null) {
+    await page.mouse.move(pb0.x + pb0.width - 4, pb0.y + pb0.height - 4)
+    await page.mouse.down()
+    await page.mouse.move(pb0.x + pb0.width + 80, pb0.y + pb0.height + 80, { steps: 6 })
+    await page.mouse.up()
+    await page.waitForTimeout(500)
+  }
+  const pb1 = await page.locator('[data-bridge-panel]').boundingBox()
+  const sizeSaved = await page.evaluate(() => localStorage.getItem('warroom-tg-panel-size') !== null)
+  check('拖手柄真变大+尺寸持久化', pb1 !== null && pb0 !== null && pb1.width > pb0.width + 40 && sizeSaved, `w ${Math.round(pb0?.width ?? 0)}→${Math.round(pb1?.width ?? 0)} saved=${sizeSaved}`)
   // 计算样式断言：消息区可滚、输入面真可见（DOM 在场≠可用——UI 交付教训）。
   const msgsScroll = await page.locator('[data-bridge-msgs]').evaluate(el => getComputedStyle(el).overflowY)
   check('计算样式：消息区可滚动（overflowY auto|scroll）', msgsScroll === 'auto' || msgsScroll === 'scroll', `overflowY=${msgsScroll}`)

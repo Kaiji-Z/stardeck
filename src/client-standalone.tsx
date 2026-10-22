@@ -37,9 +37,26 @@ const Board = warView(services)
 const BALL_STAR = 'M12 2.2l2.83 6.44 6.97.62-5.27 4.63 1.56 6.83L12 17.1l-6.09 3.62 1.56-6.83-5.27-4.63 6.97-.62z'
 const BALL_SIZE = 54
 const BALL_KEY = 'warroom-tg-ball-pos'
-const PANEL_W = 420
-const PANEL_H = 620
 const GAP = 12
+// D33 舰长令：浮窗可自主调整大小（resize 手柄+持久化）；默认放大到 460×680。
+const PANEL_KEY = 'warroom-tg-panel-size'
+const PANEL_MIN_W = 360
+const PANEL_MIN_H = 420
+
+/** 浮窗尺寸（w/h，钳在视口与最小值内）。 */
+type PanelSize = { w: number; h: number }
+function clampPanelSize(v: { w: number; h: number }): PanelSize {
+  const w = Math.min(Math.max(PANEL_MIN_W, Math.round(v.w)), Math.max(PANEL_MIN_W, window.innerWidth - 16))
+  const h = Math.min(Math.max(PANEL_MIN_H, Math.round(v.h)), Math.max(PANEL_MIN_H, window.innerHeight - 16))
+  return { w, h }
+}
+function storedPanelSize(): PanelSize {
+  try {
+    const v = JSON.parse(localStorage.getItem(PANEL_KEY) ?? '') as PanelSize
+    if (typeof v?.w === 'number' && typeof v?.h === 'number' && v.w > 0 && v.h > 0) return clampPanelSize(v)
+  } catch { /* 缺省/坏值 → 默认 */ }
+  return clampPanelSize({ w: 460, h: 680 })
+}
 
 /** 球位=右/下边距（resize 相对锚，比绝对 x/y 抗窗口变化）。 */
 type BallPos = { right: number; bottom: number }
@@ -56,12 +73,12 @@ const clampPos = (p: BallPos): BallPos => ({
 })
 
 /** 聊天浮窗贴球择位：球在右半→窗开球左侧；球在下半→窗开球上方；钳在视口内。
- *  拖动时 style 由同一 state 推导——窗口实时跟着球走。 */
-function panelStyle(pos: BallPos): CSSProperties {
+ *  拖动时 style 由同一 state 推导——窗口实时跟着球走。尺寸由舰长 resize（持久化）。 */
+function panelStyle(pos: BallPos, size: PanelSize): CSSProperties {
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const w = Math.min(PANEL_W, vw - 16)
-  const h = Math.min(PANEL_H, vh - 16)
+  const w = size.w
+  const h = size.h
   const ballLeft = vw - pos.right - BALL_SIZE
   const ballTop = vh - pos.bottom - BALL_SIZE
   const openLeft = ballLeft + BALL_SIZE / 2 > vw / 2
@@ -85,6 +102,25 @@ function App(): ReturnType<typeof createElement> {
   const bridgeOn = data?.bridge?.enabled === true
   const [chatOpen, setChatOpen] = useState(false)
   const [ballPos, setBallPos] = useState<BallPos>(storedBallPos)
+  // D33 resize：浮窗尺寸状态 + 手柄拖放追踪（ResizeObserver 落盘节流 300ms）。
+  const [panelSize, setPanelSize] = useState<PanelSize>(storedPanelSize)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const panelSizeTimer = useRef<number | null>(null)
+  useEffect(() => {
+    const el = panelRef.current
+    if (el === null || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(entries => {
+      const box = entries[0]?.contentRect
+      if (box === undefined || box.width < PANEL_MIN_W || box.height < PANEL_MIN_H) return
+      setPanelSize(clampPanelSize({ w: box.width, h: box.height }))
+      if (panelSizeTimer.current !== null) clearTimeout(panelSizeTimer.current)
+      panelSizeTimer.current = window.setTimeout(() => {
+        try { localStorage.setItem(PANEL_KEY, JSON.stringify(clampPanelSize({ w: box!.width, h: box!.height }))) } catch { /* 隐私模式 */ }
+      }, 300)
+    })
+    ro.observe(el)
+    return () => { ro.disconnect(); if (panelSizeTimer.current !== null) clearTimeout(panelSizeTimer.current) }
+  }, [chatOpen, bridgeOn])
   // 窗口 resize 时重钳球位+刷新窗位（浮窗 style 由视口尺寸推导）。
   useEffect(() => {
     const onResize = (): void => { setBallPos(p => clampPos(p)) }
@@ -206,7 +242,7 @@ function App(): ReturnType<typeof createElement> {
   // Telegram 式聊天浮窗：贴球择向弹出（style 见 panelStyle），头（标题+格言+关闭）
   // + 聊天面本体；拖球时随 state 重渲染实时跟随。
   const panel = bridgeOn && chatOpen
-    ? createElement('div', { className: 'war-root war-tg-panel', 'data-bridge-panel': '1', role: 'dialog', 'aria-label': bc.title, style: panelStyle(ballPos) },
+    ? createElement('div', { ref: panelRef, className: 'war-root war-tg-panel', 'data-bridge-panel': '1', role: 'dialog', 'aria-label': bc.title, style: panelStyle(ballPos, panelSize) },
         createElement('div', { className: 'war-tg-head' },
           createElement('div', { className: 'war-tg-head-text' },
             createElement('span', { className: 'war-tg-title' }, bc.title),

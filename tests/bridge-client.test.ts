@@ -364,3 +364,101 @@ test('段2 回归：agent 消息带复制钮 + 未读分隔条（lastSeen 锚后
     try { localStorage.removeItem('warroom-last-seen') } catch { /* n/a */ }
   }
 })
+
+
+test('段2 回归：IME 组合态 Enter 不误发（isComposing 守卫）', async () => {
+  const before = calls.filter(c => c.url.includes('/warroom/api/bridge/messages') && c.body !== undefined).length
+  const r = await render({}, '想做什么直接说')
+  try {
+    const ta = r.textareaAt('data-bridge-input')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(ta, '中文输入法组字中')
+    ta.dispatchEvent(new win.Event('input', { bubbles: true }))
+    await new Promise(res => setTimeout(res, 30))
+    ta.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    const ev = new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    Object.defineProperty(ev, 'isComposing', { value: true })
+    ta.dispatchEvent(ev)
+    await new Promise(res => setTimeout(res, 50))
+    const after = calls.filter(c => c.url.includes('/warroom/api/bridge/messages') && c.body !== undefined).length
+    assert.equal(after, before + 1, '普通 Enter 恰一发；isComposing Enter 不发（组字期不误触）')
+  } finally { r.unmount() }
+})
+
+test('段2 回归：lastSeen 缺席/为空 → 不出未读分隔', async () => {
+  try { localStorage.removeItem('warroom-last-seen') } catch { /* n/a */ }
+  bridgeFixture = { ok: true, messages: [{ id: 'm1', kind: 'agent', ts: '2026-10-21T08:00:00.000Z', text: '无锚话轮' }], revision: 'r3' }
+  const r = await render({}, '无锚话轮')
+  try {
+    assert.ok(!r.text().includes('以下为新动静'), '无 lastSeen 锚=不插分隔')
+  } finally {
+    r.unmount()
+    bridgeFixture = { ok: true, messages: [], revision: 'r1' }
+  }
+})
+
+test('段2 回归：复制钮点击回执「已复制」（clipboard 缺席亦不炸）', async () => {
+  bridgeFixture = { ok: true, messages: [{ id: 'm1', kind: 'agent', ts: '2026-10-21T08:00:00.000Z', text: '复制回执话轮' }], revision: 'r4' }
+  const r = await render({}, '复制回执话轮')
+  try {
+    const btn = document.querySelector('[data-bridge-copy]') as HTMLButtonElement | null
+    assert.ok(btn !== null, '复制钮在场')
+    btn!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(res => setTimeout(res, 50))
+    assert.ok((btn.textContent ?? '').includes('已复制'), '点击后回执已复制')
+  } finally {
+    r.unmount()
+    bridgeFixture = { ok: true, messages: [], revision: 'r1' }
+  }
+})
+
+test('段2 回归：系统战报不出复制钮（只有 agent 话轮可复制）', async () => {
+  bridgeFixture = { ok: true, messages: [{ id: 'm1', kind: 'system', ts: '2026-10-21T08:00:00.000Z', text: '机械战报', noticeKind: 'reported' }], revision: 'r5' }
+  const r = await render({}, '机械战报')
+  try {
+    assert.equal(document.querySelectorAll('[data-bridge-copy]').length, 0, '系统消息无复制钮')
+  } finally {
+    r.unmount()
+    bridgeFixture = { ok: true, messages: [], revision: 'r1' }
+  }
+})
+
+test('段2 回归：toolStepLabelOf 未知名透传（不炸不空）', async () => {
+  const { toolStepLabelOf } = await import('../src/client/bridge.tsx')
+  assert.equal(toolStepLabelOf(''), '')
+  assert.equal(toolStepLabelOf('read_anything_else'), 'read_anything_else')
+})
+
+
+test('B3 同律回归：澄清补充框 Enter 发答复（Shift 不发）', async () => {
+  const answerCallsBefore = calls.filter(c => c.url.includes('/commands/answer')).length
+  boardFixture = {
+    ...boardFixture,
+    commands: [{
+      commandId: 'cmd-e', text: '做工具', createdAt: '2026-10-20T09:00:00Z', status: 'talking',
+      staffSessionId: 's1', taskId: null, cancelledReason: null, grade: null, gradeReason: null, gradeConfidence: null, regrades: 0,
+      plan: null, schedule: null, chain: { generation: 1, rootId: 'cmd-e', length: 1, hueSlot: 0 }, continuation: null,
+      clarification: { questions: ['1. 用哪个仓？A 仓甲 / B 你帮我定'], options: [['仓甲', '你帮我定']], round: 1, status: 'pending', answer: null },
+      clarificationRounds: null, brief: null, briefSigned: null, awaitingSign: null,
+    }],
+    tasks: [],
+  } as never
+  const r = await render({}, '等你答复')
+  try {
+    const tas = [...document.querySelectorAll('textarea')] as HTMLTextAreaElement[]
+    const note = tas.find(t => (t.placeholder ?? '').includes('补充'))
+    assert.ok(note !== undefined, '补充说明框在场')
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(note!, '补充一句')
+    note!.dispatchEvent(new win.Event('input', { bubbles: true }))
+    await new Promise(res => setTimeout(res, 30))
+    note!.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }))
+    await new Promise(res => setTimeout(res, 50))
+    assert.equal(calls.filter(c => c.url.includes('/commands/answer')).length, answerCallsBefore, 'Shift+Enter 不发')
+    note!.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await new Promise(res => setTimeout(res, 80))
+    assert.equal(calls.filter(c => c.url.includes('/commands/answer')).length, answerCallsBefore + 1, 'Enter 发答复')
+  } finally {
+    r.unmount()
+  }
+})

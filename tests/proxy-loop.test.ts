@@ -98,3 +98,38 @@ test('runProxyLoop：工具轮——read_digest 被调、tool 结果回传、二
     server.close()
   }
 })
+
+
+/** D33 段2：onToolStep 双相回调——tool_calls 增量帧→start，finish 带 tool_calls 的
+ *  收尾轮经 tool-result 相→done；无工具轮零回调。 */
+test('runProxyLoop：onToolStep 序列（start→done）与无工具轮零回调', { timeout: 30_000 }, async () => {
+  // 轮1：模型发起 read_board 工具调用（finish=tool_calls）；轮2：带结果终答。
+  const { server, url } = scriptedSseServer([
+    () => ({ chunks: [{ role: 'assistant', content: null, tool_calls: [{ id: 'tc1', type: 'function', function: { name: 'read_board', arguments: '{}' } }] }], finish: 'tool_calls' }),
+    () => ({ chunks: [{ role: 'assistant', content: '查完账了。' }], finish: 'stop' }),
+  ])
+  try {
+    const steps: Array<[string, string]> = []
+    const out = await runProxyLoop('问况', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'glm-test' }, {
+      reads: { board: async () => ({ commands: [] }), digest: async () => ({}), ledger: async () => ({}) },
+      onToolStep: (name, phase) => { steps.push([name, phase]) },
+    })
+    assert.equal(out.text, '查完账了。')
+    assert.deepEqual(steps, [['read_board', 'start'], ['read_board', 'done']], `钩子序列：${JSON.stringify(steps)}`)
+  } finally { server.close() }
+})
+
+test('runProxyLoop：纯文本轮 onToolStep 零回调', { timeout: 30_000 }, async () => {
+  const { server, url } = scriptedSseServer([
+    () => ({ chunks: [{ role: 'assistant', content: '直接答。' }], finish: 'stop' }),
+  ])
+  try {
+    const steps: Array<[string, string]> = []
+    const out = await runProxyLoop('问', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'glm-test' }, {
+      reads: { board: async () => ({}), digest: async () => ({}), ledger: async () => ({}) },
+      onToolStep: (name, phase) => { steps.push([name, phase]) },
+    })
+    assert.equal(steps.length, 0, '无工具轮零回调')
+    assert.equal(out.toolCalls, 0)
+  } finally { server.close() }
+})

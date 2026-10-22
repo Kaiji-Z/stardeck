@@ -1226,7 +1226,11 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-tg-panel{position:fixed;z-index:70;height:auto;display:flex;flex-direction:column;
   background:var(--war-canvas);border:1px solid var(--war-border);border-radius:14px;overflow:hidden;
   box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent);
+  resize:both;min-width:360px;min-height:420px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
   animation:war-tg-pop .18s cubic-bezier(.16,1,.3,1)}
+/* resize 手柄与圆角共存的视觉提示（Chromium 手柄自带三角，深肤下再描一道淡边）。 */
+.war-tg-panel::after{content:'';position:absolute;right:0;bottom:0;width:18px;height:18px;pointer-events:none;
+  background:linear-gradient(135deg,transparent 50%,color-mix(in srgb,var(--war-text-3) 35%,transparent) 50%)}
 @keyframes war-tg-pop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.war-tg-panel{animation:none}}
 .war-tg-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--war-border-soft);background:var(--war-card-bg);flex:none}
