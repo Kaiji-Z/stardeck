@@ -273,26 +273,34 @@ export function readClaudeHistory(sessionId: string, root = join(homedir(), '.cl
   return { executor: 'claude', sessionId, messages }
 }
 
-/** dsh 会话存档多帧 zstd 解码（纯）：逐帧 zstdDecompressSync + 帧魔数
- * （28 B5 2F FD）步进拼接。Node <23.8 无 zstd 面时给诚实错误。 */
+/** dsh 会话存档多帧 zstd 解码（纯）：按帧魔数（28 B5 2F FD）切段逐段解码。
+ *  实现注记（2026-10-22 实弹）：Node 的 zstdDecompressSync 对拼接多帧缓冲的
+ *  行为随版本漂移——旧版停在帧界（每次解一帧），新版一次解完全部帧；
+ *  旧的「解码+魔数步进」写法在后者会把后续帧重复计数。现改为先收集全部魔数
+ *  偏移、各帧限定 [起点, 下一起点) 解码——两种语义下结果一致；段解失败按残
+ *  尾跳过（保已解码前段）。压缩体里偶现魔数字节的假起点会解失败同样被跳过。 */
 export function dshDecodeZstdFrames(buf: Buffer): string {
   const dec = (zlib as unknown as { zstdDecompressSync?: (b: Buffer) => Buffer }).zstdDecompressSync
   if (dec === undefined) throw new Error('本机 Node 无 zstd 解压面（需 Node ≥23.8/24）——dsh 会话存档（.jsonl.zstd）读不了')
+  if (buf.length === 0) return ''
   const MAGIC = Buffer.from([0x28, 0xB5, 0x2F, 0xFD])
+  const starts: number[] = []
+  let at = buf.indexOf(MAGIC)
+  while (at >= 0) {
+    starts.push(at)
+    at = buf.indexOf(MAGIC, at + 4)
+  }
+  if (starts.length === 0) {
+    // 无魔数：退化单帧尝试（残尾/损坏按空处理）。
+    try { return dec(buf).toString('utf8') } catch { return '' }
+  }
   const frames: Buffer[] = []
-  let off = 0
-  while (off < buf.length) {
-    let part: Buffer
+  for (let i = 0; i < starts.length; i++) {
+    const end = i + 1 < starts.length ? starts[i + 1]! : buf.length
     try {
-      part = dec(buf.subarray(off))
-    } catch {
-      break // 帧损坏/残尾：保已解码前段
-    }
-    if (part.length === 0) break
-    frames.push(part)
-    const next = buf.subarray(off + 4).indexOf(MAGIC)
-    if (next < 0) break
-    off += 4 + next
+      const part = dec(buf.subarray(starts[i]!, end))
+      if (part.length > 0) frames.push(part)
+    } catch { /* 假起点/残尾：跳过该段 */ }
   }
   return Buffer.concat(frames).toString('utf8')
 }
