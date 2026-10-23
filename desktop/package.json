@@ -1,7 +1,7 @@
 {
   "name": "stardeck-desktop",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "stardeck 桌面壳——点击即用的舰队甲板（daemon 内置，窗口+托盘）",
   "main": "src/main.mjs",
   "scripts": {
@@ -36,7 +36,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png"
