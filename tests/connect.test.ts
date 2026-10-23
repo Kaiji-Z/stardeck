@@ -16,6 +16,7 @@ const {
   hostConfigPaths, runConnect, PROXY_SERVER_NAME,
 } = await import('../src/connect.ts')
 const { startDaemon } = await import('../src/daemon.ts')
+const { persistConfigPatch } = await import('../src/config.ts')
 
 // connect 测的是 proxy-ON 面：矩阵 OFF 面（STARDECK_PROXY=0 env 全套注入）下
 // 本文件显式回 ON——否则签席 404 是产品正确行为而测试误败。OFF 面的 404 纪律
@@ -174,5 +175,42 @@ test('runConnect：daemon 缺席——无拉起器诚实报错；已在则拉起
     await handle.close()
     rmSync(stateDir, { recursive: true, force: true })
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+// ── D35 形态 A：--panel 落 config + 一条提示词单一源 ──
+test('persistConfigPatch：panel 往返（bridge:false 落盘/既有键保留/坏 JSON 拒绝）', () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'sd-cfg-patch-'))
+  const prev = process.env.STARDECK_CONFIG
+  process.env.STARDECK_CONFIG = join(stateDir, 'config.json')
+  try {
+    const first = persistConfigPatch({ bridge: false })
+    assert.equal(first.ok, true)
+    const disk = JSON.parse(readFileSync(process.env.STARDECK_CONFIG!, 'utf8')) as { bridge?: boolean }
+    assert.equal(disk.bridge, false, 'bridge:false 落盘')
+    const second = persistConfigPatch({ executor: 'opencode' })
+    assert.equal(second.ok, true)
+    const disk2 = JSON.parse(readFileSync(process.env.STARDECK_CONFIG!, 'utf8')) as { bridge?: boolean; executor?: string }
+    assert.equal(disk2.bridge, false, '补丁不吞既有键')
+    assert.equal(disk2.executor, 'opencode')
+    writeFileSync(process.env.STARDECK_CONFIG!, '{oops', 'utf8')
+    assert.equal(persistConfigPatch({ bridge: false }).ok, false, '坏 JSON 拒绝覆盖')
+  } finally {
+    if (prev !== undefined) process.env.STARDECK_CONFIG = prev
+    else delete process.env.STARDECK_CONFIG
+    rmSync(stateDir, { recursive: true, force: true })
+  }
+})
+
+test('一条提示词（D35）：五步齐全——装/connect/验证/开板/块文法与不代行纪律', async () => {
+  const { agentInstallPrompt, AGENT_INSTALL_PROMPT_EN } = await import('../src/agent-prompt.ts')
+  const zh = agentInstallPrompt('zh')
+  for (const needle of ['npm i -g stardeck', 'stardeck connect', 'read_digest', 'stardeck open', 'get_order', 'submit_reply', '【命令】', '不代行']) {
+    assert.ok(zh.includes(needle), `zh 提示词含 ${needle}`)
+  }
+  assert.ok(zh.includes('http://127.0.0.1:3970'), '含看板地址')
+  const en = AGENT_INSTALL_PROMPT_EN
+  for (const needle of ['npm i -g stardeck', 'stardeck connect', 'read_digest', 'submit_reply']) {
+    assert.ok(en.includes(needle), `en 提示词含 ${needle}`)
   }
 })

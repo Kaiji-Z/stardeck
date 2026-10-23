@@ -8,6 +8,7 @@
  */
 import { Fragment, createElement, useState, useSyncExternalStore } from 'react'
 import { langId, subscribeLang } from './copy.ts'
+import { agentInstallPrompt } from '../agent-prompt.ts'
 
 export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
 export interface FleetState { active: { executor: string; model: string }; seats: Seat[]; proxyLoop?: boolean }
@@ -55,6 +56,10 @@ interface GateCopy {
   copyFail: string
   loopReady: string
   loopHint: string
+  /** D35 形态 A：agent 接入卡（复制一条提示词，让 agent 自己装+连）。 */
+  agentCardTitle: string
+  agentCardHint: string
+  agentCardBtn: string
 }
 
 /** 可安装席的正典 npm 包名（2026-10 本机 npm ls 实锚；zcode/dsh 走各自渠道无 npm 包）。 */
@@ -99,6 +104,9 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     copyFail: '复制失败——请手动选中命令复制',
     loopReady: '内置代理舰长已就绪（Z_AI_* 环境变量已配）——聊天窗由内置 loop 担任，打字机流式回话；舰队外勤仍需上方任一席。',
     loopHint: '一个 CLI 都不想装也可以先聊：进板后在 设置→对话模型 里配好（或设环境变量 Z_AI_BASE_URL / Z_AI_API_KEY），聊天窗的代理舰长由内置 loop 担任（流式回话）。',
+    agentCardTitle: '把控制权交给你的 agent（形态 A · 纯面板）',
+    agentCardHint: '不装 CLI 也能用：把下面这段话粘给你的 agent（zcode/Claude Code/opencode 等），它会自己安装 stardeck、接入代理舰长席并打开看板——之后你在 agent 对话里自然语言操控舰队。',
+    agentCardBtn: '复制接入提示词',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -131,6 +139,9 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     copyFail: 'Copy failed — please select and copy the command manually',
     loopReady: 'Built-in proxy captain is ready (Z_AI_* env configured) — the chat window runs on the built-in loop with streaming replies; field missions still need a seat above.',
     loopHint: 'No CLI at all? You can still chat: configure it under Settings → Chat model after entering the board (or set Z_AI_BASE_URL / Z_AI_API_KEY env vars) — the chat captain runs on the built-in loop with streaming.',
+    agentCardTitle: 'Hand control to your own agent (Form A · pure panel)',
+    agentCardHint: 'No CLI needed: paste the prompt below into your agent (zcode / Claude Code / opencode …). It will install stardeck, take the acting-captain seat and open the board — you then steer the fleet in plain language inside your agent chat.',
+    agentCardBtn: 'Copy install prompt',
   },
 }
 
@@ -299,6 +310,24 @@ export function fleetGate(props: {
             }, `${showAbsent ? '▾ ' : '▸ '}${t.absentFold(absentSeats.length)}`)
           : null,
         showAbsent ? absentSeats.map(card) : null),
+      // D35 形态 A：agent 接入卡（恒在场——与绑定哪支舰队无关）。复制一条提示词，
+      // 用户的 agent 自己装 stardeck+接入代理舰长席+开板。
+      createElement('div', {
+        key: 'agent-card', 'data-war-agent-card': '1',
+        style: { flex: '0 0 auto', marginTop: 12, padding: '10px 14px', borderRadius: 'var(--war-r-md, 10px)', background: 'var(--war-well-bg)', border: '1px solid var(--war-border-soft)', display: 'flex', alignItems: 'center', gap: 12 },
+      },
+        createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
+          createElement('div', { style: { fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-1)', fontWeight: 600 } }, t.agentCardTitle),
+          createElement('div', { style: { marginTop: 2, fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.5 } }, t.agentCardHint)),
+        createElement('button', {
+          type: 'button', 'data-war-agent-prompt-copy': '1',
+          onClick: () => {
+            const p = navigator.clipboard?.writeText(agentInstallPrompt(langId() === 'en' ? 'en' : 'zh'))
+            if (p === undefined) return
+            void p.then(() => { setCopiedId('agent-prompt'); setTimeout(() => { setCopiedId('') }, 1600) }, () => { /* 剪贴板被拒 */ })
+          },
+          style: { flex: '0 0 auto', padding: '7px 14px', borderRadius: 8, border: '1px solid var(--war-border-hover)', background: 'var(--war-card-bg)', color: copiedId === 'agent-prompt' ? 'var(--war-done)' : 'var(--war-text-1)', cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))', whiteSpace: 'nowrap' },
+        }, copiedId === 'agent-prompt' ? t.copied : t.agentCardBtn)),
       props.error !== undefined && props.error !== ''
         ? createElement('div', { role: 'alert', style: { marginTop: 10, fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-fail)', background: 'var(--war-fail-tint)', border: '1px solid var(--war-fail-border)', borderRadius: 8, padding: '8px 10px', flex: '0 0 auto' } }, props.error)
         : null,

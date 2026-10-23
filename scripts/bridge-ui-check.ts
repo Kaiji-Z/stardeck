@@ -83,6 +83,10 @@ try {
   if (await page.locator('.war-gate-actions').count() > 0) {
     const enterBtn = page.locator('button', { hasText: '开始调度' }).first()
     await enterBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    // D35 形态 A：门面 agent 接入卡（复制一条提示词）——进场前就在场。
+    const agentCard = await page.locator('[data-war-agent-card]').count()
+    const promptBtn = await page.locator('[data-war-agent-prompt-copy]').count()
+    check('D35：门面 agent 接入卡+复制提示词钮在场', agentCard === 1 && promptBtn === 1, `card=${agentCard} btn=${promptBtn}`)
     await enterBtn.click()
   }
   // 默认脸面断言（2026-10-21 悬浮球改版）：看板恒为基座——板列在场、无抽屉。

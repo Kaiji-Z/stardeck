@@ -37,6 +37,8 @@ interface CliOptions {
   noApp?: boolean
   /** connect [host] 的位置参数（claude|zcode|opencode|codex|generic）。 */
   host?: string
+  /** D35 形态 A：connect --panel——bridge:false 落 config，看板先行无悬浮球。 */
+  panel?: boolean
 }
 
 function parseArgs(argv: string[]): { command: string; options: CliOptions } {
@@ -56,6 +58,7 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions } {
     else if (a === '--key' && next !== undefined) { options.key = next; i++ }
     else if (a === '--no-open') { options.noOpen = true }
     else if (a === '--no-app') { options.noApp = true }
+    else if (a === '--panel') { options.panel = true }
     else { console.error(`未知参数：${a}`); process.exit(2) }
   }
   return { command, options }
@@ -226,6 +229,7 @@ async function cmdConnect(options: CliOptions): Promise<void> {
   const out = await runConnect(options.host ?? 'generic', {
     base: options.port !== undefined ? `http://127.0.0.1:${options.port}` : undefined,
     spawnDaemon: defaultSpawnDaemon(),
+    panel: options.panel === true,
   })
   for (const line of out.lines) console.log(line)
   if (!out.ok) {

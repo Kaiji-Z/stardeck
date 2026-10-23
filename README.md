@@ -100,6 +100,29 @@ stardeck connect             # 其他宿主：打印 {"mcpServers": …} 配置�
 
 注册后打开 `http://127.0.0.1:3970` 聊天——回话的就是你的 agent（它拿到的是五件只读+交答工具，执行者的 war_* 一件不出；token 只在注册时出现一次）。撤销：删除宿主配置里的 `stardeck-proxy` 键即可。
 
+### 两种形态
+
+| 形态 | 面向 | 长什么样 |
+|---|---|---|
+| **A · 纯面板**（被你的 agent 控制） | 已经有一个 agent（zcode/Claude Code/opencode…）的用户 | stardeck 只是看板窗口（无悬浮球/聊天面）——对话全在你的 agent 里，自然语言操控舰队；看板负责签发与验收 |
+| **B · 完整应用**（桌面/浏览器） | 没有固定 agent 的用户 | 打开 stardeck 应用就是完整体验：设置→模型设置 配好供应商与 key，聊天窗直接对话操控 |
+
+### 一条提示词让 agent 自己装（形态 A · 零终端）
+
+把下面这段话**原样粘给你的 agent**（它会自己检查 Node、安装、接入代理舰长席、验证连通并打开看板——你全程不用碰命令行）：
+
+```text
+帮我安装并接入 stardeck（agent 舰队看板——装好后你将坐上它的「代理舰长」席）：
+1. 检查 Node ≥ 22（node -v）；没有就先帮我装 Node 22+。
+2. 运行 npm i -g stardeck。
+3. 运行 stardeck connect zcode（按你的宿主替换：claude / opencode / codex / zcode；不确定自己宿主就跑 stardeck connect，把打印的 mcpServers 配置块粘进你的 MCP 配置并让我确认）。
+4. 重启你自己让 MCP 生效，然后调 read_digest 工具验证连通（应返回舰队速览 JSON）。
+5. 运行 stardeck open 给我打开看板窗口（或告诉我地址 http://127.0.0.1:3970/）。
+之后你就是代理舰长：每轮先调 get_order 拿工作令（内含块文法教学）；下令落【命令】块、讲态势落【图景】块、管理意图落【撤令】【重派】【绑席】块；终答全文经 submit_reply 交给系统收割入账。签名与验收定夺永远留给我亲手，不代行。
+```
+
+要纯面板形态（看板先行、无悬浮球），让 agent 跑 `stardeck connect zcode --panel`（把 `bridge:false` 写进本机 config，重启 daemon 生效）；这段提示词也内置于首跑门面——「把控制权交给你的 agent」卡一键复制。
+
 ### 常用命令
 
 ```bash

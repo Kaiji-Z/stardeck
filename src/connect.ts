@@ -22,7 +22,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { loadConfig } from './config.ts'
+import { loadConfig, persistConfigPatch } from './config.ts'
 import { mcpBridgePath } from './executor.ts'
 
 export const PROXY_SERVER_NAME = 'stardeck-proxy'
@@ -179,13 +179,29 @@ export interface RunConnectOptions {
   paths?: ConnectPaths
   /** daemon 缺席时的拉起器（打包态=defaultSpawnDaemon 的 detached 自 spawn；测试注入）；缺省=不拉只报。 */
   spawnDaemon?: () => void
+  /** D35 形态 A（纯面板）：把 bridge:false 写进 config 后再拉 daemon——看板先行、
+   *  无悬浮球/聊天面，对话全部发生在用户自己的 agent 里。 */
+  panel?: boolean
 }
+
+// 一条提示词单一源在 src/agent-prompt.ts（零依赖——client bundle 也要吃）。
+export { AGENT_INSTALL_PROMPT_ZH, AGENT_INSTALL_PROMPT_EN, agentInstallPrompt } from './agent-prompt.ts'
+
 
 /** connect 主流程：探活/拉起 daemon → 签席 → 按宿主注册 → 结构化回执。 */
 export async function runConnect(host: string, opts: RunConnectOptions = {}): Promise<ConnectResult> {
+  // D35 形态 A：面板形态先落 config 再拉 daemon（自拉起的 daemon 读到的就是
+  // bridge:false——看板先行无悬浮球）。持久化失败不阻断接入，行内警示。
+  const panelLines: string[] = []
+  if (opts.panel === true) {
+    const out = persistConfigPatch({ bridge: false })
+    panelLines.push(out.ok
+      ? '面板形态已写入 config（bridge=0：看板先行、无悬浮球/聊天面——对话都在你的 agent 里；已在跑的 daemon 重启后生效）。'
+      : `面板形态写入失败（${out.error}）——接入继续，可手工把 "bridge": false 写进 ~/.stardeck/config.json。`)
+  }
   const base = opts.base ?? `http://127.0.0.1:${loadConfig().port}`
   const up = await ensureDaemon(base, opts.spawnDaemon)
-  if (!up.ok) return { ok: false, base, lines: [], error: up.error }
+  if (!up.ok) return { ok: false, base, lines: panelLines, error: up.error }
   let seat: { ok?: boolean; seatId?: string; token?: string; error?: string }
   try {
     seat = await fetch(`${base}/warroom/api/proxy/seats`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) })
@@ -242,7 +258,7 @@ export async function runConnect(host: string, opts: RunConnectOptions = {}): Pr
   }
   lines.push(`打开 ${base}/ 跟代理舰长说话——现在答话的是你的 ${normalized === 'generic' ? 'agent' : normalized}（重启该宿主生效）。`)
   lines.push('token 只此一次：本条注册就是凭证，泄露=他人可代舰长说话。')
-  return { ok: true, base, seatId: seat.seatId, lines }
+  return { ok: true, base, seatId: seat.seatId, lines: [...panelLines, ...lines] }
 }
 
 /** 打包态自拉起器：detached spawn `node bin/stardeck.mjs start`（node 直跑 mjs，

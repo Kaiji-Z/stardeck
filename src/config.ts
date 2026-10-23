@@ -161,6 +161,34 @@ export function persistFleetBinding(executor: string, model: string): { ok: true
   return { ok: true }
 }
 
+/** 通用配置补丁（D35 形态 A：connect --panel 写 bridge:false）。与
+ *  {@link persistFleetBinding} 同纪律：既有键原样保留/坏 JSON 拒绝覆盖/
+ *  tmp+rename 原子。浅合并——patch 里的键覆盖文件值，其余不动。 */
+export function persistConfigPatch(patch: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
+  const path = configFilePath()
+  let base: Record<string, unknown> = {}
+  if (existsSync(path)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, error: `配置文件不是 JSON 对象（${path}）——拒绝覆盖，请手工修复` }
+      }
+      base = { ...(parsed as Record<string, unknown>) }
+    } catch {
+      return { ok: false, error: `配置文件损坏（${path}，JSON 解析失败）——拒绝覆盖，请手工修复` }
+    }
+  }
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    const tmp = `${path}.tmp-${Date.now().toString(36)}`
+    writeFileSync(tmp, `${JSON.stringify({ ...base, ...patch }, null, 2)}\n`, 'utf8')
+    renameSync(tmp, path)
+  } catch (err) {
+    return { ok: false, error: `配置落盘失败（${path}：${err instanceof Error ? err.message : String(err)}）` }
+  }
+  return { ok: true }
+}
+
 
 /** D33 段3：内置 loop 供给段（config.json 顶层 `loop` 键）。key 落盘范围仅此一处
  *  （舰长 2026-10-22 拍板放宽：key 只存本机 config——永不入仓/不进日志/不出 daemon）。 */
