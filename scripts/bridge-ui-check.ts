@@ -227,11 +227,16 @@ try {
   const darkSwitch = await page.locator('.war-settings-drawer .war-switch').count()
   check('设置归拢：板设置抽屉含定夺授权段', authCount > 0 && authGrant > 0, `auth=${authCount} grant=${authGrant}`)
   check('设置归拢：明暗开关在看板抽屉（standalone）', darkSwitch > 0, `switches=${darkSwitch}`)
-  // D33 段3：对话模型配置段（预设/自定义/基址/key 掩码/来源行/测试连接/保存）。
-  const loopcfg = await page.locator('[data-loopcfg]').count()
-  const testBtn = await page.locator('[data-loopcfg-test]').count()
-  const srcLine = await page.locator('[data-loopcfg-source]').first().getAttribute('data-loopcfg-source')
-  check('段3：对话模型配置段在场', loopcfg > 0 && testBtn > 0, `section=${loopcfg} testBtn=${testBtn} keySource=${srcLine}`)
+  // D34 舰长令：模型设置独立弹窗——抽屉里一行摘要+「模型设置…」钮，点开弹窗。
+  const launchBtn = await page.locator('[data-loopcfg-open]').count()
+  const launchSummary = await page.locator('[data-looplaunch-summary]').count()
+  check('D34：抽屉内模型行摘要+打开钮在场', launchBtn === 1 && launchSummary === 1, `btn=${launchBtn} summary=${launchSummary}`)
+  await page.click('[data-loopcfg-open]')
+  await page.waitForSelector('[data-loopdlg]', { timeout: 5000 })
+  const drawerStill = await page.locator('.war-settings-drawer').count()
+  const dlgTest = await page.locator('[data-loopdlg] [data-loopcfg-test]').count()
+  const dlgSave = await page.locator('[data-loopdlg] [data-loopcfg-save]').count()
+  check('D34：模型设置弹窗开在抽屉之上（表单+动作条齐）', drawerStill === 1 && dlgTest === 1 && dlgSave === 1, `drawer=${drawerStill} test=${dlgTest} save=${dlgSave}`)
   await page.evaluate(async () => { await fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.2' }) }) })
   const fleetLoop = await page.evaluate(async () => await (await fetch('/warroom/api/fleet')).json()) as { loopModel?: string; loopKeySource?: string }
   check('段3：loop-config POST 即时生效（/fleet 回读）', fleetLoop.loopModel === 'glm-5.2', `loopModel=${fleetLoop.loopModel} keySource=${fleetLoop.loopKeySource}`)
@@ -247,6 +252,11 @@ try {
   check('D34：点供应商=填表（DeepSeek 基址/模型/领 key 链接/快捷药丸）', dsBase.includes('api.deepseek.com') && dsModel !== '' && getKey === 1 && modelOpts > 0, `base=${dsBase} model=${dsModel} getKey=${getKey} opts=${modelOpts}`)
   const afterDs = await page.evaluate(async () => await (await fetch('/warroom/api/loop-config')).json()) as { model?: string }
   check('D34：统一契约——药丸只填表不落盘（daemon 仍 glm-5.2）', afterDs.model === 'glm-5.2', `daemon model=${afterDs.model}`)
+  // Esc 层序：弹窗后入栈——Esc 关弹窗、抽屉保持开。
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('[data-loopdlg]', { state: 'detached', timeout: 5000 })
+  const drawerAfterEsc = await page.locator('.war-settings-drawer').count()
+  check('D34：Esc 只关弹窗（抽屉保持开）', drawerAfterEsc === 1, `drawer=${drawerAfterEsc}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
   await browser.close()
 } catch (err) {

@@ -2881,8 +2881,15 @@ function DispatchStrip(props: { onCompose: () => void; tab: CmdTab; onTab: (t: C
 
 /** D33 段3：对话模型配置段（独立形态）。自取数（GET/POST loop-config + 测试连接），
  *  key 只进 daemon（掩码/来源呈现，永不回显本体）。 */
-function LoopConfigSection(): ReactNode {
+/** D34 舰长令：模型设置独立弹窗（设置抽屉里点按钮弹出）。完整表单搬进模态：
+ *  useModalLayer 压栈（Esc 只关本层、焦点圈禁+归还）；backdrop 复用
+ *  war-settings-backdrop 类——client-standalone 的浮窗 Esc 守卫认这个类，不误关。
+ *  布局：头（标题+✕）/ 滚动体（供应商药丸栅格→模型+快捷药丸→基址→key+领 key
+ *  链接+清除→来源行）/ 底部动作条（测试连接 | 保存）。 */
+function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
+  const { onClose } = props
   const bc = activeCopy().bridge
+  const layer = useModalLayer(onClose, bc.modelSection)
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [keyInput, setKeyInput] = useState('')
@@ -2901,12 +2908,12 @@ function LoopConfigSection(): ReactNode {
   // 契约统一为「药丸=填表、保存=唯一提交」——供应商/模型药丸都不直写 config
   // （选了供应商没 key 时落盘=存坏配置；批判双轨制 P1 在此一并埋掉）。
   const matchedPreset = presetByBaseUrl(baseUrl)
-  const save = (patch: Record<string, string>, okNote: string = bc.savedNote): void => {
+  const save = (patch: Record<string, string>): void => {
     setBusy(true)
     void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
       .then(r => r.json()).then((d: { saved?: { ok?: boolean; error?: string; keySource?: 'config' | 'env' | 'none' } }) => {
         setBusy(false)
-        setNote(d.saved?.ok === true ? okNote : (d.saved?.error ?? bc.testFail('save')))
+        setNote(d.saved?.ok === true ? bc.savedNote : (d.saved?.error ?? bc.testFail('save')))
         if (d.saved?.keySource !== undefined) setKeySource(d.saved.keySource)
       }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
   }
@@ -2919,61 +2926,94 @@ function LoopConfigSection(): ReactNode {
       setNote(d.probe?.ok === true ? bc.testOk(d.probe.latencyMs ?? 0) : bc.testFail(d.probe?.error ?? 'unknown'))
     }).catch(() => { setBusy(false); setNote(bc.testFail('network')) })
   }
-  return createElement('div', { className: 'war-loopcfg', 'data-loopcfg': '1' },
-    createElement('div', { className: 'war-settings-section' }, bc.modelSection),
-    // 供应商行（zcode templateRules 两步流第一步：选模板→表单自填）。
-    createElement('div', { className: 'war-skin-row', 'data-loopcfg-providers': '1' },
-      ...PROVIDER_PRESETS.map(p => createElement('button', {
-        key: p.id, type: 'button',
-        className: `war-skin-opt${matchedPreset?.id === p.id ? ' on' : ''}`,
-        'aria-pressed': matchedPreset?.id === p.id,
-        'data-loopcfg-preset': p.id,
-        title: p.baseUrl,
-        onClick: () => {
-          setBaseUrl(p.baseUrl)
-          // 换供应商：当前模型不属于新供应商清单就落它的主力 id（填表不提交）。
-          setModel(cur => cur !== '' && p.modelIds.includes(cur) ? cur : p.modelIds[0] ?? '')
-        },
-      }, langId() === 'en' ? p.name.en : p.name.zh)),
-      createElement('button', {
-        type: 'button', className: `war-skin-opt${matchedPreset === null ? ' on' : ''}`, 'aria-pressed': matchedPreset === null,
-        'data-loopcfg-preset': 'custom',
-        onClick: () => { setBaseUrl('') },
-      }, bc.providerCustom)),
-    createElement('label', { className: 'war-loopcfg-field' },
-      createElement('span', { className: 'war-bcard-flabel' }, bc.modelCustom),
-      createElement('input', { type: 'text', className: 'war-bcard-input', value: model, 'data-loopcfg-model': '1', list: 'war-loopcfg-models', onChange: e => { setModel(String(e.target.value ?? '')) } }),
-      matchedPreset !== null ? createElement('datalist', { id: 'war-loopcfg-models' },
-        ...matchedPreset.modelIds.map(id => createElement('option', { key: id, value: id }))) : null),
-    // 模型快捷药丸（zcode builtinModelIds 同义——填表不提交）。
-    matchedPreset !== null ? createElement('div', { className: 'war-skin-row', 'data-loopcfg-modelopts': '1' },
-      ...matchedPreset.modelIds.slice(0, 4).map(id => createElement('button', {
-        key: id, type: 'button', className: `war-skin-opt war-skin-opt-sm${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
-        'data-loopcfg-modelopt': id,
-        onClick: () => { setModel(id) },
-      }, id))) : null,
-    createElement('label', { className: 'war-loopcfg-field' },
-      createElement('span', { className: 'war-bcard-flabel' }, bc.baseUrlLabel),
-      createElement('input', { type: 'text', className: 'war-bcard-input', value: baseUrl, 'data-loopcfg-base': '1', onChange: e => { setBaseUrl(String(e.target.value ?? '')) } })),
-    createElement('label', { className: 'war-loopcfg-field' },
-      createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
-      createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } })),
-    // 领 key 链接（照搬 zcode access.apiKeyManagementUrl）。
-    matchedPreset !== null ? createElement('a', {
-      className: 'war-loopcfg-getkey', href: matchedPreset.keyUrl, target: '_blank', rel: 'noreferrer',
-      'data-loopcfg-getkey': '1',
-    }, bc.getKeyLink) : null,
-    keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null,
-    createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
-    createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { type: 'button', className: 'war-btn primary', disabled: busy, 'data-loopcfg-save': '1', onClick: () => {
-        const patch: Record<string, string> = { model, baseUrl }
-        if (keyInput !== '') patch.apiKey = keyInput
-        save(patch)
-        setKeyInput('')
-      } }, bc.saveBtn),
-      createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-loopcfg-test': '1', onClick: test }, bc.testBtn)),
-    note !== '' ? createElement('p', { className: 'war-settings-note', role: 'status', 'data-loopcfg-note': '1' }, note) : null,
+  return createElement('div', {
+    className: 'war-settings-backdrop war-loopdlg-backdrop',
+    onClick: onClose,
+  },
+    createElement('div', {
+      className: 'war-modal war-loopdlg', 'data-loopdlg': '1',
+      onClick: (e: { stopPropagation: () => void }) => { e.stopPropagation() },
+      ...layer.props,
+      ref: layer.ref,
+    },
+      // 头：标题+✕（粘顶）。
+      createElement('div', { className: 'war-loopdlg-head' },
+        createElement('span', { className: 'war-loopdlg-title' }, bc.modelSection),
+        createElement('button', { type: 'button', className: 'war-btn', 'aria-label': activeCopy().settings.close, 'data-loopdlg-close': '1', onClick: onClose }, '✕')),
+      // 滚动体。
+      createElement('div', { className: 'war-loopdlg-body' },
+        createElement('div', { className: 'war-settings-section' }, bc.providerRow),
+        // 供应商行（zcode templateRules 两步流第一步：选模板→表单自填）。
+        createElement('div', { className: 'war-loopdlg-prov', 'data-loopcfg-providers': '1' },
+          ...PROVIDER_PRESETS.map(p => createElement('button', {
+            key: p.id, type: 'button',
+            className: `war-skin-opt${matchedPreset?.id === p.id ? ' on' : ''}`,
+            'aria-pressed': matchedPreset?.id === p.id,
+            'data-loopcfg-preset': p.id,
+            title: p.baseUrl,
+            onClick: () => {
+              setBaseUrl(p.baseUrl)
+              // 换供应商：当前模型不属于新供应商清单就落它的主力 id（填表不提交）。
+              setModel(cur => cur !== '' && p.modelIds.includes(cur) ? cur : p.modelIds[0] ?? '')
+            },
+          }, langId() === 'en' ? p.name.en : p.name.zh)),
+          createElement('button', {
+            type: 'button', className: `war-skin-opt${matchedPreset === null ? ' on' : ''}`, 'aria-pressed': matchedPreset === null,
+            'data-loopcfg-preset': 'custom',
+            onClick: () => { setBaseUrl('') },
+          }, bc.providerCustom)),
+        createElement('div', { className: 'war-settings-section' }, bc.modelIdLabel),
+        createElement('input', { type: 'text', className: 'war-bcard-input', value: model, 'data-loopcfg-model': '1', list: 'war-loopcfg-models', onChange: e => { setModel(String(e.target.value ?? '')) } }),
+        // 模型快捷药丸（zcode builtinModelIds 同义——填表不提交）。
+        matchedPreset !== null ? createElement('div', { className: 'war-skin-row', 'data-loopcfg-modelopts': '1' },
+          ...matchedPreset.modelIds.slice(0, 4).map(id => createElement('button', {
+            key: id, type: 'button', className: `war-skin-opt war-skin-opt-sm${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
+            'data-loopcfg-modelopt': id,
+            onClick: () => { setModel(id) },
+          }, id))) : null,
+        createElement('div', { className: 'war-settings-section' }, bc.baseUrlLabel),
+        createElement('input', { type: 'text', className: 'war-bcard-input', value: baseUrl, 'data-loopcfg-base': '1', onChange: e => { setBaseUrl(String(e.target.value ?? '')) } }),
+        // key 行：标签+领 key 链接同行（照搬 zcode access.apiKeyManagementUrl）。
+        createElement('div', { className: 'war-loopcfg-keyrow' },
+          createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
+          matchedPreset !== null ? createElement('a', {
+            className: 'war-loopcfg-getkey', href: matchedPreset.keyUrl, target: '_blank', rel: 'noreferrer',
+            'data-loopcfg-getkey': '1',
+          }, bc.getKeyLink) : null),
+        createElement('div', { className: 'war-loopcfg-keyrow' },
+          createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } }),
+          keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null),
+        createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
+        note !== '' ? createElement('p', { className: 'war-settings-note', role: 'status', 'data-loopcfg-note': '1' }, note) : null),
+      // 底部动作条（粘底）：测试连接 | 保存。
+      createElement('div', { className: 'war-loopdlg-foot' },
+        createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-loopcfg-test': '1', onClick: test }, bc.testBtn),
+        createElement('button', { type: 'button', className: 'war-btn primary', disabled: busy, 'data-loopcfg-save': '1', onClick: () => {
+          const patch: Record<string, string> = { model, baseUrl }
+          if (keyInput !== '') patch.apiKey = keyInput
+          save(patch)
+          setKeyInput('')
+        } }, bc.saveBtn)),
+    ),
+  )
+}
+
+/** 设置抽屉里的对话模型行（D34 舰长令收成一行）：当前态摘要+「模型设置…」钮。
+ *  弹窗开合状态归 SettingsDrawer（抽屉先开、弹窗后压 Esc 栈=Esc 先关弹窗）。 */
+function LoopConfigLauncher(props: { onOpen: () => void }): ReactNode {
+  const bc = activeCopy().bridge
+  const [summary, setSummary] = useState<{ model: string; keySource: 'config' | 'env' | 'none' }>({ model: '', keySource: 'none' })
+  useEffect(() => {
+    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; keySource?: 'config' | 'env' | 'none' }) => {
+      setSummary({ model: typeof d.model === 'string' ? d.model : '', keySource: d.keySource ?? 'none' })
+    }).catch(() => { /* daemon 不在——摘要照实空 */ })
+  }, [])
+  return createElement('div', { className: 'war-looplaunch', 'data-looplaunch': '1' },
+    createElement('div', { className: 'war-looplaunch-text' },
+      createElement('span', { className: 'war-set-toggle-label' }, bc.modelSection),
+      createElement('span', { className: 'war-set-toggle-hint', 'data-looplaunch-summary': '1' },
+        summary.model === '' ? bc.keySourceNone : `${summary.model} · ${summary.keySource === 'config' ? bc.keySourceConfig : summary.keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone}`)),
+    createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-open': '1', onClick: props.onOpen }, bc.modelSettingsBtn),
   )
 }
 
@@ -3011,6 +3051,9 @@ function SettingsDrawer(props: {
     try { localStorage.setItem('warroom-standalone-theme', v ? 'dark' : 'light') } catch { /* 隐私模式 */ }
   }
   const layer = useModalLayer(onClose, copy.title)
+  // D34 舰长令：模型设置独立弹窗（弹窗压在抽屉之上——useModalLayer 后入栈，
+  // Esc 只关弹窗不关抽屉）。
+  const [loopDlgOpen, setLoopDlgOpen] = useState(false)
   // 定夺授权（D27）归队（2026-10-21 设置归拢：独立壳迷你弹层退役，全设置唯一
   // 面=看板设置抽屉）。代理舰长在役才有意义；降级态藏段不误导演长。授权对钮
   // 沿用 critique7 等权纪律：不设 primary，禁用侧=当前态，状态句点名。
@@ -3065,9 +3108,8 @@ function SettingsDrawer(props: {
         createElement('span', { className: 'war-settings-title' }, copy.title),
         createElement('button', { className: 'war-btn', onClick: onClose }, copy.close)),
       createElement('div', { className: 'war-settings-body' },
-        // P1 修（D33 critique A 七轮）：对话模型段提到抽屉首位——配置模型是 Operate
-        // 主任务，沉底被折叠线切掉保存/测试钮=「存没存不可见」。
-        standaloneChrome ? createElement(LoopConfigSection) : null,
+        // D34 舰长令：模型设置收成一行摘要+按钮，完整表单在独立弹窗。
+        standaloneChrome ? createElement(LoopConfigLauncher, { onOpen: () => { setLoopDlgOpen(true) } }) : null,
         createElement('div', { className: 'war-settings-section' }, copy.skinSection),
         createElement('div', { className: 'war-skin-row' },
           skinBtn('trek', copy.skinTrek),
@@ -3116,6 +3158,8 @@ function SettingsDrawer(props: {
           createElement('button', { className: 'war-btn', onClick: onRefresh }, copy.refresh)),
       ),
     ),
+    // D34：模型设置弹窗与抽屉平级渲染（不受抽屉 overflow 裁剪；Esc 栈=后开先关）。
+    loopDlgOpen ? createElement(ModelSettingsDialog, { onClose: () => { setLoopDlgOpen(false) } }) : null,
   )
 }
 

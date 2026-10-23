@@ -1205,9 +1205,27 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-loopcfg-field{display:flex;flex-direction:column;gap:2px}
 .war-loopcfg .war-bcard-input{min-height:30px}
 /* D34 供应商中立化：领 key 链接（zcode apiKeyManagementUrl 同义）+小号模型快捷药丸。 */
-.war-loopcfg-getkey{font-size:calc(11px*var(--war-fs));color:var(--war-run-strong);text-decoration:none;align-self:flex-start;padding:1px 0}
+.war-loopcfg-getkey{font-size:calc(11px*var(--war-fs));color:var(--war-run-strong);text-decoration:none;padding:1px 0}
 .war-loopcfg-getkey:hover{text-decoration:underline}
 .war-skin-opt-sm{font-size:calc(10px*var(--war-fs));padding:1px 8px}
+/* D34 舰长令：模型设置独立弹窗——抽屉(z80)之上(z85)，头粘顶/体滚动/脚粘底。 */
+.war-loopdlg-backdrop{z-index:85;display:flex;align-items:center;justify-content:center;padding:24px}
+.war-loopdlg{width:600px;max-width:calc(100vw - 32px);max-height:84vh;padding:0;gap:0}
+.war-loopdlg-head{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--war-border-soft)}
+.war-loopdlg-title{font-weight:600;font-size:calc(13px*var(--war-fs));color:var(--war-text-1)}
+.war-loopdlg-body{flex:1 1 auto;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.war-loopdlg-body .war-settings-section{padding:0}
+.war-loopdlg-prov{display:flex;flex-wrap:wrap;gap:6px}
+.war-loopdlg-prov .war-skin-opt{flex:0 0 auto}
+.war-loopdlg .war-bcard-input{width:100%;box-sizing:border-box}
+.war-loopcfg-keyrow{display:flex;align-items:center;gap:8px;min-width:0}
+.war-loopcfg-keyrow .war-bcard-flabel{flex:1 1 auto;min-width:0}
+.war-loopcfg-keyrow .war-bcard-input{flex:1 1 auto}
+.war-loopdlg-foot{flex:0 0 auto;display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--war-border-soft)}
+/* 抽屉内的一行摘要（弹窗按钮行）。 */
+.war-looplaunch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
+.war-looplaunch-text{display:flex;flex-direction:column;gap:1px;min-width:0}
+.war-looplaunch-text .war-set-toggle-hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
  * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
  * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=

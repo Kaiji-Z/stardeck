@@ -645,8 +645,10 @@ export interface WarCopy {
     modelSection: string
     /** D34 供应商中立化（照搬 zcode 注册表）：供应商行/领 key 链接/自定义档。 */
     providerRow: string
+    modelIdLabel: string
     getKeyLink: string
     providerCustom: string
+    modelSettingsBtn: string
     modelFlash: string
     modelFull: string
     modelCustom: string
@@ -1295,8 +1297,10 @@ export const warCopy: WarCopy = {
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
     providerRow: '供应商',
+    modelIdLabel: '模型 id',
     getKeyLink: '获取密钥 ↗',
     providerCustom: '自定义',
+    modelSettingsBtn: '模型设置…',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
     modelCustom: '自定义 id',
@@ -1936,8 +1940,10 @@ export const plainCopy: WarCopy = {
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
     providerRow: '供应商',
+    modelIdLabel: '模型 id',
     getKeyLink: '获取密钥 ↗',
     providerCustom: '自定义',
+    modelSettingsBtn: '模型设置…',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
     modelCustom: '自定义 id',
