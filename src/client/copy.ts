@@ -645,7 +645,6 @@ export interface WarCopy {
     modelSection: string
     modelFlash: string
     modelFull: string
-    modelHighspeed: string
     modelCustom: string
     baseUrlLabel: string
     keyLabel: string
@@ -1293,7 +1292,6 @@ export const warCopy: WarCopy = {
     modelSection: '对话模型（内置 loop）',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
-    modelHighspeed: 'glm-5.3-highspeed（高速）',
     modelCustom: '自定义 id',
     baseUrlLabel: 'API 基址（OpenAI 兼容）',
     keyLabel: 'API key（只存本机 config.json，不进仓库不进日志）',
@@ -1933,7 +1931,6 @@ export const plainCopy: WarCopy = {
     modelSection: '对话模型（内置 loop）',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
-    modelHighspeed: 'glm-5.3-highspeed（高速）',
     modelCustom: '自定义 id',
     baseUrlLabel: 'API 基址（OpenAI 兼容）',
     keyLabel: 'API key（只存本机 config.json，不进仓库不进日志）',

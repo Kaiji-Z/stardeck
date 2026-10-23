@@ -87,17 +87,17 @@ test('真 daemon：loop-config 三端点 + /fleet 回读 + key 永不出线', { 
     assert.equal(g0.keySource, 'none', '无 key=none')
     assert.equal(g0.model, 'glm-5.3-flash', 'env 模型（STARDECK_PROXY_LOOP_MODEL）')
     // POST：存 key+模型+假网关基址 → config 相位
-    const p1 = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.3-highspeed', baseUrl: `http://127.0.0.1:${gatePort}`, apiKey: 'sk-loop-test' }) }).then(r => r.json()) as { saved: { ok: boolean; keySource: string; error?: string } }
+    const p1 = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.2', baseUrl: `http://127.0.0.1:${gatePort}`, apiKey: 'sk-loop-test' }) }).then(r => r.json()) as { saved: { ok: boolean; keySource: string; error?: string } }
     assert.equal(p1.saved.ok, true, `save ok（${p1.saved.error ?? ''}）`)
     assert.equal(p1.saved.keySource, 'config', '存 key 后来源=config')
     // GET 回读：模型/基址生效；**回执无 key 本体**
     const g1 = await fetch(`${base}/warroom/api/loop-config`).then(r => r.json()) as Record<string, unknown>
-    assert.equal(g1.model, 'glm-5.3-highspeed')
+    assert.equal(g1.model, 'glm-5.2')
     assert.equal(g1.baseUrl, `http://127.0.0.1:${gatePort}`)
     assert.ok(!JSON.stringify(g1).includes('sk-loop-test'), 'key 本体永不出线')
     // /fleet 回读
     const f1 = await fetch(`${base}/warroom/api/fleet`).then(r => r.json()) as { loopModel?: string; loopKeySource?: string }
-    assert.equal(f1.loopModel, 'glm-5.3-highspeed', '/fleet loopModel 回读一致')
+    assert.equal(f1.loopModel, 'glm-5.2', '/fleet loopModel 回读一致')
     assert.equal(f1.loopKeySource, 'config', '/fleet loopKeySource=config')
     // loop-test：假网关 200 → ok+延迟
     const t1 = await fetch(`${base}/warroom/api/loop-test`, { method: 'POST' }).then(r => r.json()) as { probe: { ok: boolean; latencyMs?: number; error?: string } }

@@ -232,9 +232,9 @@ try {
   const testBtn = await page.locator('[data-loopcfg-test]').count()
   const srcLine = await page.locator('[data-loopcfg-source]').first().getAttribute('data-loopcfg-source')
   check('段3：对话模型配置段在场', loopcfg > 0 && testBtn > 0, `section=${loopcfg} testBtn=${testBtn} keySource=${srcLine}`)
-  await page.evaluate(async () => { await fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.3-highspeed' }) }) })
+  await page.evaluate(async () => { await fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.2' }) }) })
   const fleetLoop = await page.evaluate(async () => await (await fetch('/warroom/api/fleet')).json()) as { loopModel?: string; loopKeySource?: string }
-  check('段3：loop-config POST 即时生效（/fleet 回读）', fleetLoop.loopModel === 'glm-5.3-highspeed', `loopModel=${fleetLoop.loopModel} keySource=${fleetLoop.loopKeySource}`)
+  check('段3：loop-config POST 即时生效（/fleet 回读）', fleetLoop.loopModel === 'glm-5.2', `loopModel=${fleetLoop.loopModel} keySource=${fleetLoop.loopKeySource}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
   await browser.close()
 } catch (err) {

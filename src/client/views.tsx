@@ -2896,7 +2896,9 @@ function LoopConfigSection(): ReactNode {
     }).catch(() => { /* daemon 不在——来源行照实 none */ })
   }
   useEffect(refresh, [])
-  const presets: Array<[string, string]> = [[bc.modelFlash, 'glm-5.3-flash'], [bc.modelFull, 'glm-5.3'], [bc.modelHighspeed, 'glm-5.3-highspeed']]
+  // 预设只放当前订阅实测可用的（2026-10-23 实弹：highspeed/flashx 都 429 计划
+  // 门槛外——预设指向不可用模型=陷阱）；其余 id 走自定义框。
+  const presets: Array<[string, string]> = [[bc.modelFlash, 'glm-5.3-flash'], [bc.modelFull, 'glm-5.3']]
   const save = (patch: Record<string, string>, okNote: string = bc.savedNote): void => {
     setBusy(true)
     void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
