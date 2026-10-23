@@ -235,6 +235,18 @@ try {
   await page.evaluate(async () => { await fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'glm-5.2' }) }) })
   const fleetLoop = await page.evaluate(async () => await (await fetch('/warroom/api/fleet')).json()) as { loopModel?: string; loopKeySource?: string }
   check('段3：loop-config POST 即时生效（/fleet 回读）', fleetLoop.loopModel === 'glm-5.2', `loopModel=${fleetLoop.loopModel} keySource=${fleetLoop.loopKeySource}`)
+  // D34 供应商中立化（照搬 zcode 注册表）：供应商药丸/点选填表/领 key 链接/统一契约。
+  const provPills = await page.locator('[data-loopcfg-providers] [data-loopcfg-preset]').count()
+  check('D34：供应商药丸行（8 预设+自定义）', provPills === 9, `pills=${provPills}`)
+  await page.click('[data-loopcfg-preset="deepseek"]')
+  await page.waitForTimeout(200)
+  const dsBase = await page.locator('[data-loopcfg-base]').inputValue()
+  const dsModel = await page.locator('[data-loopcfg-model]').inputValue()
+  const getKey = await page.locator('[data-loopcfg-getkey]').count()
+  const modelOpts = await page.locator('[data-loopcfg-modelopts] [data-loopcfg-modelopt]').count()
+  check('D34：点供应商=填表（DeepSeek 基址/模型/领 key 链接/快捷药丸）', dsBase.includes('api.deepseek.com') && dsModel !== '' && getKey === 1 && modelOpts > 0, `base=${dsBase} model=${dsModel} getKey=${getKey} opts=${modelOpts}`)
+  const afterDs = await page.evaluate(async () => await (await fetch('/warroom/api/loop-config')).json()) as { model?: string }
+  check('D34：统一契约——药丸只填表不落盘（daemon 仍 glm-5.2）', afterDs.model === 'glm-5.2', `daemon model=${afterDs.model}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
   await browser.close()
 } catch (err) {

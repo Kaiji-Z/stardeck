@@ -1204,6 +1204,10 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-loopcfg{display:flex;flex-direction:column;gap:6px;padding-top:2px}
 .war-loopcfg-field{display:flex;flex-direction:column;gap:2px}
 .war-loopcfg .war-bcard-input{min-height:30px}
+/* D34 供应商中立化：领 key 链接（zcode apiKeyManagementUrl 同义）+小号模型快捷药丸。 */
+.war-loopcfg-getkey{font-size:calc(11px*var(--war-fs));color:var(--war-run-strong);text-decoration:none;align-self:flex-start;padding:1px 0}
+.war-loopcfg-getkey:hover{text-decoration:underline}
+.war-skin-opt-sm{font-size:calc(10px*var(--war-fs));padding:1px 8px}
 /* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
  * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
  * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=

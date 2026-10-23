@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, markTalking, regradeCommand, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice } from './data.ts'
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
+import { PROVIDER_PRESETS, presetByBaseUrl } from './provider-presets.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
 import { visitDelta, type VisitDelta } from './visit.ts'
 import { applyBattlefieldMarker, applyGradeMarker, displayTitleOf, stalledOnUserPlan, type ComposerGrade } from './preflight.ts'
@@ -2896,9 +2897,10 @@ function LoopConfigSection(): ReactNode {
     }).catch(() => { /* daemon 不在——来源行照实 none */ })
   }
   useEffect(refresh, [])
-  // 预设只放当前订阅实测可用的（2026-10-23 实弹：highspeed/flashx 都 429 计划
-  // 门槛外——预设指向不可用模型=陷阱）；其余 id 走自定义框。
-  const presets: Array<[string, string]> = [[bc.modelFlash, 'glm-5.3-flash'], [bc.modelFull, 'glm-5.3']]
+  // D34 供应商中立化（照搬 zcode 开源注册表，src/client/provider-presets.ts）：
+  // 契约统一为「药丸=填表、保存=唯一提交」——供应商/模型药丸都不直写 config
+  // （选了供应商没 key 时落盘=存坏配置；批判双轨制 P1 在此一并埋掉）。
+  const matchedPreset = presetByBaseUrl(baseUrl)
   const save = (patch: Record<string, string>, okNote: string = bc.savedNote): void => {
     setBusy(true)
     void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
@@ -2919,23 +2921,48 @@ function LoopConfigSection(): ReactNode {
   }
   return createElement('div', { className: 'war-loopcfg', 'data-loopcfg': '1' },
     createElement('div', { className: 'war-settings-section' }, bc.modelSection),
-    createElement('div', { className: 'war-skin-row' },
-      ...presets.map(([label, id]) => createElement('button', {
-        key: id, type: 'button', className: `war-skin-opt${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
-        // P1 修（D33 critique A）：preset 即点即生效（同抽屉皮肤/语言药丸同约）——
-        // 只落 model 键（daemon 侧 patch 只并所给字段），半截输入的 key 不受牵连；
-        // 回执点名只存了模型（防「已保存」盖住未存的基址/key——复评 P1 修）。
-        onClick: () => { setModel(id); save({ model: id }, bc.presetSavedNote) },
-      }, label))),
+    // 供应商行（zcode templateRules 两步流第一步：选模板→表单自填）。
+    createElement('div', { className: 'war-skin-row', 'data-loopcfg-providers': '1' },
+      ...PROVIDER_PRESETS.map(p => createElement('button', {
+        key: p.id, type: 'button',
+        className: `war-skin-opt${matchedPreset?.id === p.id ? ' on' : ''}`,
+        'aria-pressed': matchedPreset?.id === p.id,
+        'data-loopcfg-preset': p.id,
+        title: p.baseUrl,
+        onClick: () => {
+          setBaseUrl(p.baseUrl)
+          // 换供应商：当前模型不属于新供应商清单就落它的主力 id（填表不提交）。
+          setModel(cur => cur !== '' && p.modelIds.includes(cur) ? cur : p.modelIds[0] ?? '')
+        },
+      }, langId() === 'en' ? p.name.en : p.name.zh)),
+      createElement('button', {
+        type: 'button', className: `war-skin-opt${matchedPreset === null ? ' on' : ''}`, 'aria-pressed': matchedPreset === null,
+        'data-loopcfg-preset': 'custom',
+        onClick: () => { setBaseUrl('') },
+      }, bc.providerCustom)),
     createElement('label', { className: 'war-loopcfg-field' },
       createElement('span', { className: 'war-bcard-flabel' }, bc.modelCustom),
-      createElement('input', { type: 'text', className: 'war-bcard-input', value: model, 'data-loopcfg-model': '1', onChange: e => { setModel(String(e.target.value ?? '')) } })),
+      createElement('input', { type: 'text', className: 'war-bcard-input', value: model, 'data-loopcfg-model': '1', list: 'war-loopcfg-models', onChange: e => { setModel(String(e.target.value ?? '')) } }),
+      matchedPreset !== null ? createElement('datalist', { id: 'war-loopcfg-models' },
+        ...matchedPreset.modelIds.map(id => createElement('option', { key: id, value: id }))) : null),
+    // 模型快捷药丸（zcode builtinModelIds 同义——填表不提交）。
+    matchedPreset !== null ? createElement('div', { className: 'war-skin-row', 'data-loopcfg-modelopts': '1' },
+      ...matchedPreset.modelIds.slice(0, 4).map(id => createElement('button', {
+        key: id, type: 'button', className: `war-skin-opt war-skin-opt-sm${model === id ? ' on' : ''}`, 'aria-pressed': model === id,
+        'data-loopcfg-modelopt': id,
+        onClick: () => { setModel(id) },
+      }, id))) : null,
     createElement('label', { className: 'war-loopcfg-field' },
       createElement('span', { className: 'war-bcard-flabel' }, bc.baseUrlLabel),
       createElement('input', { type: 'text', className: 'war-bcard-input', value: baseUrl, 'data-loopcfg-base': '1', onChange: e => { setBaseUrl(String(e.target.value ?? '')) } })),
     createElement('label', { className: 'war-loopcfg-field' },
       createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
       createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } })),
+    // 领 key 链接（照搬 zcode access.apiKeyManagementUrl）。
+    matchedPreset !== null ? createElement('a', {
+      className: 'war-loopcfg-getkey', href: matchedPreset.keyUrl, target: '_blank', rel: 'noreferrer',
+      'data-loopcfg-getkey': '1',
+    }, bc.getKeyLink) : null,
     keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null,
     createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
     createElement('div', { className: 'war-bcard-actions' },

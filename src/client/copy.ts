@@ -643,6 +643,10 @@ export interface WarCopy {
     newSince: string
     /** D33 段3：对话模型配置段。 */
     modelSection: string
+    /** D34 供应商中立化（照搬 zcode 注册表）：供应商行/领 key 链接/自定义档。 */
+    providerRow: string
+    getKeyLink: string
+    providerCustom: string
     modelFlash: string
     modelFull: string
     modelCustom: string
@@ -1290,6 +1294,9 @@ export const warCopy: WarCopy = {
     dayLabel: (m, d) => `${m}月${d}日`,
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
+    providerRow: '供应商',
+    getKeyLink: '获取密钥 ↗',
+    providerCustom: '自定义',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
     modelCustom: '自定义 id',
@@ -1306,7 +1313,6 @@ export const warCopy: WarCopy = {
     testFail: (e: string) => `连接失败：${e}`,
     saveBtn: '保存',
     savedNote: '已保存（即时生效）',
-    presetSavedNote: '模型已切换并保存（即时生效）——基址/key 改动仍以「保存」为准',
     processing: '代理舰长处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试令',
@@ -1929,6 +1935,9 @@ export const plainCopy: WarCopy = {
     dayLabel: (m, d) => `${m}月${d}日`,
     newSince: '以下为新动静',
     modelSection: '对话模型（内置 loop）',
+    providerRow: '供应商',
+    getKeyLink: '获取密钥 ↗',
+    providerCustom: '自定义',
     modelFlash: 'glm-5.3-flash（省 token）',
     modelFull: 'glm-5.3（全量）',
     modelCustom: '自定义 id',
@@ -1945,7 +1954,6 @@ export const plainCopy: WarCopy = {
     testFail: (e: string) => `连接失败：${e}`,
     saveBtn: '保存',
     savedNote: '已保存（即时生效）',
-    presetSavedNote: '模型已切换并保存（即时生效）——基址/key 改动仍以「保存」为准',
     processing: '代理管家处理中…',
     kbdHint: 'Alt+1/2/3 切视图 · Ctrl+Enter 发送',
     retryBtn: '下重试单',
