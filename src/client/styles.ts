@@ -149,12 +149,12 @@ body[data-ds-dark-theme] .war-root{
   --war-canvas: #0a0b0e;
   --war-zone-bg: #101114;
   --war-card-bg: #16171b;
-  --war-pop-bg: #1c1d22;
+  --war-pop-bg: #202229;
   --war-well-bg: #22242a;
   --war-text-1: #f2f3f5;
   --war-text-2: #a2a5ad;
   --war-text-3: #83868e;
-  --war-border: #2a2c33;
+  --war-border: #30333b;
   --war-border-soft: #1f2127;
   --war-border-hover: #3d4049;
   --war-scrollbar: #3a3d45;
@@ -1157,11 +1157,14 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 .war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);background:var(--war-well-bg)}
-/* D36 流式详情：思考流折叠区（正文未出时展开、正文开始即折叠）——well 微染圆角卡。 */
+/* D36 流式详情：思考流折叠区——D38.1 恒折叠一行（摘要行带尾部实时预览），展开才见全文。 */
 .war-bmsg-reasoning{margin:2px 0;padding:6px 10px;border:1px solid var(--war-border-soft);border-radius:var(--war-r-sm);background:color-mix(in srgb,var(--war-text-1) 3%,transparent);font-size:calc(11.5px*var(--war-fs))}
-.war-bmsg-reasoning summary{cursor:pointer;color:var(--war-text-2);font-weight:600;user-select:none;list-style:none}
+.war-bmsg-reasoning summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;color:var(--war-text-2);user-select:none;list-style:none}
 .war-bmsg-reasoning summary::before{content:'▸ ';font-size:9px;color:var(--war-text-3)}
 .war-bmsg-reasoning[open] summary::before{content:'▾ '}
+.war-bmsg-reasoning-title{flex:none;font-weight:600}
+/* D38.1：折叠态摘要行的尾部一行预览（DSH 同法）——截断省略，展开后在正文看全。 */
+.war-bmsg-reasoning-peek{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--war-text-3);font-weight:400}
 .war-bmsg-reasoning-body{white-space:pre-wrap;color:var(--war-text-3);max-height:160px;overflow-y:auto;margin-top:4px;padding-top:4px;border-top:1px solid var(--war-border-soft);line-height:1.6}
 .war-bmsg-tooldetail{color:var(--war-text-3);font-size:calc(10px*var(--war-fs));max-width:280px;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @keyframes war-msg-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -1299,9 +1302,9 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
  * 会把球撑成满高柱——chrome 竖排 P0 同源）。 */
 .war-tg-ball{position:fixed;right:18px;bottom:18px;z-index:60;width:54px;height:54px;flex:none;
   display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;touch-action:none;
-  background:color-mix(in srgb,var(--war-card-bg) 78%,transparent);
+  background:color-mix(in srgb,var(--war-pop-bg) 90%,transparent);
   backdrop-filter:blur(12px) saturate(1.1);-webkit-backdrop-filter:blur(12px) saturate(1.1);
-  border:1px solid var(--war-border-soft);border-radius:50%;
+  border:1px solid var(--war-border);border-radius:50%;
   box-shadow:var(--war-shadow-2);
   transition:box-shadow .18s var(--war-ease-expo),transform .18s var(--war-ease-expo)}
 .war-tg-ball:hover{box-shadow:var(--war-shadow-3),0 0 0 4px color-mix(in srgb,var(--war-run-border) 22%,transparent);transform:scale(1.05)}
@@ -1313,15 +1316,15 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
   border:2px solid var(--war-canvas)}
 .war-tg-pill{position:fixed;right:18px;bottom:86px;z-index:60;height:auto;width:fit-content;flex:none;
   padding:7px 12px;border-radius:999px;cursor:pointer;
-  background:color-mix(in srgb,var(--war-card-bg) 78%,transparent);
+  background:color-mix(in srgb,var(--war-pop-bg) 90%,transparent);
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border:1px solid var(--war-border-soft);box-shadow:var(--war-shadow-1);
+  border:1px solid var(--war-border);box-shadow:var(--war-shadow-1);
   color:var(--war-text-2);font-family:var(--war-font-code);font-size:calc(13px*var(--war-fs))}
 .war-tg-pill-solo{bottom:18px}
 .war-tg-panel{position:fixed;z-index:70;height:auto;display:flex;flex-direction:column;
-  background:color-mix(in srgb,var(--war-pop-bg) 92%,transparent);
+  background:color-mix(in srgb,var(--war-pop-bg) 95%,transparent);
   backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);
-  border:1px solid var(--war-border-soft);border-radius:var(--war-r-lg);overflow:hidden;
+  border:1px solid var(--war-border);border-radius:var(--war-r-lg);overflow:hidden;
   box-shadow:var(--war-shadow-3);
   resize:both;min-width:360px;min-height:420px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
   animation:war-tg-pop .2s var(--war-ease-expo)}

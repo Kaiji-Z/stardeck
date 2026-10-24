@@ -8,7 +8,7 @@
  * @module stardeck/client/bridge
  */
 
-import { createElement, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createElement, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { answerCommand, abortLoop, closeTask, createCommand, decidePlan, fetchLoopView, saveLoopEffort, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage, type LoopView } from './data.ts'
 import { activeCopy, subscribeSkin, skinId, subscribeLang, langId } from './copy.ts'
 import { collectInbox, type InboxItem } from './inbox.ts'
@@ -127,6 +127,13 @@ function hhmm(iso: string): string {
   if (!Number.isFinite(t)) return ''
   const d = new Date(t)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** D38.1（DSH 同法）：思考尾部一行——折叠态摘要行的实时预览，流式时肉眼可见
+ *  它在想什么；展开才见全文。取最后一行非空文本，空串时摘要行只剩标题。 */
+function reasoningPeek(s: string): string {
+  const lines = s.trimEnd().split('\n')
+  return (lines[lines.length - 1] ?? '').trim()
 }
 
 // ---------- 决策卡组件（各自持编辑态） ----------
@@ -366,8 +373,10 @@ function RetryCard(props: CardProps & { task: BoardTask }): ReactNode {
 // ---------- 聊天面 ----------
 
 /** 舰桥频道聊天面。onOpenBoard=点穿回调（壳层切视图并带聚焦页 hash）。 */
-export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }): ReactNode {
-  const { onOpenBoard } = props
+/** fs=D38.1 字号滑杆值（浮窗壳热跟随）——桥面根是 .war-root（类默认 --war-fs:1
+ *  会掐断面板内联值的继承），与板根同构用内联压类默认。 */
+export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; fs?: number }): ReactNode {
+  const { onOpenBoard, fs } = props
   const { data } = useWar()
   const { messages, error, live, liveReasoning, liveTools } = useBridge()
   useSyncExternalStore(subscribeSkin, skinId)
@@ -596,7 +605,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     if (dock !== null) ro.observe(dock)
     return () => ro.disconnect()
   }, [error, sendNote, actionNote, proxyAway, inbox, dockMore])
-  return createElement('div', { className: 'war-root war-bridge', 'data-bridge': '1', ref: bridgeRootRef },
+  return createElement('div', { className: 'war-root war-bridge', 'data-bridge': '1', ref: bridgeRootRef, style: { '--war-fs': String(fs ?? 1) } as CSSProperties },
     // 头部（标题/格言/关闭）归壳层抽屉（client-standalone war-tg-head）——
     // 本组件只管消息流+决策坞+输入面（2026-10-21 悬浮球改版：三态加速器退役）。
     createElement('div', {
@@ -656,8 +665,12 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         ? createElement('div', { className: 'war-bmsg war-bmsg-agent war-bmsg-live', 'data-bridge-live': '1' },
             createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${loopView !== null && loopView.model !== '' ? `${loopView.model} · ` : ''}${bc.liveTyping}`),
             liveReasoning !== ''
-              ? createElement('details', { className: 'war-bmsg-reasoning', 'data-bridge-reasoning': '1', open: live === '' },
-                  createElement('summary', null, bc.thinkingChars(liveReasoning.length)),
+              ? createElement('details', { className: 'war-bmsg-reasoning', 'data-bridge-reasoning': '1' },
+                  // D38.1：恒折叠为一行（此前正文未出时自动展开=满屏思考）——
+                  // 摘要行带尾部一行实时预览，展开才显示全部（舰长令/DSH 同法）。
+                  createElement('summary', null,
+                    createElement('span', { className: 'war-bmsg-reasoning-title' }, bc.thinkingChars(liveReasoning.length)),
+                    createElement('span', { className: 'war-bmsg-reasoning-peek' }, reasoningPeek(liveReasoning))),
                   createElement('div', { className: 'war-bmsg-reasoning-body' }, liveReasoning))
               : null,
             liveTools.length > 0

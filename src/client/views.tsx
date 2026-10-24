@@ -3203,6 +3203,9 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       const z = Math.min(1.35, Math.max(0.85, Math.round(v * 100) / 100))
       setFontScale(z)
       try { localStorage.setItem('warroom-cfg-zoom', String(z)) } catch { /* 隐私模式 */ }
+      // D38.1：字号滑杆管到浮窗——球/胶囊/面板是板根的平级 .war-root（吃不到
+      // 这里的内联 --war-fs），广播事件让浮件壳热跟随（client-standalone 监听）。
+      try { window.dispatchEvent(new CustomEvent('warroom-fs', { detail: z })) } catch { /* 老宿主忽略 */ }
     }
     // V16.4 critique P2（Alex 画像）：聚焦页状态进 URL hash（#war-cmd-<id>）——
     // 刷新不丢、可贴进笔记发给别人；replaceState 不推历史栈。R2 勘误：hash 归

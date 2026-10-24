@@ -91,6 +91,23 @@ function App(): ReturnType<typeof createElement> {
   const [panelSize, setPanelSize] = useState<PanelSize>(storedPanelSize)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const panelSizeTimer = useRef<number | null>(null)
+  // D38.1：字号滑杆管到浮窗（此前只作用板根——球/胶囊/面板是平级 .war-root，
+  // 默认 --war-fs:1 吃不到滑杆值）。boot 读同款 localStorage，设置抽屉改动经
+  // warroom-fs 事件热跟随（views.tsx applyFontScale 广播）。
+  const [panelFs, setPanelFs] = useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem('warroom-cfg-zoom') ?? '1')
+      return Number.isFinite(v) ? Math.min(1.35, Math.max(0.85, v)) : 1
+    } catch { return 1 }
+  })
+  useEffect(() => {
+    const onFs = (e: Event): void => {
+      const v = (e as CustomEvent<number>).detail
+      if (typeof v === 'number' && Number.isFinite(v)) setPanelFs(Math.min(1.35, Math.max(0.85, v)))
+    }
+    window.addEventListener('warroom-fs', onFs)
+    return () => { window.removeEventListener('warroom-fs', onFs) }
+  }, [])
   useEffect(() => {
     const el = panelRef.current
     if (el === null || typeof ResizeObserver === 'undefined') return
@@ -221,6 +238,7 @@ function App(): ReturnType<typeof createElement> {
     ? createElement('button', {
         className: `war-root war-tg-pill${bridgeOn ? '' : ' war-tg-pill-solo'}`, type: 'button', 'data-bridge-fleet': '1',
         title: bindNote !== '' ? `切换舰队（只影响后续征召）\n${bindNote}` : '切换舰队（只影响后续征召）',
+        style: { '--war-fs': String(panelFs) } as CSSProperties,
         onClick: () => { setPhase('switch') },
       }, activeCopy().head.fleetPill(fleet.active.executor).replace(' ⇄', ''))
     : null
@@ -229,7 +247,7 @@ function App(): ReturnType<typeof createElement> {
     ? createElement('button', {
         className: 'war-root war-tg-ball', type: 'button', 'data-bridge-ball': '1', ref: ballRef,
         'aria-label': bc.title, title: bc.title,
-        style: { right: ballPos.right, bottom: ballPos.bottom },
+        style: { right: ballPos.right, bottom: ballPos.bottom, '--war-fs': String(panelFs) } as CSSProperties,
         onPointerDown: onBallDown, onPointerMove: onBallMove, onPointerUp: onBallUp,
         onClick: onBallClick, onKeyDown: onBallKeyDown,
         // B7 修：双击复位默认位——拖丢的球一次手势回角。
@@ -247,14 +265,14 @@ function App(): ReturnType<typeof createElement> {
   // Telegram 式聊天浮窗：贴球择向弹出（style 见 panelStyle），头（标题+格言+关闭）
   // + 聊天面本体；拖球时随 state 重渲染实时跟随。
   const panel = bridgeOn && chatOpen
-    ? createElement('div', { ref: panelRef, className: 'war-root war-tg-panel', 'data-bridge-panel': '1', role: 'dialog', 'aria-label': bc.title, style: panelStyle(ballPos, panelSize) },
+    ? createElement('div', { ref: panelRef, className: 'war-root war-tg-panel', 'data-bridge-panel': '1', role: 'dialog', 'aria-label': bc.title, style: { ...panelStyle(ballPos, panelSize), '--war-fs': String(panelFs) } as CSSProperties },
         createElement('div', { className: 'war-tg-head' },
           createElement('div', { className: 'war-tg-head-text' },
             createElement('span', { className: 'war-tg-title' }, bc.title),
             // B4 修（D33 bug 表）：头部副行=动态状态（格言移空态欢迎语，420px 永不截断）。
             createElement('span', { className: 'war-tg-motto', 'data-bridge-status': data?.bridge?.proxy === false ? 'off' : 'on' }, data?.bridge?.proxy === false ? bc.statusOff : bc.statusOn)),
           createElement('button', { className: 'war-btn war-tg-close', type: 'button', 'aria-label': activeCopy().settings.close, 'data-bridge-panel-close': '1', onClick: closeChat }, '✕')),
-        createElement('div', { className: 'war-tg-body' }, createElement(BridgePane, { onOpenBoard: openBoard })),
+        createElement('div', { className: 'war-tg-body' }, createElement(BridgePane, { onOpenBoard: openBoard, fs: panelFs })),
       )
     : null
   // 满高挂载：板恒为基座；球/胶囊/浮窗浮于其上。

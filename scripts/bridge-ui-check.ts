@@ -250,6 +250,12 @@ try {
   await page.locator('[data-bridge-input]').fill('慢点答：讲讲舰队现状')
   await page.locator('[data-bridge-send]').click()
   await page.waitForSelector('[data-bridge-reasoning]', { timeout: 20_000 })
+  // D38.1：思考恒折叠一行（摘要行带尾部预览）——不再正文未出时自动展开满屏。
+  const reasoningState = await page.locator('[data-bridge-reasoning]').evaluate(el => ({
+    open: (el as HTMLDetailsElement).open,
+    peek: (el.querySelector('.war-bmsg-reasoning-peek')?.textContent ?? '').length,
+  }))
+  check('D38.1：思考恒折叠一行（不自动展开+尾部预览在场）', reasoningState.open === false && reasoningState.peek > 0, JSON.stringify(reasoningState))
   const stopBtn = await page.locator('[data-bridge-stop]').count()
   check('D37：在途轮发送钮变停止（■）', stopBtn === 1, `stop=${stopBtn}`)
   await page.screenshot({ path: join(evidenceDir, 'd37-live-stop.png'), fullPage: false })
@@ -282,6 +288,18 @@ try {
   const metaColor = await page.locator('.war-bmsg-meta').first().evaluate(el => getComputedStyle(el).color)
   // D38 批判 P1 修后 meta=text-2 实色（text-3 曾 4.3:1、opacity .5 时 2.2:1 不达 AA）。
   check('D38：meta 行弱化但不失读（text-2 实色）', metaColor === 'rgb(162, 165, 173)', metaColor)
+  // D38.1：字号滑杆热跟随到浮窗 + 面板可见描边（暗色层级=更亮表面+读得出的边）。
+  const fsBefore = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).getPropertyValue('--war-fs').trim())
+  await page.evaluate(() => { window.dispatchEvent(new CustomEvent('warroom-fs', { detail: 1.2 })) })
+  await page.waitForTimeout(150)
+  const fsHot = await page.locator('[data-bridge-panel]').evaluate(el => ({
+    fs: getComputedStyle(el).getPropertyValue('--war-fs').trim(),
+    chipFont: getComputedStyle(document.querySelector('[data-bridge-effort]') ?? el).fontSize,
+  }))
+  check('D38.1：字号滑杆管到浮窗（warroom-fs 热跟随）', fsBefore === '1' && fsHot.fs === '1.2' && parseFloat(fsHot.chipFont) > 13, `before=${fsBefore} hot=${JSON.stringify(fsHot)}`)
+  await page.evaluate(() => { window.dispatchEvent(new CustomEvent('warroom-fs', { detail: 1 })) })
+  const panelBorder = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).borderTopColor)
+  check('D38.1：面板可见描边（--war-border 可读档）', panelBorder === 'rgb(48, 51, 59)', panelBorder)
   await page.screenshot({ path: join(evidenceDir, 'd38-panel-dark.png'), fullPage: false })
   // D33 B1：点穿聚焦页浮窗保持开（种子战报卡带「打开聚焦页」钮）。
   const refBtn = page.locator('.war-bref').first()
