@@ -410,6 +410,8 @@ export interface WarCopy {
     clarifyAnswered: string
     /** V21.4 选择题式：点选选项后的拼装提示。 */
     clarifyPickNote: string
+    /** D38.2 批判 P1 半答闸：闸住时的送达钮教学 title。 */
+    clarifyGateHint: string
     /** D23 第四刀真会议室（2026-09-08）：场所化时间轴——场地名/场所铭/历史轮标签/过程态。 */
     meetingTitle: string
     meetingMotto: string
@@ -695,6 +697,12 @@ export interface WarCopy {
     effortFast: string
     effortDeep: string
     effortUnsupported: string
+    /** D38.2 批判复评（双席同扣分点）：键位总览弹层——聚合浮窗真键位。 */
+    keysTitle: string
+    keysSend: string
+    keysEsc: string
+    keysCard: string
+    keysBall: string
     /** D37 上下文占用表（环形表+四段明细面板）。 */
     ctxTitle: string
     ctxTeaching: string
@@ -1105,6 +1113,7 @@ export const warCopy: WarCopy = {
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——大副正带答复开新一轮定案',
     clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
+    clarifyGateHint: '带选项的问题各选一项（或在附言里作答）后可送达',
     meetingTitle: '会议室',
     meetingMotto: '这里只做一件事：把模糊命令收敛成强目标。',
     meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
@@ -1366,6 +1375,11 @@ export const warCopy: WarCopy = {
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
     ctxTitle: '上下文占用',
+    keysTitle: '键位',
+    keysSend: '发送 · Shift+Enter 换行',
+    keysEsc: '关最上层（弹窗→浮窗），焦点回球',
+    keysCard: '决策卡动作——先 Tab 聚焦再回车',
+    keysBall: '双击悬浮球复位球位',
     ctxTeaching: '教学骨架',
     ctxHistory: '对话历史',
     ctxLedger: '账本切片',
@@ -1772,6 +1786,7 @@ export const plainCopy: WarCopy = {
     clarifyCaptain: '舰长答复',
     clarifyAnswered: '答复已入账——规划 Agent正带答复开新一轮定案',
     clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
+    clarifyGateHint: '带选项的问题各选一项（或在附言里作答）后可送达',
     meetingTitle: '会议室',
     meetingMotto: '这里只做一件事：把模糊命令收敛成强目标。',
     meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
@@ -2027,6 +2042,11 @@ export const plainCopy: WarCopy = {
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
     ctxTitle: '上下文占用',
+    keysTitle: '键位',
+    keysSend: '发送 · Shift+Enter 换行',
+    keysEsc: '关最上层（弹窗→浮窗），焦点回球',
+    keysCard: '决策卡动作——先 Tab 聚焦再回车',
+    keysBall: '双击悬浮球复位球位',
     ctxTeaching: '教学骨架',
     ctxHistory: '对话历史',
     ctxLedger: '账本切片',

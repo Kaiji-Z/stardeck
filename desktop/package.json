@@ -1,7 +1,7 @@
 {
   "name": "stardeck-desktop",
   "private": true,
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "stardeck 桌面壳——点击即用的舰队甲板（daemon 内置，窗口+托盘）",
   "main": "src/main.mjs",
   "scripts": {

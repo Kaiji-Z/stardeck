@@ -17,6 +17,7 @@ import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
 import { PROVIDER_PRESETS, presetByBaseUrl } from './provider-presets.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
+import { clarifyCovered, clarifyProse } from './clarify-gate.ts'
 import { visitDelta, type VisitDelta } from './visit.ts'
 import { applyBattlefieldMarker, applyGradeMarker, displayTitleOf, stalledOnUserPlan, type ComposerGrade } from './preflight.ts'
 import { galaxyLayout, garrisonOf, hqMoonPos, HQ_POS, moonPos, StarfieldMap, workspaceCreationOrder } from './starfield.tsx'
@@ -1437,8 +1438,12 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   const [planNote, setPlanNote] = useState('')
   const [answerBusy, setAnswerBusy] = useState(false)
   const [answerNote, setAnswerNote] = useState('')
-  const sendAnswer = (): void => {
+  // D38.2 批判 P1 收口（与 bridge 浮窗卡同闸）：挂起澄清的选项问全被药丸覆盖、
+  // 或拼装码之外另有自由作答，才可送达——半答入账烧澄清轮数预算（CAP=2）。
+  // optionSets 由调用侧传入（挂起澄清数据在会议室段作用域）。
+  const sendAnswer = (optionSets: ReadonlyArray<ReadonlyArray<string>> = []): void => {
     if (answerBusy || answerText.trim() === '') return
+    if (!clarifyCovered(answerText, optionSets) && clarifyProse(answerText) === '') return
     setAnswerBusy(true); setAnswerNote('')
     void answerCommand(cmd.commandId, answerText.trim().slice(0, 2000)).then(out => {
       setAnswerNote(out.ok ? (out.note ?? fp.answerDone) : `${fp.answerFail}${out.error ?? '未知'}`)
@@ -1665,6 +1670,8 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
   const meetingRoom = (k?: string): ReactNode => {
     if (!meetingActive) return null
     const pendingClar = meetingClar !== null && meetingClar.status === 'pending' ? meetingClar : null
+    // D38.2 半答闸的启用态（按钮 disabled+教学 title 用；sendAnswer 侧同判）。
+    const clarSendable = clarifyCovered(answerText, pendingClar?.options ?? []) || clarifyProse(answerText) !== ''
     const finalizing = meetingClar !== null && meetingClar.status === 'answered'
     const hasBrief = cmd.brief !== null && cmd.brief !== undefined
     // 时间轴数据面：轮次史优先；缺席（老投影/夹具）时从活动态合成单轮——
@@ -1755,16 +1762,17 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
                 className: 'war-cd-answer', rows: 3, placeholder: fp.answerPh,
                 value: answerText,
                 onChange: e => { setAnswerText(String(e.target.value ?? '')) },
-                onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer() } },
+                onKeyDown: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendAnswer(pendingClar?.options ?? []) } },
               }),
               (pendingClar?.options?.some(o => o.length > 0) ?? false)
                 ? createElement('p', { className: 'war-clarify-note' }, fp.clarifyPickNote)
                 : null,
               subActions([
                 createElement('button', {
-                  className: 'war-btn primary', type: 'button', disabled: answerBusy || answerText.trim() === '',
-                  title: fp.answerTitle,
-                  onClick: () => { void sendAnswer() },
+                  className: 'war-btn primary', type: 'button',
+                  disabled: answerBusy || answerText.trim() === '' || !clarSendable,
+                  title: clarSendable ? fp.answerTitle : fp.clarifyGateHint,
+                  onClick: () => { void sendAnswer(pendingClar?.options ?? []) },
                 }, answerBusy ? fp.answerBusy : fp.answerBtn),
               ]),
               answerNote !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, answerNote) : null,

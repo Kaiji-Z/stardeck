@@ -8,10 +8,11 @@
  * @module stardeck/client/bridge
  */
 
-import { createElement, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { createElement, Fragment, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { answerCommand, abortLoop, closeTask, createCommand, decidePlan, fetchLoopView, saveLoopEffort, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage, type LoopView } from './data.ts'
 import { activeCopy, subscribeSkin, skinId, subscribeLang, langId } from './copy.ts'
 import { collectInbox, type InboxItem } from './inbox.ts'
+import { clarifyCovered } from './clarify-gate.ts'
 import { reportBody } from './views.tsx'
 
 /** 频道消息 store：与 WarBoardStore 同纪律（SSE rev 驱动 + 15s 兜底轮询）。 */
@@ -146,6 +147,12 @@ interface CardProps {
   onOpenBoard?: (commandId?: string) => void
 }
 
+/** D38.2 kbd 芯片（Raycast 同法）：⏎=Tab 聚焦后回车触发（button 原生行为），
+ *  不骗键位——只挂主动作。 */
+function kbdEnter(): ReactNode {
+  return createElement('span', { className: 'war-kbd', title: 'Tab 聚焦后回车触发' }, '⏎')
+}
+
 function cardHead(label: string, title: string, refId: string): ReactNode {
   return createElement('div', { className: 'war-bcard-head' },
     createElement('span', { className: 'war-bcard-tag' }, label),
@@ -201,10 +208,12 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
     const opt = clar?.options?.[qi]?.[m[2]!.charCodeAt(0) - 65]
       chosen.push(opt !== undefined ? opt : `${m[1]}${m[2]}`)
   }
+  // D38.2 批判 P1 收口：半答闸——带选项的问题全被药丸覆盖、或附言另有自由
+  // 作答，才可送达；只点一问就发=烧澄清轮数预算（CAP=2）。
+  const sendable = clarifyCovered(text, clar?.options ?? []) || note.trim() !== ''
   const sendAnswer = (): void => {
-    const composed = `${text.trim()} ${note.trim()}`.trim()
-    if (composed === '' || busy) return
-    act(item.refId, () => answerCommand(item.refId, composed, 'bridge'))
+    if (!sendable || busy) return
+    act(item.refId, () => answerCommand(item.refId, `${text.trim()} ${note.trim()}`.trim(), 'bridge'))
   }
   return createElement('div', { className: 'war-bcard', 'data-bridge-card': 'clarify' },
     cardHead(bc.cardClarify, item.title, item.refId),
@@ -238,7 +247,9 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
       },
     }),
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || (text.trim() === '' && note.trim() === ''), 'data-bridge-act': 'answer', onClick: sendAnswer }, busy ? bc.actionBusy : fp.answerBtn)),
+      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || !sendable, title: sendable ? undefined : fp.clarifyGateHint, 'data-bridge-act': 'answer', onClick: sendAnswer }, busy ? bc.actionBusy : createElement(Fragment, null, fp.answerBtn, kbdEnter()))),
+    // D38.2 复评 A 席 P3：闸住原因内联常显（教学只在 title=悬停才可见，第一眼不达）。
+    !sendable && !busy ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-gatehint': '1' }, fp.clarifyGateHint) : null,
   )
 }
 
@@ -284,7 +295,7 @@ function SignCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
       }))),
     createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: fp.signNotePh, value: note, onChange: e => { setNoteBoth(String(e.target.value ?? '')) } }),
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || !complete, 'data-bridge-act': 'sign', title: fp.signEditableNote, onClick: () => { decide('approve') } }, busy ? bc.actionBusy : fp.signBtn),
+      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy || !complete, 'data-bridge-act': 'sign', title: fp.signEditableNote, onClick: () => { decide('approve') } }, busy ? bc.actionBusy : createElement(Fragment, null, fp.signBtn, kbdEnter())),
       createElement('button', { className: 'war-btn war-btn-warn', type: 'button', disabled: busy || note.trim() === '', 'data-bridge-act': 'redraft', onClick: () => { decide('reject') } }, fp.redraftBtn)),
   )
 }
@@ -343,7 +354,7 @@ function ReviewCard(props: CardProps & { task: BoardTask }): ReactNode {
       `${checks.length > 0 ? bc.checksPass(passed, checks.length) : bc.checksNone}${ev?.tests !== undefined ? ` · ${bc.testsExit(ev.tests.exitCode)}` : ''}${task.deliverables.length > 0 ? ` · ${bc.deliverables(task.deliverables.length)}` : ''}`),
     createElement('textarea', { className: 'war-bcard-input war-bcard-note', rows: 2, placeholder: bc.knockNotePh, value: knockNote, 'data-bridge-knock-note': '1', onChange: e => { setKnockNoteBoth(String(e.target.value ?? '')) } }),
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: `war-btn${confirming ? ' war-btn-warn' : ' primary'}`, type: 'button', disabled: busy, 'data-bridge-act': 'accept', title: confirming ? fp.acceptConfirm : fp.acceptTitle, onClick: accept }, busy ? bc.actionBusy : confirming ? fp.acceptConfirm : fp.acceptBtn),
+      createElement('button', { className: `war-btn${confirming ? ' war-btn-warn' : ' primary'}`, type: 'button', disabled: busy, 'data-bridge-act': 'accept', title: confirming ? fp.acceptConfirm : fp.acceptTitle, onClick: accept }, busy ? bc.actionBusy : confirming ? fp.acceptConfirm : createElement(Fragment, null, fp.acceptBtn, kbdEnter())),
       createElement('button', { className: 'war-btn war-btn-warn', type: 'button', disabled: busy || knockNote.trim() === '', 'data-bridge-act': 'knock', onClick: knock }, bc.knockBtn)),
   )
 }
@@ -366,7 +377,7 @@ function RetryCard(props: CardProps & { task: BoardTask }): ReactNode {
       ? createElement('p', { className: 'war-bcard-hint' }, task.lastError)
       : null,
     createElement('div', { className: 'war-bcard-actions' },
-      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy, 'data-bridge-act': 'retry', onClick: retry }, busy ? bc.actionBusy : bc.retryBtn)),
+      createElement('button', { className: 'war-btn primary', type: 'button', disabled: busy, 'data-bridge-act': 'retry', onClick: retry }, busy ? bc.actionBusy : createElement(Fragment, null, bc.retryBtn, kbdEnter()))),
   )
 }
 
@@ -407,6 +418,9 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
   // 轮询+每轮入账（消息数变化）即刷——占用表跟着真实组包走。
   const [loopView, setLoopView] = useState<LoopView | null>(null)
   const [ctxOpen, setCtxOpen] = useState(false)
+  // D38.2 批判复评（双席同扣分点）：键位总览弹层——聚合浮窗真键位（教学散点
+  // 各处都有，汇总面此前缺位）。
+  const [keysOpen, setKeysOpen] = useState(false)
   const [effortBusy, setEffortBusy] = useState(false)
   const refreshLoop = (): void => { void fetchLoopView().then(v => { if (v !== null) setLoopView(v) }) }
   useEffect(() => {
@@ -770,6 +784,23 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
             })()
           : null,
           createElement('span', { className: 'war-bridge-toolspring', 'aria-hidden': 'true' }),
+          // D38.2 键位总览：? 芯片弹层（ctx-panel 同法 toggle），行内 kbd 芯片
+          // 只列真键位。
+          createElement('span', { className: 'war-bridge-keyshelp' },
+            createElement('button', {
+              type: 'button', className: 'war-btn war-bridge-chip', 'data-bridge-keys': '1',
+              title: bc.keysTitle, 'aria-expanded': keysOpen, onClick: () => { setKeysOpen(o => !o) },
+            }, '?'),
+            keysOpen
+              ? createElement('div', { className: 'war-keys-panel', 'data-bridge-keyspanel': '1' },
+                  createElement('div', { className: 'war-ctx-panel-title' }, bc.keysTitle),
+                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, '⏎'), bc.keysSend),
+                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, 'Esc'), bc.keysEsc),
+                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, 'Tab→⏎'), bc.keysCard),
+                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, '2×'), bc.keysBall))
+              : null),
+          // D38.2 kbd 芯片（Raycast 同法）：真键位教学——Enter 直发/Shift+Enter 换行。
+          createElement('span', { className: 'war-kbd', title: 'Enter 直发 · Shift+Enter 换行' }, '⏎'),
           // D37→D38 停止钮：在途流（思考/正文/工具任一有流量）或待答轮（末条
           // 是舰长发言）时同位变停止——掐在途轮不降级；无在途=诚实回执。
           liveActive || roundPending

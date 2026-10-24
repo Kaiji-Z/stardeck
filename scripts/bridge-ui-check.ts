@@ -197,6 +197,23 @@ try {
   await page.waitForSelector('[data-bridge-chosen]', { timeout: 5000 })
   const chosenText = await page.locator('[data-bridge-chosen]').textContent()
   check('选项药丸点选：已选摘要人话回显', (chosenText ?? '').includes('工具箱仓'), chosenText ?? 'empty')
+  // D38.2 批判 P1 收口：半答闸——两问只答一问不可送达（防烧澄清轮预算）。
+  const halfGate = await page.locator('[data-bridge-act="answer"]').isDisabled()
+  check('D38.2：澄清半答闸——只答一问禁送达', halfGate === true, `disabled=${halfGate}`)
+  const gateTitle = await page.locator('[data-bridge-act="answer"]').getAttribute('title')
+  check('D38.2：半答闸带教学 title', (gateTitle ?? '').length > 0, gateTitle ?? 'missing')
+  const gateHint = await page.locator('[data-bridge-gatehint]').count()
+  check('D38.2：闸住原因内联常显（非悬停可达，复评 A 席 P3）', gateHint === 1, `hint=${gateHint}`)
+  await page.locator('[data-bridge-card="clarify"] .war-clarify-opt').nth(2).click()
+  await page.waitForTimeout(200)
+  const fullGate = await page.locator('[data-bridge-act="answer"]').isDisabled()
+  check('D38.2：两问全答解锁送达', fullGate === false, `disabled=${fullGate}`)
+  const gateHintGone = await page.locator('[data-bridge-gatehint]').count()
+  check('D38.2：全答后内联提示退场', gateHintGone === 0, `hint=${gateHintGone}`)
+  // D38.2 批判 P2：浮窗开=板层指路 toast 让位（防半遮在面板下诱导误点「忽略」）。
+  const hintCount = await page.locator('.war-map-hint').count()
+  const toastDisplay = hintCount > 0 ? await page.locator('.war-map-hint').first().evaluate(el => getComputedStyle(el).display) : 'absent'
+  check('D38.2：浮窗开=板层指路 toast 让位', toastDisplay === 'none' || toastDisplay === 'absent', `hints=${hintCount} display=${toastDisplay}`)
   await page.screenshot({ path: join(evidenceDir, 'chat-panel.png'), fullPage: false })
   // 关闭钮收浮窗 → 球再开（往返无损）。
   await page.locator('[data-bridge-panel-close]').click()
@@ -287,7 +304,7 @@ try {
   check('D38：状态单槽（提示互斥呈现，≤1 行）', noteCount <= 1, `notes=${noteCount}`)
   const metaColor = await page.locator('.war-bmsg-meta').first().evaluate(el => getComputedStyle(el).color)
   // D38 批判 P1 修后 meta=text-2 实色（text-3 曾 4.3:1、opacity .5 时 2.2:1 不达 AA）。
-  check('D38：meta 行弱化但不失读（text-2 实色）', metaColor === 'rgb(162, 165, 173)', metaColor)
+  check('D38：meta 行弱化但不失读（text-2 实色，D38.2 白α阶梯）', metaColor === 'rgba(255, 255, 255, 0.62)', metaColor)
   // D38.1：字号滑杆热跟随到浮窗 + 面板可见描边（暗色层级=更亮表面+读得出的边）。
   const fsBefore = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).getPropertyValue('--war-fs').trim())
   await page.evaluate(() => { window.dispatchEvent(new CustomEvent('warroom-fs', { detail: 1.2 })) })
@@ -299,7 +316,7 @@ try {
   check('D38.1：字号滑杆管到浮窗（warroom-fs 热跟随）', fsBefore === '1' && fsHot.fs === '1.2' && parseFloat(fsHot.chipFont) > 13, `before=${fsBefore} hot=${JSON.stringify(fsHot)}`)
   await page.evaluate(() => { window.dispatchEvent(new CustomEvent('warroom-fs', { detail: 1 })) })
   const panelBorder = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).borderTopColor)
-  check('D38.1：面板可见描边（--war-border 可读档）', panelBorder === 'rgb(48, 51, 59)', panelBorder)
+  check('D38.2：面板白α描边（Raycast 月光线稿，批判轮提阶 α.14）', panelBorder === 'rgba(255, 255, 255, 0.14)', panelBorder)
   await page.screenshot({ path: join(evidenceDir, 'd38-panel-dark.png'), fullPage: false })
   // D33 B1：点穿聚焦页浮窗保持开（种子战报卡带「打开聚焦页」钮）。
   const refBtn = page.locator('.war-bref').first()
@@ -365,6 +382,30 @@ try {
   const drawerAfterEsc = await page.locator('.war-settings-drawer').count()
   check('D34：Esc 只关弹窗（抽屉保持开）', drawerAfterEsc === 1, `drawer=${drawerAfterEsc}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
+  // ── D38.2 Raycast 语系断言：流光开窗/kbd 芯片/obsidian 面梯 ──
+  // 此前流程已把浮窗关掉（设置抽屉段）——先 Esc 收抽屉（D34 段留开）再点球重开。
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.war-settings-drawer', { state: 'detached', timeout: 5000 })
+  await page.locator('[data-bridge-ball]').click()
+  await page.waitForSelector('[data-bridge-panel]', { timeout: 5000 })
+  await page.waitForTimeout(300)
+  const shine = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el, '::before').animationName)
+  check('D38.2：开窗流光描边动画在场（war-shine）', shine === 'war-shine', shine)
+  const kbdInCard = await page.locator('[data-bridge-card="clarify"] .war-kbd').count()
+  const kbdInToolbar = await page.locator('[data-bridge-toolbar] .war-kbd').count()
+  check('D38.2：kbd 芯片一等公民（澄清卡主钮+composer ⏎）', kbdInCard === 1 && kbdInToolbar === 1, `card=${kbdInCard} toolbar=${kbdInToolbar}`)
+  const obsidian = await page.locator('.war-zone').first().evaluate(el => getComputedStyle(el).backgroundColor)
+  check('D38.2：obsidian 面梯（zone=#121214）', obsidian === 'rgb(18, 18, 20)', obsidian)
+  // D38.2 复评批次：键位总览弹层（? 芯片 toggle，ctx-panel 同法）+ 消息流顶部淡出。
+  await page.locator('[data-bridge-keys]').click()
+  await page.waitForSelector('[data-bridge-keyspanel]', { timeout: 5000 })
+  const keysRows = await page.locator('.war-keys-row').count()
+  check('D38.2：键位总览弹层（? 开·四行真键位，复评双席 #10）', keysRows === 4, `rows=${keysRows}`)
+  await page.locator('[data-bridge-keys]').click()
+  await page.waitForSelector('[data-bridge-keyspanel]', { state: 'detached', timeout: 5000 })
+  const msgsFade = await page.locator('[data-bridge-msgs]').evaluate(el => getComputedStyle(el).maskImage)
+  check('D38.2：消息流顶部 12px 淡出（滚出内容不硬切，复评 B 席 #8）', msgsFade.includes('linear-gradient'), msgsFade)
+  await page.screenshot({ path: join(evidenceDir, 'd382-panel-dark.png'), fullPage: false })
   // D38 浅色往返：显式选浅 → 重载后深色属性摘除（浅色一等公民），截图存证。
   // 重载后落回舰队门（门在时球不渲染）——与开场同法：门在场先点「开始调度」。
   await page.evaluate(() => { try { localStorage.setItem('warroom-standalone-theme', 'light') } catch { /* 隐私模式 */ } })
@@ -377,6 +418,16 @@ try {
   const lightBoot = await page.evaluate(() => !document.body.hasAttribute('data-ds-dark-theme'))
   check('D38：显式选浅=深色属性摘除（浅色往返）', lightBoot, `light=${lightBoot}`)
   await page.screenshot({ path: join(evidenceDir, 'd38-board-light.png'), fullPage: false })
+  // D38.2：浅色面板一等公民——浅色往返后重开浮窗，玻璃配方走 token 自洽
+  // （浅 pop=#fff → 96% 玻璃=近白实底），对照深色黑曜石存证。
+  await page.locator('[data-bridge-ball]').click()
+  await page.waitForSelector('[data-bridge-panel]', { timeout: 5000 })
+  await page.waitForTimeout(300)
+  const lightPanelBg = await page.locator('[data-bridge-panel]').evaluate(el => getComputedStyle(el).backgroundColor)
+  // Chromium 新版把 color-mix 结果序列化为 color(srgb …) 形状——两形状都认。
+  const lightPanelOk = lightPanelBg === 'rgba(255, 255, 255, 0.96)' || lightPanelBg === 'color(srgb 1 1 1 / 0.96)'
+  check('D38.2：浅色面板=近白玻璃（96% pop）', lightPanelOk, lightPanelBg)
+  await page.screenshot({ path: join(evidenceDir, 'd382-panel-light.png'), fullPage: false })
   await browser.close()
 } catch (err) {
   exitCode = 1

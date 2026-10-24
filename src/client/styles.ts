@@ -39,12 +39,13 @@ export const WAR_CSS = `
   --war-text-1: #17191e;
   --war-text-2: #565a63;
   --war-text-3: #6e727b;
-  --war-border: #d8dbe1;
+  --war-border: #ced2da;
   --war-border-soft: #e6e8ed;
   --war-border-hover: #9aa0ab;
   --war-font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --war-font-code: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-  --war-scrollbar: #c9cdd4;
+  --war-scrollbar: #d4d4d8;
+  --war-kbd-bg: rgba(0, 0, 0, .05);
   /* 状态前景（正文级 → 白底 ≥4.5:1 压暗档）+ 饱和档（描边/圆点/彩带） */
   --war-run: #0369a1;
   --war-run-strong: #0284c7;
@@ -146,18 +147,19 @@ export const WAR_CSS = `
  * 全字面覆写（不再依赖宿主 shim 翻转）：近黑五级表面阶 + 亮文字阶 + 信号蓝。
  * 星域/战术盘/日志/链色四组字面值有回退哨兵双向锁死，改值必须锁步 war-tokens.ts。 */
 body[data-ds-dark-theme] .war-root{
-  --war-canvas: #0a0b0e;
-  --war-zone-bg: #101114;
-  --war-card-bg: #16171b;
-  --war-pop-bg: #202229;
-  --war-well-bg: #22242a;
-  --war-text-1: #f2f3f5;
-  --war-text-2: #a2a5ad;
-  --war-text-3: #83868e;
-  --war-border: #30333b;
-  --war-border-soft: #1f2127;
-  --war-border-hover: #3d4049;
-  --war-scrollbar: #3a3d45;
+  --war-canvas: #0d0d0f;
+  --war-zone-bg: #121214;
+  --war-card-bg: #17171a;
+  --war-pop-bg: #1c1c20;
+  --war-well-bg: #232328;
+  --war-text-1: rgba(255, 255, 255, .92);
+  --war-text-2: rgba(255, 255, 255, .62);
+  --war-text-3: rgba(255, 255, 255, .50);
+  --war-border: rgba(255, 255, 255, .14);
+  --war-border-soft: rgba(255, 255, 255, .06);
+  --war-border-hover: rgba(255, 255, 255, .22);
+  --war-scrollbar: rgba(255, 255, 255, .14);
+  --war-kbd-bg: rgba(255, 255, 255, .07);
   /* 状态前景（深底亮档，正文级 ≥4.5:1）+ 饱和档 */
   --war-run: #45c1f7;
   --war-run-strong: #38bdf8;
@@ -170,7 +172,7 @@ body[data-ds-dark-theme] .war-root{
   --war-done-border: #34d399;
   --war-fail-border: #f87171;
   --war-band-task: #38bdf8;
-  --war-band-field: #3d4049;
+  --war-band-field: rgba(255, 255, 255, .16);
   --war-band-report: #34d399;
   --war-action-bg: #0369a1;
   --war-action-edge: #075985;
@@ -186,7 +188,8 @@ body[data-ds-dark-theme] .war-root{
   --war-dock-inset: inset 0 2px 8px rgba(0, 0, 0, .32);
   --war-shadow-1: 0 1px 3px -1px rgba(0, 0, 0, .3);
   --war-shadow-2: 0 4px 12px -2px rgba(0, 0, 0, .4);
-  --war-shadow-3: 0 12px 32px -8px rgba(0, 0, 0, .55);
+  /* shadow-3 带 1px 顶部内高光（Raycast 玻璃幕光照暗示——批判轮 B：纯暗边 1.27:1 不可辨，光边+影双通道）。 */
+  --war-shadow-3: 0 16px 48px -8px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .06);
   --war-backdrop: rgba(0, 0, 0, .55);
   /* 星域场景组 · 深空玻璃/战术雷达皮（哨兵锁值，本轮不动） */
   --war-wz-wait: #ffc24d; --war-wz-battle: #ff6a55; --war-wz-held: #66d4ff; --war-wz-hl: #6fe3ff; --war-wz-active: #5aa9ff; --war-wz-settled: #4cd98e; --war-wz-failed: #ff5f56;
@@ -886,6 +889,8 @@ body[data-ds-dark-theme] .war-root .war-stars{position:absolute;inset:0;
 /* 叠加错乱治（设置归拢目检实抓）：模态层开着时收掉板面指路 toast——toast 的
  * 堆叠上下文与抽屉背板竞争，实证压得过 z80 背板；行为层一刀干净。 */
 body:has(.war-settings-backdrop) .war-map-hint{display:none}
+/* D38.2 批判 P2：浮窗开着=聚焦聊天态，板层指路 toast 半遮在面板下既读不全又诱导误点「忽略」——同设置抽屉先例让位。 */
+body:has([data-bridge-panel]) .war-map-hint{display:none}
 .war-map-hint-main{cursor:pointer;background:none;border:none;font:inherit;color:inherit;text-align:left;padding:0}
 .war-map-hint-main:hover{color:var(--war-run-strong)}
 .war-map-hint-x{flex:none;cursor:pointer;font-size:calc(12px*var(--war-fs));line-height:calc(18px*var(--war-fs));padding:0 8px;border-radius:9px;border:1px solid var(--war-border);color:var(--war-text-2);background:transparent}
@@ -1136,7 +1141,11 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
  * 微染气泡+右下收小尾角、机械战报居中弱化药丸——层级靠对齐与微染，不靠描边。
  * 新消息入场 200ms expo 上浮（motion 纪律：状态传达非装饰）。 */
 .war-bridge{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:transparent;font-family:var(--war-font)}
-.war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px;
+  /* D38.2 复评 B 席：顶部 12px 淡出——滚出内容在面板头下缘硬切半行像渲染伤；
+   * padding 顶 ≥14px，scroll-top=0 时首行不落淡出带。mask 行走纯净性豁免。 */
+  mask-image:linear-gradient(to bottom,transparent 0,#000 12px);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12px)}
 .war-bridge-welcome{color:var(--war-text-2);font-size:calc(13px*var(--war-fs));padding:8px 2px}
 .war-bridge-err{color:var(--war-fail,var(--war-text-2));font-size:calc(12px*var(--war-fs));margin:0}
 .war-bmsg{max-width:100%;display:flex;flex-direction:column;gap:3px;padding:2px 0;animation:war-msg-enter .22s var(--war-ease-expo)}
@@ -1197,7 +1206,12 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bcard-hint{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);margin:0}
 .war-bcard-evi{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
 .war-bcard-body{max-height:180px;overflow-y:auto;font-size:calc(12px*var(--war-fs))}
-.war-bcard-actions{display:flex;gap:8px;flex-wrap:wrap}
+/* D38.2 kbd 芯片（Raycast 灵魂）：mono、4px 圆角、kbd-bg——只挂真实键位
+ * （⏎=Tab 聚焦后回车触发，button/details 原生行为，title 补教学）。 */
+.war-kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:calc(18px*var(--war-fs));padding:0 5px;border-radius:4px;background:var(--war-kbd-bg);color:var(--war-text-2);font-family:var(--war-font-code);font-size:calc(11px*var(--war-fs));line-height:1}
+.war-btn .war-kbd{margin-left:8px}
+/* Raycast 动作条：卡底动作行=发丝分隔+右对齐紧凑钮。 */
+.war-bcard-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--war-border-soft);padding-top:8px}
 /* D38 composer 一体卡：textarea+状态槽+工具条+发送钮一张 16px 圆角卡——状态
  * 提示单槽换内容（旧五层纵叠抖动终局），focus-within 微亮+accent 描边。 */
 .war-bridge-input{padding:8px 14px 14px;display:flex;flex-direction:column}
@@ -1226,7 +1240,11 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-ctx-ring-fg{stroke:var(--war-run-strong,var(--war-text-2));transition:stroke-dasharray .3s ease}
 .war-ctx-ring-fg.warn{stroke:var(--war-fail,var(--war-text-1))}
 .war-bridge-ctx{position:relative;display:inline-flex}
-.war-ctx-panel{position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:190px;background:var(--war-pop-bg);border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:var(--war-shadow-2);display:flex;flex-direction:column;gap:3px}
+.war-ctx-panel{position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:190px;background:color-mix(in srgb,var(--war-pop-bg) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:var(--war-shadow-2);display:flex;flex-direction:column;gap:3px}
+/* D38.2 键位总览弹层（? 芯片）：ctx-panel 同族玻璃，右锚开向上；行内 kbd 芯片。 */
+.war-bridge-keyshelp{position:relative;display:inline-flex}
+.war-keys-panel{position:absolute;bottom:calc(100% + 8px);right:0;z-index:40;min-width:230px;background:color-mix(in srgb,var(--war-pop-bg) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:var(--war-shadow-2);display:flex;flex-direction:column;gap:5px}
+.war-keys-row{display:flex;align-items:center;gap:7px;font-size:calc(12px*var(--war-fs));color:var(--war-text-2);line-height:1.4;text-align:left}
 .war-ctx-panel-title{font-size:calc(11px*var(--war-fs));color:var(--war-text-3);margin-bottom:2px}
 .war-ctx-row{display:flex;justify-content:space-between;gap:10px;font-size:calc(11px*var(--war-fs))}
 .war-ctx-label{color:var(--war-text-2)}
@@ -1322,8 +1340,8 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
   color:var(--war-text-2);font-family:var(--war-font-code);font-size:calc(13px*var(--war-fs))}
 .war-tg-pill-solo{bottom:18px}
 .war-tg-panel{position:fixed;z-index:70;height:auto;display:flex;flex-direction:column;
-  background:color-mix(in srgb,var(--war-pop-bg) 95%,transparent);
-  backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);
+  background:color-mix(in srgb,var(--war-pop-bg) 96%,transparent);
+  backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);
   border:1px solid var(--war-border);border-radius:var(--war-r-lg);overflow:hidden;
   box-shadow:var(--war-shadow-3);
   resize:both;min-width:360px;min-height:420px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
@@ -1332,6 +1350,18 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-tg-panel::after{content:'';position:absolute;right:0;bottom:0;width:18px;height:18px;pointer-events:none;
   background:linear-gradient(135deg,transparent 50%,color-mix(in srgb,var(--war-text-3) 35%,transparent) 50%)}
 @keyframes war-tg-pop{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:none}}
+/* D38.2 开窗流光描边（cmdk 标志性瞬间）：扫光沿 1px 描边环走过一次渐隐，
+ * 落回静态白α边。mask 环用 #000（纯净性豁免），色标全走 token。 */
+.war-tg-panel::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:6;
+  padding:1px;
+  background:linear-gradient(100deg,transparent 25%,var(--war-border-hover) 42%,var(--war-select-name) 50%,var(--war-border-hover) 58%,transparent 75%);
+  background-size:240% 100%;background-position:130% 0;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
+  opacity:0;animation:war-shine 2.8s ease forwards .15s}
+@keyframes war-shine{0%{opacity:1;background-position:130% 0}70%{opacity:1;background-position:-40% 0}100%{opacity:0;background-position:-130% 0}}
+@media (prefers-reduced-motion:reduce){.war-tg-panel::before{animation:none;opacity:0}}
 @media (prefers-reduced-motion:reduce){.war-tg-panel{animation:none}}
 .war-tg-head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--war-border-soft);background:color-mix(in srgb,var(--war-card-bg) 45%,transparent);flex:none}
 .war-tg-head-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
