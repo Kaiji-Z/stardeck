@@ -124,8 +124,12 @@ for (;;) {
       console.log(`desktop installers found: ${installers.join(', ')} — uploading to GitHub Release ${tag}…`)
       let uploaded = false
       for (let attempt = 0; attempt < 10 && !uploaded; attempt++) {
-        // Release 对象可能尚未存在（CI 刚跑完 npm）——先 create（已存在则忽略错）再 upload。
-        sh('gh', ['release', 'create', tag, '--title', tag, '--notes', `stardeck ${next}`, '--clobber'], true)
+        // Release 对象可能尚未存在（CI 只发 npm 不建 Release）——view 探测缺席才
+        // create（--clobber 是 upload 的旗不是 create 的：v0.8.0 实弹事故——create
+        // 带它直接打出用法帮助退非零，被「已存在则忽略」吞掉，upload 才报 not found）。
+        if (sh('gh', ['release', 'view', tag], false) !== 0) {
+          sh('gh', ['release', 'create', tag, '--title', `stardeck v${next}`, '--notes', `stardeck ${next} — 见 CHANGELOG`, '--latest'], true)
+        }
         uploaded = sh('gh', ['release', 'upload', tag, ...installers.map(f => `desktop/release/${f}`), '--clobber'], false) === 0
         if (!uploaded) await new Promise(resolve => setTimeout(resolve, 30_000))
       }
