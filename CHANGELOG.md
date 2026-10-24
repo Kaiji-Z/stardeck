@@ -3,6 +3,22 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
 
+## [0.8.0] - 2026-10-24
+
+### Added（D31-D35 聊天产品级重塑 + 供应商中立 + 两形态降门槛）
+
+- **可拖拽舰桥悬浮球**（D31）：看板恒为基座+Telegram 式贴球聊天浮窗（点按开关/拖动移位持久化/双击复位/键盘可达）；设置唯一面=看板设置抽屉。
+- **内置 BYOK loop 翻默认+流式**（D32）：Z_AI_* 齐即默认开（=0 显式关）；打字机气泡（onTextDelta→daemon live 缓冲→SSE {live} 帧，会话态不进账本）+ 工具步骤 chip（「在查账」可见）。
+- **自带聊天产品级重塑**（D33）：bug 表 8 条全关（Enter 直发/断网 banner/流式帧对称/球复位…）+ lookatstudy 中栏四件移植（回底钮/时间戳弱化/复制钮/未读分隔）+ **模型配置窗**（key 存本机 config.loop——舰长批准的放宽；loop-config/loop-test 端点；测试连接带所见覆盖：未保存先测=测所见不落盘）+ 浮窗可自主调整大小（panel-size 纯模块）；critique 九轮 28→35.5/40 且 P0/P1=0；实弹修复【命令】块解析从宽（flash 散文行尾方差）。
+- **供应商中立化**（D34，照搬 zcode 开源注册表 github.com/zai-org/ZCode config/provider/zcode-builtin.json）：provider-presets.ts 八家预设（Z.ai 编程计划/开放平台、DeepSeek、Kimi、阿里百炼、MiniMax、OpenAI、Anthropic 兼容层）——选供应商=基址自填+模型快捷药丸+**领 key ↗ 直达链接**；**模型设置独立弹窗**（设置抽屉一行摘要+「模型设置…」钮；Esc 只关弹窗；统一契约「药丸=填表、保存=唯一提交」）。glm-5.3-highspeed 预设实弹核验拆除（订阅 429 计划未含——预设只放实测可用 id）。
+- **两形态+一条 prompt**（D35）：**形态 A 纯面板**=`stardeck connect <host> --panel`（bridge:false 落 config，看板先行无悬浮球，对话全在用户 agent 里）；**一条提示词**（src/agent-prompt.ts 单一源，README/首跑门共用）：粘给 agent 即自行 Node 自查→npm i -g stardeck→connect（含宿主自识别回落）→read_digest 自证→stardeck open 开板，附块文法与不代行纪律；首跑门恒在场「把控制权交给你的 agent」卡一键复制。
+
+### Changed
+- README 增「两种形态」对照表与提示词章节；npm 首发提示词正典入口。
+
+### 门禁
+- 测试 532→570（+38：panel-size 7/loop-config 10/bridge-client 20/解析从宽 2/persistConfigPatch+提示词 2/fleet-gate 等）；live 40/40 全相位（含 D33 模型配置三断言+loop 拟令成卡）；verify+矩阵全绿；critique 双隔离子代理九轮闭环在 .goal/evidence/chat-d33/。
+
 ## [0.7.0] - 2026-10-21
 
 ### Added（D30 开箱即用 + 一行接入 + 桌面壳——npm 发布解禁后的第一刀）
