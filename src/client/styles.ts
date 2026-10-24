@@ -254,7 +254,7 @@ body[data-ds-dark-theme] .war-root{
 .war-head-dot.on{background:var(--war-run-border)}
 .war-island-counts{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);white-space:nowrap}
 .war-island-num{font-size:calc(13px*var(--war-fs));font-weight:600;color:var(--war-text-2)} /* V12.2 critique P3：计数数字上权重（第一眼信息反层级倒挂） */
-.war-island-badge{font-size:calc(12px*var(--war-fs));line-height:calc(18px*var(--war-fs));padding:0 8px;border-radius:9px;border:1px solid var(--war-border);color:var(--war-text-2);white-space:nowrap;background:transparent;cursor:pointer;font-family:var(--war-font)} /* V16.4-R3：span→button——显式透明底防 UA ButtonFace 泄漏 */
+.war-island-badge{font-size:calc(12px*var(--war-fs));line-height:calc(18px*var(--war-fs));padding:0 8px;border-radius:9px;border:1px solid var(--war-border);color:var(--war-text-2);white-space:nowrap;background:transparent;cursor:help;text-decoration:underline dotted var(--war-border-hover);text-underline-offset:3px;font-family:var(--war-font)} /* V16.4-R3：span→button——显式透明底防 UA ButtonFace 泄漏；D38.3 批判 P3：单字单位（阅/批/答/试）密排需悬停解义——help 光标+点状下划线把「可悬停」变成看得出的仿语 */
 .war-island-seg{background:none;border:none;font:inherit;color:inherit;cursor:pointer;padding:0}
 .war-island-seg:hover .war-island-num,.war-island-seg:hover{color:var(--war-text-1)}
 .war-flash{outline:2px solid var(--war-focus) !important;outline-offset:1px;border-radius:var(--war-r-sm)} /* V16.4-R3：计数路由的 1.6s 闪显描边 */
@@ -1284,6 +1284,16 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-bmsg-new{align-self:center;font-size:calc(11px*var(--war-fs));color:var(--war-run-strong,var(--war-text-2));padding:2px 12px;margin:4px 0;border-bottom:1px solid color-mix(in srgb,var(--war-run-strong) 45%,transparent);letter-spacing:.06em}
 .war-bmsg-copy{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;opacity:.55}
 .war-bmsg-copy:hover{opacity:1}
+/* D38.3 舰长撤回：悬停显形的小出口（臂起=红字确认态常显）；已撤回话轮=中性药丸。 */
+.war-bmsg-recall{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;border:none;background:none;color:var(--war-text-3);opacity:0;transition:opacity .15s ease}
+.war-bmsg-user:hover .war-bmsg-recall,.war-bmsg-recall:focus-visible,.war-bmsg-recall.arm{opacity:1}
+.war-bmsg-recall.arm{color:var(--war-fail);font-weight:600}
+.war-bmsg-recalled-pill{align-self:flex-end;padding:3px 12px;border-radius:var(--war-r-pill);border:1px dashed var(--war-border);color:var(--war-text-3);font-size:calc(12px*var(--war-fs))}
+/* D38.3 决策卡坞折叠：头行即开关；折叠态只剩头行（新卡到来只变计数不打断）。 */
+.war-bridge-dock.collapsed{overflow:hidden;max-height:none;flex:0 0 auto}
+.war-bridge-dock.collapsed .war-bcard,.war-bridge-dock.collapsed .war-bridge-dock-fade,.war-bridge-dock.collapsed .war-bcard-hint,.war-bridge-dock.collapsed .war-bridge-dock-hintbar{display:none}
+.war-bridge-docktoggle{display:inline-flex;align-items:center;gap:6px;min-height:0;padding:0;border:none;background:none;font:inherit;color:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
+.war-bridge-docktoggle:hover{color:var(--war-text-1)}
 .war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:var(--war-text-1);color:var(--war-canvas);box-shadow:var(--war-shadow-2)}
 .war-bridge{position:relative}
 /* D33 段3：对话模型配置段（抽屉内）。 */
@@ -1363,6 +1373,10 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 @keyframes war-shine{0%{opacity:1;background-position:130% 0}70%{opacity:1;background-position:-40% 0}100%{opacity:0;background-position:-130% 0}}
 @media (prefers-reduced-motion:reduce){.war-tg-panel::before{animation:none;opacity:0}}
 @media (prefers-reduced-motion:reduce){.war-tg-panel{animation:none}}
+/* D38.3 批判残余：浮窗面板边单独提阶（结构描边 sub-3:1 的定点改善——悬浮件
+ * 是最需要边界辨识的面；深色 only，text-1 24% mix≈白α.22，B 席实测 1.95:1 on
+ * canvas / 2.05:1 on pop（+34%）；全局描边维持 .14 定案不动）。 */
+body[data-ds-dark-theme] .war-root .war-tg-panel{border-color:color-mix(in srgb,var(--war-text-1) 24%,transparent)}
 .war-tg-head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--war-border-soft);background:color-mix(in srgb,var(--war-card-bg) 45%,transparent);flex:none}
 .war-tg-head-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .war-tg-title{font-size:calc(15px*var(--war-fs));font-weight:600;color:var(--war-text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

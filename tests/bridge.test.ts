@@ -161,3 +161,37 @@ test('bridge：战报文本截断——长文本 120 字封顶带省略号，换
     assert.ok(!text.includes('\n'), '换行压平')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+// ── D38.3：舰长撤回墓碑（append-only fold 回溯） ──
+
+test('D38.3 撤回墓碑：fold 回溯标记同 ts 的舰长话轮；消息数不变（append-only）', () => {
+  const msgs = foldBridge([
+    { type: 'bridge_user_message', ts: '01', text: '打错话' },
+    { type: 'bridge_agent_message', ts: '02', text: '回' },
+    { type: 'bridge_user_message', ts: '03', text: '重说' },
+    { type: 'bridge_user_message_recalled', ts: '04', targetTs: '01' },
+  ] as BridgeEvent[])
+  assert.equal(msgs.length, 3, '墓碑不产新消息也不删原消息（append-only，只回溯标记）')
+  assert.equal(msgs[0]!.recalled, true)
+  assert.equal(msgs[0]!.text, '打错话', '原文留账（审计可见，渲染层折叠）')
+  assert.equal(msgs[2]!.recalled, undefined, '未撤话轮不带标记')
+})
+
+test('D38.3 撤回幂等：重复墓碑/异仓 ts 不炸不误标', () => {
+  const msgs = foldBridge([
+    { type: 'bridge_user_message', ts: '01', text: 'a' },
+    { type: 'bridge_user_message_recalled', ts: '02', targetTs: '01' },
+    { type: 'bridge_user_message_recalled', ts: '03', targetTs: '01' },
+    { type: 'bridge_user_message_recalled', ts: '04', targetTs: 'ghost' },
+  ] as BridgeEvent[])
+  assert.equal(msgs[0]!.recalled, true)
+  assert.equal(msgs.filter(m => m.kind === 'user').length, 1)
+})
+
+test('D38.3 撤回不改未答判定：撤回的是文本不是事实（已 kick 的轮照常走完）', () => {
+  const pending = bridgeUnanswered(foldBridge([
+    { type: 'bridge_user_message', ts: '01', text: '在吗' },
+    { type: 'bridge_user_message_recalled', ts: '02', targetTs: '01' },
+  ] as BridgeEvent[]))
+  assert.equal(pending.length, 1, '墓碑不改水位——机械层仍待答（诚实语义）')
+})

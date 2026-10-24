@@ -45,6 +45,7 @@ export interface BridgeMessageMeta {
 /** The bridge log's entry union (one JSON line each). */
 export type BridgeEvent =
   | { type: 'bridge_user_message'; ts: string; text: string }
+  | { type: 'bridge_user_message_recalled'; ts: string; /** 被撤话轮的时间戳（消息身份=ts；fold 回溯标记，append-only 墓碑——原行永不改写）。 */ targetTs: string }
   | { type: 'bridge_agent_message'; ts: string; text: string; /** 本轮答复涉及的命令号（点穿用）。 */ commandRefs?: string[]; /** 大副 agentId（staff-<ts36>，逻辑常驻键）。 */ agentId?: string; /** 原生会话号（attach-map 捕获；resume 续跑依据）。 */ sessionId?: string; /** 图景附件（D28：渲染器落盘成功时随话轮入账）。 */ artifact?: BridgeArtifact; /** D37 回合计量（内置 loop 终答随账——条件 spread）。 */ meta?: BridgeMessageMeta }
   | { type: 'bridge_system_notice'; ts: string; noticeKind: BridgeNoticeKind; /** 源事件指纹（幂等键：同键不再入账）。 */ dedupKey: string; text: string; /** 点穿引用（commandId/taskId → 板聚焦页/trace）。 */ refs?: Record<string, string> }
 
@@ -53,6 +54,8 @@ export interface BridgeMessage {
   readonly kind: 'user' | 'agent' | 'system'
   readonly ts: string
   readonly text: string
+  /** 舰长撤回标记（append-only 墓碑——板上显「已撤回」，账本原行留审计）。 */
+  readonly recalled?: boolean
   readonly commandRefs?: readonly string[]
   readonly agentId?: string
   readonly sessionId?: string
@@ -90,6 +93,13 @@ export function foldBridge(events: ReadonlyArray<BridgeEvent>): BridgeMessage[] 
   const out: BridgeMessage[] = []
   for (const e of events) {
     if (e.type === 'bridge_user_message') out.push({ kind: 'user', ts: e.ts, text: e.text })
+    else if (e.type === 'bridge_user_message_recalled') {
+      // 墓碑回溯：标记最后一条同 ts 的舰长话轮（找不到=重复撤回/异仓事件，幂等忽略）。
+      for (let i = out.length - 1; i >= 0; i--) {
+        const m = out[i]
+        if (m !== undefined && m.kind === 'user' && m.ts === e.targetTs) { out[i] = { ...m, recalled: true }; break }
+      }
+    }
     else if (e.type === 'bridge_agent_message') out.push({ kind: 'agent', ts: e.ts, text: e.text, ...(e.commandRefs !== undefined ? { commandRefs: e.commandRefs } : {}), ...(e.agentId !== undefined ? { agentId: e.agentId } : {}), ...(e.sessionId !== undefined ? { sessionId: e.sessionId } : {}), ...(e.artifact !== undefined ? { artifact: e.artifact } : {}), ...(e.meta !== undefined ? { meta: e.meta } : {}) })
     else if (e.type === 'bridge_system_notice') out.push({ kind: 'system', ts: e.ts, text: e.text, noticeKind: e.noticeKind, dedupKey: e.dedupKey, ...(e.refs !== undefined ? { refs: e.refs } : {}) })
   }

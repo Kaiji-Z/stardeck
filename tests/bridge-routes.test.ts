@@ -186,3 +186,32 @@ test('bridge digest：紧凑封顶——commands ≤8、tasks ≤8、标题/战�
     assert.equal(d.stats.commands, 12)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+// ── D38.3：舰长撤回路由（append-only 墓碑） ──
+
+test('D38.3 bridge/recall：只撤自己的 user 话轮——异仓 404/正常 200+recalled/重复 409/agent 不可撤/旗 OFF 404', async () => {
+  const dir = tmpStateDir()
+  const offDir = tmpStateDir()
+  try {
+    const { handler } = makeHandler(dir, { bridgeEnabled: true })
+    // 旗 OFF 面 404（与改前等价）。
+    const off = makeHandler(offDir, {})
+    assert.equal((await call(off.handler, postReq('/warroom/api/bridge/recall', { ts: 'x' }))).code, 404)
+    // 异仓/坏 ts → 404。
+    assert.equal((await call(handler, postReq('/warroom/api/bridge/recall', { ts: 'ghost' }))).code, 404)
+    assert.equal((await call(handler, postReq('/warroom/api/bridge/recall', {}))).code, 404)
+    // 正常撤 → 200，GET 投影带 recalled。
+    const sent = await call(handler, postReq('/warroom/api/bridge/messages', { text: '舰队什么情况？' }))
+    assert.equal(sent.code, 200)
+    const ok = await call(handler, postReq('/warroom/api/bridge/recall', { ts: sent.body.ts }))
+    assert.equal(ok.code, 200)
+    const all = await call(handler, getReq('/warroom/api/bridge/messages'))
+    assert.equal(all.body.messages[0].recalled, true)
+    assert.equal(all.body.messages[0].text, '舰队什么情况？', '原文留账（投影带标记不删内容——读投影红线）')
+    // 重复撤 → 409。
+    assert.equal((await call(handler, postReq('/warroom/api/bridge/recall', { ts: sent.body.ts }))).code, 409)
+    // agent 话轮不可撤（find 只认 user）。
+    appendBridgeEvent(dir, { type: 'bridge_agent_message', ts: 'agent-1', text: '回话' })
+    assert.equal((await call(handler, postReq('/warroom/api/bridge/recall', { ts: 'agent-1' }))).code, 404)
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(offDir, { recursive: true, force: true }) }
+})

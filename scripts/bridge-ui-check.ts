@@ -401,10 +401,51 @@ try {
   await page.waitForSelector('[data-bridge-keyspanel]', { timeout: 5000 })
   const keysRows = await page.locator('.war-keys-row').count()
   check('D38.2：键位总览弹层（? 开·四行真键位，复评双席 #10）', keysRows === 4, `rows=${keysRows}`)
-  await page.locator('[data-bridge-keys]').click()
+  // D38.3 弹层入 Esc 分层链：弹层开着按 Esc 只收弹层，浮窗保持开。
+  await page.keyboard.press('Escape')
   await page.waitForSelector('[data-bridge-keyspanel]', { state: 'detached', timeout: 5000 })
+  const panelStillOpen = await page.locator('[data-bridge-panel]').count()
+  check('D38.3：Esc 只收弹层（浮窗保持开）', panelStillOpen === 1, `panel=${panelStillOpen}`)
+  // 点外即收：开弹层后向 composer 输入面按压（弹层此刻盖在其上——force 派发
+  // =真用户第一击落在面板=开关外按压，应即收）。
+  await page.locator('[data-bridge-keys]').click()
+  await page.waitForSelector('[data-bridge-keyspanel]', { timeout: 5000 })
+  await page.locator('[data-bridge-input]').click({ force: true })
+  const keysGone = await page.waitForSelector('[data-bridge-keyspanel]', { state: 'detached', timeout: 5000 }).then(() => true).catch(() => false)
+  check('D38.3：点弹层外即收', keysGone, `gone=${keysGone}`)
   const msgsFade = await page.locator('[data-bridge-msgs]').evaluate(el => getComputedStyle(el).maskImage)
   check('D38.2：消息流顶部 12px 淡出（滚出内容不硬切，复评 B 席 #8）', msgsFade.includes('linear-gradient'), msgsFade)
+  // ── D38.3 舰长撤回 e2e：发话 → 悬停撤回（臂起确认态） → 再点真撤 → 已撤回药丸 ──
+  await page.locator('[data-bridge-input]').fill('撤回目检：这句话马上撤。')
+  await page.locator('[data-bridge-send]').click()
+  await page.waitForFunction(async () => {
+    const r = await fetch('/warroom/api/bridge/messages')
+    const b = await r.json() as { messages?: Array<{ text: string }> }
+    return (b.messages ?? []).some(m => m.text.includes('撤回目检'))
+  }, { timeout: 10_000 })
+  await page.waitForTimeout(400)
+  const recallBtn = page.locator('[data-bridge-recall]').last()
+  await recallBtn.click()
+  const armText = await recallBtn.textContent()
+  check('D38.3：撤回两步确认（臂起=确认撤回）', (armText ?? '').includes('确认撤回'), armText ?? 'missing')
+  await recallBtn.click()
+  await page.waitForSelector('[data-bridge-recalled]', { timeout: 10_000 })
+  const recalledCount = await page.locator('[data-bridge-recalled]').count()
+  const sentGone = await page.locator('[data-bridge-msgs]').evaluate(el => !(el.textContent ?? '').includes('撤回目检'))
+  check('D38.3：真撤后显已撤回药丸（原文不渲染）', recalledCount >= 1 && sentGone, `pill=${recalledCount} gone=${sentGone}`)
+  await page.screenshot({ path: join(evidenceDir, 'd383-recall.png'), fullPage: false })
+  // ── D38.3 决策卡坞折叠：头行开关+记忆位，验后复位 ──
+  await page.locator('[data-bridge-docktoggle]').click()
+  await page.waitForTimeout(200)
+  const dockCollapsed = await page.locator('.war-bridge-dock.collapsed').count()
+  const cardsHidden = await page.locator('.war-bridge-dock .war-bcard:visible').count()
+  const dockSaved = await page.evaluate(() => localStorage.getItem('warroom-bridge-dock-collapsed'))
+  check('D38.3：坞折叠（卡隐藏+记忆位落盘）', dockCollapsed === 1 && cardsHidden === 0 && dockSaved === '1', `collapsed=${dockCollapsed} cards=${cardsHidden} saved=${dockSaved}`)
+  await page.screenshot({ path: join(evidenceDir, 'd383-dock-collapsed.png'), fullPage: false })
+  await page.locator('[data-bridge-docktoggle]').click()
+  await page.waitForTimeout(200)
+  const dockRestored = await page.locator('.war-bridge-dock.collapsed').count()
+  check('D38.3：坞展开复位', dockRestored === 0, `collapsed=${dockRestored}`)
   await page.screenshot({ path: join(evidenceDir, 'd382-panel-dark.png'), fullPage: false })
   // D38 浅色往返：显式选浅 → 重载后深色属性摘除（浅色一等公民），截图存证。
   // 重载后落回舰队门（门在时球不渲染）——与开场同法：门在场先点「开始调度」。

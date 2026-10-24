@@ -994,6 +994,29 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         send(200, { ok: true, ts })
         return
       }
+      if (r.method === 'POST' && pathname === '/warroom/api/bridge/recall') {
+        // D38.3 舰长撤回自己的话轮（append-only 墓碑：原行永不改写，fold 回溯
+        // 标记——板上显「已撤回」，账本留审计）。只认 user 话轮；代理舰长/
+        // 大副的话轮不可撤。旗 OFF 面 404。撤回不 kick（不触发应答轮）。
+        if (deps.bridgeEnabled !== true) {
+          send(404, { ok: false, error: `路由不存在：${r.method ?? 'POST'} ${pathname}` })
+          return
+        }
+        const body = await readJsonBody(r) as { ts?: unknown }
+        const targetTs = typeof body.ts === 'string' ? body.ts.trim() : ''
+        const hit = loadBridgeMessages(deps.stateDir).find(m => m.kind === 'user' && m.ts === targetTs)
+        if (targetTs === '' || hit === undefined) {
+          send(404, { ok: false, error: '撤回目标不在频道里：只能撤回你自己发过的话。' })
+          return
+        }
+        if (hit.recalled === true) {
+          send(409, { ok: false, error: '这条已经撤回了。' })
+          return
+        }
+        appendBridgeEvent(deps.stateDir, { type: 'bridge_user_message_recalled', ts: new Date().toISOString(), targetTs })
+        send(200, { ok: true, ts: targetTs })
+        return
+      }
       if (r.method === 'GET' && pathname === '/warroom/api/bridge/digest') {
         // D26 舰队全况 digest（经理人的战况底料 + 聊天决策坞的数据面；紧凑封顶）。
         if (deps.bridgeEnabled !== true) {

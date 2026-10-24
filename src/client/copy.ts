@@ -697,6 +697,14 @@ export interface WarCopy {
     effortFast: string
     effortDeep: string
     effortUnsupported: string
+    /** D38.3 舰长撤回（两步确认）+ 决策卡坞折叠。 */
+    recallBtn: string
+    recallConfirm: string
+    recalledLabel: string
+    /** 撤回语义一句话（title——账本留痕、在途应答不召回）。 */
+    recallHint: string
+    dockCollapse: string
+    dockExpand: string
     /** D38.2 批判复评（双席同扣分点）：键位总览弹层——聚合浮窗真键位。 */
     keysTitle: string
     keysSend: string
@@ -705,6 +713,8 @@ export interface WarCopy {
     keysBall: string
     /** D37 上下文占用表（环形表+四段明细面板）。 */
     ctxTitle: string
+    /** D38.3 批判 P3：占用 chip 的新手提示（title 后缀——点开有四段明细）。 */
+    ctxChipHint: string
     ctxTeaching: string
     ctxHistory: string
     ctxLedger: string
@@ -1375,6 +1385,13 @@ export const warCopy: WarCopy = {
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
     ctxTitle: '上下文占用',
+    ctxChipHint: '点击看四段明细',
+    recallBtn: '撤回',
+    recallConfirm: '确认撤回',
+    recalledLabel: '已撤回',
+    recallHint: '撤回（账本留痕 · 应答不召回）',
+    dockCollapse: '收起待办坞',
+    dockExpand: '展开待办坞',
     keysTitle: '键位',
     keysSend: '发送 · Shift+Enter 换行',
     keysEsc: '关最上层（弹窗→浮窗），焦点回球',
@@ -2042,6 +2059,13 @@ export const plainCopy: WarCopy = {
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
     ctxTitle: '上下文占用',
+    ctxChipHint: '点击看四段明细',
+    recallBtn: '撤回',
+    recallConfirm: '确认撤回',
+    recalledLabel: '已撤回',
+    recallHint: '撤回（账本留痕 · 应答不召回）',
+    dockCollapse: '收起待办坞',
+    dockExpand: '展开待办坞',
     keysTitle: '键位',
     keysSend: '发送 · Shift+Enter 换行',
     keysEsc: '关最上层（弹窗→浮窗），焦点回球',

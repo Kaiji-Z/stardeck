@@ -286,6 +286,8 @@ export interface BridgeChatMessage {
   kind: 'user' | 'agent' | 'system'
   ts: string
   text: string
+  /** 舰长撤回标记（append-only 墓碑 fold——板上显「已撤回」）。 */
+  recalled?: boolean
   commandRefs?: string[]
   noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene'
   refs?: Record<string, string>
@@ -348,6 +350,20 @@ export async function sendBridgeMessage(text: string): Promise<{ ok: boolean; ts
       body: JSON.stringify({ text }),
     })
     return await res.json() as { ok: boolean; ts?: string; error?: string }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** D38.3 舰长撤回自己的话轮（append-only 墓碑：板上显「已撤回」，账本留审计）。 */
+export async function recallBridgeMessage(ts: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/warroom/api/bridge/recall', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ts }),
+    })
+    return await res.json() as { ok: boolean; error?: string }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

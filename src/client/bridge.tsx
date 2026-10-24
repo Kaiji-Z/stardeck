@@ -9,7 +9,7 @@
  */
 
 import { createElement, Fragment, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
-import { answerCommand, abortLoop, closeTask, createCommand, decidePlan, fetchLoopView, saveLoopEffort, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage, type LoopView } from './data.ts'
+import { answerCommand, abortLoop, closeTask, createCommand, decidePlan, fetchLoopView, recallBridgeMessage, saveLoopEffort, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage, type LoopView } from './data.ts'
 import { activeCopy, subscribeSkin, skinId, subscribeLang, langId } from './copy.ts'
 import { collectInbox, type InboxItem } from './inbox.ts'
 import { clarifyCovered } from './clarify-gate.ts'
@@ -421,7 +421,34 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
   // D38.2 批判复评（双席同扣分点）：键位总览弹层——聚合浮窗真键位（教学散点
   // 各处都有，汇总面此前缺位）。
   const [keysOpen, setKeysOpen] = useState(false)
+  // D38.3 批判残余收口：舰长撤回（两步确认——首点臂起，再点真撤）+ 决策卡坞
+  // 折叠记忆位（折叠是舰长注意力的意愿表达，新卡到来只变计数不打断）。
+  const [recallArmTs, setRecallArmTs] = useState<string | null>(null)
+  const [dockCollapsed, setDockCollapsed] = useState(() => { try { return localStorage.getItem('warroom-bridge-dock-collapsed') === '1' } catch { return false } })
   const [effortBusy, setEffortBusy] = useState(false)
+  // D38.3 弹层入 Esc 分层链+点外即收：keys/ctx 开着时 Esc 只收弹层（window
+  // 捕获段先于浮窗级 Esc 处理并拦截传播），点弹层外同样收起。
+  useEffect(() => {
+    if (!keysOpen && !ctxOpen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      setKeysOpen(false)
+      setCtxOpen(false)
+      e.stopPropagation()
+      e.preventDefault()
+    }
+    const onPointer = (e: PointerEvent): void => {
+      // 纯读弹层（无内部交互件）：点开关本体之外任何处即收——否则盖住
+      // composer 输入面时点击被面板吞掉，输入被永久挡路（目检实抓）。
+      const t = e.target
+      if (t instanceof Element && t.closest('[data-bridge-keys], [data-bridge-ctx]')) return
+      setKeysOpen(false)
+      setCtxOpen(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('pointerdown', onPointer, true)
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('pointerdown', onPointer, true) }
+  }, [keysOpen, ctxOpen])
   const refreshLoop = (): void => { void fetchLoopView().then(v => { if (v !== null) setLoopView(v) }) }
   useEffect(() => {
     refreshLoop()
@@ -490,6 +517,21 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
     } else setActionNote(out.error ?? bc.actionFail)
   }
 
+  // D38.3 舰长撤回：两步确认（首点臂起 4s 自动松臂防误触，再点真撤）——
+  // append-only 墓碑入账，板上显「已撤回」；失败走 composer 状态单槽诚实出声。
+  const recallMessage = (ts: string): void => {
+    void recallBridgeMessage(ts).then(out => {
+      setRecallArmTs(null)
+      if (out.ok) bridgeStore.refresh()
+      else setSendNote(out.error ?? bc.actionFail)
+    })
+  }
+  const recallClick = (ts: string): void => {
+    if (recallArmTs === ts) { recallMessage(ts); return }
+    setRecallArmTs(ts)
+    setTimeout(() => { setRecallArmTs(cur => cur === ts ? null : cur) }, 4000)
+  }
+
   // ---------- D37 工具条三件（思考档芯条/上下文占用环/停止钮的数据与动作） ----------
   const effortLabelOf = (e: '' | 'fast' | 'deep'): string => e === '' ? bc.effortAuto : e === 'fast' ? bc.effortFast : bc.effortDeep
   const liveActive = live !== '' || liveReasoning !== '' || liveTools.length > 0
@@ -552,11 +594,26 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
         refs.length > 0 ? createElement('div', { className: 'war-bmsg-refs' }, ...refs) : null,
       )
     }
+    // D38.3 撤回态：舰长话轮被撤——内容不渲染（账本原行留审计），显已撤回药丸。
+    if (m.kind === 'user' && m.recalled === true) {
+      return createElement('div', { key: i, className: 'war-bmsg war-bmsg-user war-bmsg-recalled', 'data-bridge-recalled': '1' },
+        createElement('div', { className: 'war-bmsg-meta' }, `${role} · ${hhmm(m.ts)}`),
+        createElement('div', { className: 'war-bmsg-recalled-pill', title: bc.recallHint }, bc.recalledLabel),
+      )
+    }
     return createElement('div', { key: i, className: `war-bmsg war-bmsg-${m.kind}` },
       createElement('div', { className: 'war-bmsg-meta' }, `${role} · ${hhmm(m.ts)}${metaSuffix}`),
       m.kind === 'agent'
         ? createElement('div', { className: 'war-bmsg-body' }, reportBody(m.text))
         : createElement('div', { className: 'war-bmsg-body war-bmsg-plain' }, m.text),
+      // D38.3 撤回出口（仅自己的话轮、悬停显形）：两步确认防误触。
+      m.kind === 'user'
+        ? createElement('button', {
+            className: `war-btn war-bmsg-recall${recallArmTs === m.ts ? ' arm' : ''}`, type: 'button', 'data-bridge-recall': String(i),
+            title: bc.recallHint,
+            onClick: () => { recallClick(m.ts) },
+          }, recallArmTs === m.ts ? bc.recallConfirm : bc.recallBtn)
+        : null,
       m.kind === 'agent'
         ? createElement('button', {
             className: 'war-btn war-bmsg-copy', type: 'button', 'data-bridge-copy': String(i),
@@ -704,14 +761,20 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
           : null,
     ),
     createElement('div', {
-      className: 'war-bridge-dock', 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty',
+      className: `war-bridge-dock${dockCollapsed ? ' collapsed' : ''}`, 'data-bridge-dock': inbox.length > 0 ? 'pending' : 'empty',
       ref: dockRef,
       onScroll: () => {
         const el = dockRef.current
         if (el !== null) setDockMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2)
       },
     },
-      createElement('div', { className: 'war-bridge-dockhead' }, bc.dockTitle),
+      // D38.3 坞折叠：头行即开关（计数随新卡走）；折叠是舰长意愿，新卡不打断。
+      createElement('div', { className: 'war-bridge-dockhead' },
+        createElement('button', {
+          type: 'button', className: 'war-btn war-bridge-docktoggle', 'data-bridge-docktoggle': '1', 'aria-expanded': !dockCollapsed,
+          title: dockCollapsed ? bc.dockExpand : bc.dockCollapse,
+          onClick: () => { setDockCollapsed(c => { const n = !c; try { localStorage.setItem('warroom-bridge-dock-collapsed', n ? '1' : '0') } catch { /* 隐私模式 */ } return n }) },
+        }, `${dockCollapsed ? '▸' : '▾'} ${bc.dockTitle}${inbox.length > 0 ? ` · ${inbox.length}` : ''}`)),
       inbox.length === 0
         ? createElement('p', { className: 'war-bcard-hint' }, bc.dockEmpty)
         : inbox.map(dockCard),
@@ -730,6 +793,9 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
         createElement('textarea', {
           className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
           disabled: proxyAway,
+          // D38.3：聚焦输入面=要说话了——纯读弹层即收（键盘路径的体面；鼠标
+          // 路径由弹层的「开关外按压即收」承担）。
+          onFocus: () => { setKeysOpen(false); setCtxOpen(false) },
           onChange: e => {
             const v = String(e.target.value ?? '')
             draftStore.input = v
@@ -760,7 +826,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
               return createElement('div', { className: 'war-bridge-ctx' },
                 createElement('button', {
                   type: 'button', className: `war-btn war-bridge-chip${warn ? ' warn' : ''}`, 'data-bridge-ctx': pct !== null ? String(pct) : 'na',
-                  title: bc.ctxTitle, 'aria-expanded': ctxOpen, onClick: () => { setCtxOpen(o => !o) },
+                  title: `${bc.ctxTitle} · ${bc.ctxChipHint}`, 'aria-label': bc.ctxTitle, 'aria-expanded': ctxOpen, onClick: () => { setCtxOpen(o => !o) },
                 },
                   createElement('svg', { viewBox: '0 0 16 16', width: 13, height: 13, 'aria-hidden': 'true', className: 'war-ctx-ring' },
                     createElement('circle', { cx: 8, cy: 8, r: 6, className: 'war-ctx-ring-bg', strokeWidth: 2.5, fill: 'none' }),
@@ -789,7 +855,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
           createElement('span', { className: 'war-bridge-keyshelp' },
             createElement('button', {
               type: 'button', className: 'war-btn war-bridge-chip', 'data-bridge-keys': '1',
-              title: bc.keysTitle, 'aria-expanded': keysOpen, onClick: () => { setKeysOpen(o => !o) },
+              title: bc.keysTitle, 'aria-label': bc.keysTitle, 'aria-expanded': keysOpen, onClick: () => { setKeysOpen(o => !o) },
             }, '?'),
             keysOpen
               ? createElement('div', { className: 'war-keys-panel', 'data-bridge-keyspanel': '1' },
@@ -797,7 +863,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void; 
                   createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, '⏎'), bc.keysSend),
                   createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, 'Esc'), bc.keysEsc),
                   createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, 'Tab→⏎'), bc.keysCard),
-                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, '2×'), bc.keysBall))
+                  createElement('div', { className: 'war-keys-row' }, createElement('span', { className: 'war-kbd' }, '双击'), bc.keysBall))
               : null),
           // D38.2 kbd 芯片（Raycast 同法）：真键位教学——Enter 直发/Shift+Enter 换行。
           createElement('span', { className: 'war-kbd', title: 'Enter 直发 · Shift+Enter 换行' }, '⏎'),
