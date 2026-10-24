@@ -236,6 +236,23 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // D33 段2：tools=本轮工具步骤（label+done），lookatstudy tool-call part 同形。
   // D36：reasoning=思考流缓冲（GLM reasoning_content）；tools 增 detail=参数/结果摘要。
   const proxyLive = { seq: 0, text: '', reasoning: '', tools: [] as Array<{ label: string; done: boolean; detail?: string }> }
+  // 对抗审查 B：bridgeKick 防抖计时柄（250ms 窗口吸收连发）。
+  let bridgeKickTimer: ReturnType<typeof setTimeout> | undefined
+  // 对抗审查 B2（回合水位）：watermark=最近一轮**已入账**回话所应答的最新 user ts。
+  // pending=user.ts>watermark——治「轮中后到的话被『末条=agent』时间轴判答=静默
+  // 吞话」（bridgeUnanswered 语义保留给 staff/digest 等旧消费者）。推进点=入账
+  // 成功（失手/spawn 败水位不动→罚时+下轮自然重试，语义与旧版一致）；冷启对齐
+  // 旧语义（末条 agent 之后的 user 才算未答）。
+  const proxyWatermarkInit = (): string => {
+    const messages = loadBridgeMessages(stateDir)
+    const lastAgent = [...messages].reverse().find(m => m.kind === 'agent')
+    if (lastAgent === undefined) return ''
+    const covered = messages.filter(m => m.kind === 'user' && m.ts <= lastAgent.ts)
+    return covered.length > 0 ? covered[covered.length - 1]!.ts : '0'
+  }
+  let proxyWatermark = proxyWatermarkInit()
+  const proxyPendingSince = (messages: ReadonlyArray<{ kind: string; ts: string }>): Array<{ kind: string; ts: string }> =>
+    messages.filter(m => m.kind === 'user' && m.ts > proxyWatermark)
   // D33 段3：loop 供给运行态（config.loop 段优先，env 回落；窗口 POST 即时翻新）。
   const loopCfg: LoopConfig = readLoopConfig()
   const effectiveLoopEnv = () => mergeLoopEnv(process.env, loopCfg)
@@ -304,8 +321,16 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       // D32 流式上屏：SSE 帧随 live.seq 变化推 {live} 打字机文本。
       proxyLive: () => ({ seq: proxyLive.seq, text: proxyLive.text, reasoning: proxyLive.reasoning, tools: proxyLive.tools }),
       /** D36-A 发话即应答：bridge/messages 入账成功即触发一轮 proxyTick（15s
-       *  哨位降为兜底——平均省 7.5s 起步延迟；守卫链防重入）。 */
-      bridgeKick: () => { void proxyTick().catch(err => console.error('[stardeck] 代理舰长 kick 异常（跳过）:', err instanceof Error ? err.message : err)) },
+       *  哨位降为兜底——平均省 7.5s 起步延迟；守卫链防重入）。对抗审查 B：
+       *  250ms 防抖吸收连发——同一串话一轮全吃（无防抖时第一条会同步抢跑组包，
+       *  第二条被挡在包外，只能靠组包锚续跑补轮）。 */
+      bridgeKick: () => {
+        if (bridgeKickTimer !== undefined) clearTimeout(bridgeKickTimer)
+        bridgeKickTimer = setTimeout(() => {
+          bridgeKickTimer = undefined
+          void proxyTick().catch(err => console.error('[stardeck] 代理舰长 kick 异常（跳过）:', err instanceof Error ? err.message : err))
+        }, 250)
+      },
       // D33 段3：模型配置窗口面。key 永不出 daemon——回执只带来源与有无。
       loopConfig: {
         get: () => {
@@ -551,13 +576,14 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // war_close_task（B3 flag-gated 通路，身份=在册代理会话）。代理舰长无工具
   // 面（executor.ts 注入守卫）——写全经收割，账本为源不变。
   let proxySession: ExecutorSession | undefined
+  // 对抗 B2 侧车：在途 CLI 席本轮载荷携带的最新 user ts（收割成功时推进水位）。
+  let proxySessionPackTs: string | undefined
   let proxySpawning = false
   let proxyRetryAfter = 0
   let proxyResumeBusy = false
   let proxyResumeRetryAfter = 0
-  const proxyChatOrder = () => {
-    const messages = loadBridgeMessages(stateDir)
-    const pending = bridgeUnanswered(messages)
+  const proxyChatOrder = () => {    const messages = loadBridgeMessages(stateDir)
+    const pending = proxyPendingSince(messages)
     return {
       pending: pending.map(m => ({ text: m.text, ts: m.ts })),
       history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && pending.some(c => c.ts === m.ts)))),
@@ -724,15 +750,19 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       }
       try {
         await harvestProxyReply(proxySession.agentId)
+        // 对抗 B2（回合水位）：CLI 席收割成功（agent 已入账）→ 水位推进到该轮
+        // 载荷携带的最新 user ts（侧车记录；收割失败/未应答不推进→罚时+重试语义不变）。
+        if (proxySessionPackTs !== undefined) proxyWatermark = proxySessionPackTs
       } catch (err) {
         console.warn(`[stardeck] 代理舰长收割失败（下轮退避重试）：${err instanceof Error ? err.message : String(err)}`)
       }
-      // 没干成活（未答话还在）→ 罚 2 分钟防重试风暴。
-      if (bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0) proxyRetryAfter = Date.now() + 120_000
+      // 没干成活（未答话还在）→ 罚 2 分钟防重试风暴（水位语义：入账没推进=仍在）。
+      if (proxyPendingSince(loadBridgeMessages(stateDir)).length > 0) proxyRetryAfter = Date.now() + 120_000
       proxySession = undefined
+      proxySessionPackTs = undefined
     }
     if (proxySpawning || Date.now() < proxyRetryAfter) return
-    const pendingMsgs = bridgeUnanswered(loadBridgeMessages(stateDir))
+    const pendingMsgs = proxyPendingSince(loadBridgeMessages(stateDir))
     if (pendingMsgs.length === 0) return
     // 逻辑常驻（resume 优先）：上轮代理舰长原生会话在 attach-map 且席别=当前
     // 舰队（opencode/pi 有续跑原语）→ 简报 resume 投递；失败/无答复退避 2 分钟
@@ -745,6 +775,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         const fleetNow = staffExecutorFor(activeExecutor)
         if (entry !== undefined && (entry.executor === 'opencode' || entry.executor === 'pi') && entry.executor === fleetNow) {
           proxyResumeBusy = true
+          const resumePackTs = proxyPendingSince(loadBridgeMessages(stateDir)).at(-1)?.ts
           const brief = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
           void (async () => {
             try {
@@ -764,6 +795,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
                 return
               }
               await harvestProxyReply(lastProxy.agentId!)
+              if (resumePackTs !== undefined) proxyWatermark = resumePackTs
               console.log(`[stardeck] 代理舰长续跑回话入账（${reply.length} 字，resume）`)
             } catch (err) {
               console.warn(`[stardeck] 代理舰长续跑异常（退避后全新回合兜底）：${err instanceof Error ? err.message : String(err)}`)
@@ -783,6 +815,10 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       const loopEnv = effectiveLoopEnv()
       proxySpawning = true
       try {
+        // 对抗审查 B 修（组包锚）：记组包时最新 user ts——终答后若又有新话
+        // （ts>锚）必续跑一轮。不能依赖 bridgeUnanswered：轮中后到的话会被
+        // 「末条=agent」顺带判答=静默吞话（50ms 连发实弹抓到）。
+        const packTs = pendingMsgs[pendingMsgs.length - 1]?.ts ?? ''
         const order = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
         proxyLive.text = ''
         proxyLive.tools = []
@@ -813,14 +849,18 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         // B6 修（D33 bug 表）：先入账后清 live——同一 SSE 帧携 rev+live:''，
         // 客户端一次换页（终答顶替打字机），无空窗无重复。
         await applyProxyReply('proxy-loop', out.text)
+        // 对抗 B2（回合水位）：入账成功才推进——轮中后到的话（ts>packTs）保持
+        // 未答态，续跑/哨位都会再吃，不再被「末条=agent」时间轴判答吞掉。
+        proxyWatermark = packTs
         proxyLive.text = ''
         proxyLive.reasoning = ''
         proxyLive.tools = []
         proxyLive.seq += 1
         console.log(`[stardeck] 代理舰长 loop 回话入账（${out.text.length} 字，${out.steps} 步/工具 ${out.toolCalls} 次）`)
-        // D36-A：应答期间舰长又发了话——不等下一轮 15s 哨位，微延迟续跑一轮
-        //（守卫链天然防重入；只续一层，风暴由 tick 兜底节奏约束）。
-        if (bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0) {
+        // D36-A：组包锚续跑——终答后若存在 ts>packTs 的 user 消息（轮中后到的
+        // 新话，未被本轮载荷携带），不等 15s 哨位立即续跑一轮吃掉（守卫链防重入）。
+        const arrivedLate = loadBridgeMessages(stateDir).some(m => m.kind === 'user' && m.ts > packTs)
+        if (arrivedLate) {
           setTimeout(() => { void proxyTick().catch(err => console.error('[stardeck] 代理舰长续跑异常（跳过）:', err instanceof Error ? err.message : err)) }, 400)
         }
         return
@@ -841,6 +881,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       const fleetNow = staffExecutorFor(activeExecutor)
       if (fleetNow !== activeExecutor) console.log(`[stardeck] 代理舰长随舰队：${activeExecutor} 实弹受阻，本轮代理舰长由 ${fleetNow} 代跑`)
       proxyAgentIds.add(agentId)
+      // 对抗 B2 侧车：本 CLI 席轮载荷的最新 user ts（收割成功时推进水位）。
+      proxySessionPackTs = pendingMsgs[pendingMsgs.length - 1]?.ts
       proxySession = await spawnStaffAgent({
         brief: proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime }),
         workspacePath: join(stateDir, 'proxy'),
