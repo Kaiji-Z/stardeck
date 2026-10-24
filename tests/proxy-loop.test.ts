@@ -23,8 +23,10 @@ test('旗面解析（纯）：key 齐即默认开（D32 翻默认）、0 显式�
   assert.equal(proxyLoopEnvOf({ STARDECK_PROXY_LOOP: '1', Z_AI_BASE_URL: 'https://x', Z_AI_API_KEY: 'k' }).model, 'glm-5.3', '缺省 glm-5.3')
 })
 
-/** 手写 OpenAI 兼容 SSE 服：按脚本逐请求应答，收录请求体供断言。 */
-function scriptedSseServer(script: Array<(body: Record<string, unknown>) => { chunks: string[]; finish: string | null }>): Promise<{ server: Server; url: Promise<string>; bodies: Promise<Array<Record<string, unknown>>> }> {
+/** 手写 OpenAI 兼容 SSE 服：按脚本逐请求应答，收录请求体供断言。
+ *  chunk 带 __raw 键=整帧原样透传（usage 收尾帧等非 choices 形状用）；
+ *  tail=finish 帧之后、[DONE] 之前的原样帧（真实 usage 收尾序：finish→usage→DONE）。 */
+function scriptedSseServer(script: Array<(body: Record<string, unknown>) => { chunks: Array<Record<string, unknown>>; finish: string | null; tail?: Array<Record<string, unknown>> }>): Promise<{ server: Server; url: Promise<string>; bodies: Promise<Array<Record<string, unknown>>> }> {
   const bodies: Array<Record<string, unknown>> = []
   let reqNo = 0
   let resolveBodies: (v: Array<Record<string, unknown>>) => void = () => {}
@@ -40,12 +42,14 @@ function scriptedSseServer(script: Array<(body: Record<string, unknown>) => { ch
       reqNo++
       resolveBodies(bodies)
       resolveUrl(`http://127.0.0.1:${(req.socket.localPort ?? 0)}`)
-      const { chunks, finish } = step(bodies[bodies.length - 1]!)
+      const { chunks, finish, tail } = step(bodies[bodies.length - 1]!)
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
       for (const c of chunks) {
-        res.write(`data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'glm-test', choices: [{ index: 0, delta: c, finish_reason: null }] })}\n\n`)
+        if ('__raw' in c) res.write(`data: ${JSON.stringify(c.__raw)}\n\n`)
+        else res.write(`data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'glm-test', choices: [{ index: 0, delta: c, finish_reason: null }] })}\n\n`)
       }
       res.write(`data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'glm-test', choices: [{ index: 0, delta: {}, finish_reason: finish }] })}\n\n`)
+      for (const t of tail ?? []) res.write(`data: ${JSON.stringify(t)}\n\n`)
       res.write('data: [DONE]\n\n')
       res.end()
     })
@@ -169,4 +173,91 @@ test('summarizeStepDetail：压平空白/截断/非法对象不炸', async () =>
   assert.equal(summarizeStepDetail('  a\n b  ', 60), 'a b')
   const cyc: Record<string, unknown> = {}; cyc.self = cyc
   assert.ok(typeof summarizeStepDetail(cyc, 10) === 'string', '循环引用走 String() 兜底')
+})
+
+// ── D37：思考强度 bodyPatch / usage 计量 / 手动停止 / 方言嗅探 ──
+
+test('D37 bodyPatch：GLM 家族（模型串嗅探）effort=fast 打 thinking disabled、deep 打 enabled；自动零干预', { timeout: 30_000 }, async () => {
+  const { server, url, bodies } = scriptedSseServer([
+    () => ({ chunks: [{ role: 'assistant', content: '快答。' }], finish: 'stop' }),
+    () => ({ chunks: [{ role: 'assistant', content: '深答。' }], finish: 'stop' }),
+    () => ({ chunks: [{ role: 'assistant', content: '自动。' }], finish: 'stop' }),
+  ])
+  try {
+    const base = await url
+    const reads = { board: async () => ({}), digest: async () => ({}), ledger: async () => ({}) }
+    await runProxyLoop('问1', { enabled: true, baseUrl: base, apiKey: 'k', model: 'glm-5.3', effort: 'fast' }, { reads })
+    await runProxyLoop('问2', { enabled: true, baseUrl: base, apiKey: 'k', model: 'glm-5.3', effort: 'deep' }, { reads })
+    await runProxyLoop('问3', { enabled: true, baseUrl: base, apiKey: 'k', model: 'glm-5.3', effort: '' }, { reads })
+    const got = await bodies
+    assert.deepEqual(got[0]!.thinking, { type: 'disabled' }, 'fast=关思考')
+    assert.equal(got[0]!.reasoning_effort, 'low', 'fast 附 reasoning_effort low')
+    assert.deepEqual(got[1]!.thinking, { type: 'enabled' }, 'deep=开思考')
+    assert.equal(got[1]!.reasoning_effort, undefined, 'deep 不打 effort 字段')
+    assert.equal(got[2]!.thinking, undefined, '自动零干预——请求体不带方言补丁')
+  } finally { server.close() }
+})
+
+test('D37 bodyPatch：非方言家族（模型串也不沾）零干预', { timeout: 30_000 }, async () => {
+  const { server, url, bodies } = scriptedSseServer([
+    () => ({ chunks: [{ role: 'assistant', content: '答。' }], finish: 'stop' }),
+  ])
+  try {
+    await runProxyLoop('问', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'some-other-model', effort: 'fast' }, {
+      reads: { board: async () => ({}), digest: async () => ({}), ledger: async () => ({}) },
+    })
+    const got = await bodies
+    assert.equal(got[0]!.thinking, undefined, '非方言家族不硬打补丁（档位静默自动）')
+  } finally { server.close() }
+})
+
+test('D37 usage：includeUsage 请求体带 stream_options；usage 收尾帧解析进回执（含 reasoningTokens）', { timeout: 30_000 }, async () => {
+  const { server, url, bodies } = scriptedSseServer([
+    () => ({
+      chunks: [
+        { role: 'assistant', reasoning_content: '想一想' },
+        { content: '答完了。' },
+      ],
+      finish: 'stop',
+      // 真实收尾序（finish→usage→DONE）：usage 帧空 choices、带 prompt/completion_tokens。
+      tail: [{ id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'glm-test', choices: [], usage: { prompt_tokens: 11, completion_tokens: 7, completion_tokens_details: { reasoning_tokens: 3 } } }],
+    }),
+  ])
+  try {
+    let reasoning = ''
+    const out = await runProxyLoop('问', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'glm-test' }, {
+      reads: { board: async () => ({}), digest: async () => ({}), ledger: async () => ({}) },
+      onReasoningDelta: d => { reasoning += d },
+    })
+    assert.equal(reasoning, '想一想')
+    assert.deepEqual(out.usage, { promptTokens: 11, completionTokens: 7, reasoningTokens: 3 }, `usage 采集：${JSON.stringify(out.usage)}`)
+    assert.ok(out.elapsedMs >= 0, '耗时在场')
+    const got = await bodies
+    assert.deepEqual(got[0]!.stream_options, { include_usage: true }, 'includeUsage 打开——网关回报 usage 的前提')
+  } finally { server.close() }
+})
+
+test('D37 abort：外部 signal 掐断在途轮（runProxyLoop 抛错由调用侧按意图分诊）', { timeout: 30_000 }, async () => {
+  const { server, url } = scriptedSseServer([
+    () => ({ chunks: [{ role: 'assistant', content: '不该出全——' }], finish: 'stop' }),
+  ])
+  try {
+    const ctrl = new AbortController()
+    ctrl.abort() // 预掐：SDK 应在发流前后即弃
+    await assert.rejects(
+      runProxyLoop('问', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'glm-test' }, {
+        reads: { board: async () => ({}), digest: async () => ({}), ledger: async () => ({}) },
+        abortSignal: ctrl.signal,
+      }),
+      () => true,
+    )
+  } finally { server.close() }
+})
+
+test('D37 thinkingDialectSupported：baseUrl/模型串双源嗅探', async () => {
+  const { thinkingDialectSupported } = await import('../src/proxy-loop.ts')
+  assert.equal(thinkingDialectSupported('https://api.z.ai/api/coding/paas/v4', 'glm-5.3'), true, 'z.ai 基址')
+  assert.equal(thinkingDialectSupported('http://127.0.0.1:3975/v1', 'glm-5.3'), true, '自建代理端点靠模型串识别')
+  assert.equal(thinkingDialectSupported('http://127.0.0.1:3975/v1', 'some-model'), false, '双源都不沾=不支持')
+  assert.equal(thinkingDialectSupported('https://api.deepseek.com/v1', 'deepseek-flash'), true, 'deepseek 家族')
 })

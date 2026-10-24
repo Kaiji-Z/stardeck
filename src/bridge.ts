@@ -31,10 +31,21 @@ export type BridgeNoticeKind = 'reported' | 'clarify' | 'retry' | 'terminal' | '
  * 话，图页是附页（沙箱 iframe，零脚本）。 */
 export interface BridgeArtifact { id: string; title: string }
 
+/** D37 回合计量（随 agent 终答条件 spread 入账——旧消息零迁移）。会话态流式
+ *  不入账；这条 meta 是回合事实审计：哪台模型/哪档思考强度/耗时/真实 token。 */
+export interface BridgeMessageMeta {
+  readonly model: string
+  /** ''=自动 | 'fast'=快速 | 'deep'=深度。 */
+  readonly effort: string
+  readonly elapsedMs: number
+  readonly promptTokens?: number
+  readonly completionTokens?: number
+}
+
 /** The bridge log's entry union (one JSON line each). */
 export type BridgeEvent =
   | { type: 'bridge_user_message'; ts: string; text: string }
-  | { type: 'bridge_agent_message'; ts: string; text: string; /** 本轮答复涉及的命令号（点穿用）。 */ commandRefs?: string[]; /** 大副 agentId（staff-<ts36>，逻辑常驻键）。 */ agentId?: string; /** 原生会话号（attach-map 捕获；resume 续跑依据）。 */ sessionId?: string; /** 图景附件（D28：渲染器落盘成功时随话轮入账）。 */ artifact?: BridgeArtifact }
+  | { type: 'bridge_agent_message'; ts: string; text: string; /** 本轮答复涉及的命令号（点穿用）。 */ commandRefs?: string[]; /** 大副 agentId（staff-<ts36>，逻辑常驻键）。 */ agentId?: string; /** 原生会话号（attach-map 捕获；resume 续跑依据）。 */ sessionId?: string; /** 图景附件（D28：渲染器落盘成功时随话轮入账）。 */ artifact?: BridgeArtifact; /** D37 回合计量（内置 loop 终答随账——条件 spread）。 */ meta?: BridgeMessageMeta }
   | { type: 'bridge_system_notice'; ts: string; noticeKind: BridgeNoticeKind; /** 源事件指纹（幂等键：同键不再入账）。 */ dedupKey: string; text: string; /** 点穿引用（commandId/taskId → 板聚焦页/trace）。 */ refs?: Record<string, string> }
 
 /** Fold 后的一条频道消息（渲染面形状）。 */
@@ -51,6 +62,8 @@ export interface BridgeMessage {
   readonly refs?: Readonly<Record<string, string>>
   /** 图景附件（D28：agent 话轮可带——聊天窗渲染沙箱 iframe）。 */
   readonly artifact?: BridgeArtifact
+  /** D37 回合计量（模型/思考强度/耗时/tokens——消息 meta 行数据源）。 */
+  readonly meta?: BridgeMessageMeta
 }
 
 function bridgeFile(stateDir: string): string {
@@ -77,7 +90,7 @@ export function foldBridge(events: ReadonlyArray<BridgeEvent>): BridgeMessage[] 
   const out: BridgeMessage[] = []
   for (const e of events) {
     if (e.type === 'bridge_user_message') out.push({ kind: 'user', ts: e.ts, text: e.text })
-    else if (e.type === 'bridge_agent_message') out.push({ kind: 'agent', ts: e.ts, text: e.text, ...(e.commandRefs !== undefined ? { commandRefs: e.commandRefs } : {}), ...(e.agentId !== undefined ? { agentId: e.agentId } : {}), ...(e.sessionId !== undefined ? { sessionId: e.sessionId } : {}), ...(e.artifact !== undefined ? { artifact: e.artifact } : {}) })
+    else if (e.type === 'bridge_agent_message') out.push({ kind: 'agent', ts: e.ts, text: e.text, ...(e.commandRefs !== undefined ? { commandRefs: e.commandRefs } : {}), ...(e.agentId !== undefined ? { agentId: e.agentId } : {}), ...(e.sessionId !== undefined ? { sessionId: e.sessionId } : {}), ...(e.artifact !== undefined ? { artifact: e.artifact } : {}), ...(e.meta !== undefined ? { meta: e.meta } : {}) })
     else if (e.type === 'bridge_system_notice') out.push({ kind: 'system', ts: e.ts, text: e.text, noticeKind: e.noticeKind, dedupKey: e.dedupKey, ...(e.refs !== undefined ? { refs: e.refs } : {}) })
   }
   return out
@@ -103,8 +116,31 @@ export function bridgeUnanswered(messages: ReadonlyArray<BridgeMessage>): Bridge
  * 对话史窗口（纯，工单携史兜底）：末 cap 条压成 role+text——全席通用的逻辑
  * 常驻底座（进程不常驻，历史随工单走；重启不失忆——账本即状态）。
  */
-export function bridgeHistoryWindow(messages: ReadonlyArray<BridgeMessage>, cap = 24): Array<{ role: 'you' | 'manager' | 'system'; text: string }> {
-  return messages.slice(-cap).map(m => ({ role: m.kind === 'user' ? 'you' as const : m.kind === 'agent' ? 'manager' as const : 'system' as const, text: m.text }))
+/** D37 token 估算（照搬 lookatstudy token-estimate 启发式）：CJK 1.1 token/字、
+ *  其他 4 字符/token——上下文占用表的纯函数底座（不引 tokenizer 依赖；与
+ *  proxy-loop 同仓零依赖，放账本模块两侧共用）。 */
+export function estimateTokens(s: string): number {
+  if (s === '') return 0
+  let cjk = 0
+  for (const ch of s) if (ch.charCodeAt(0) > 0x2e7f) cjk++
+  return Math.round(cjk * 1.1 + (s.length - cjk) / 4)
+}
+export function bridgeHistoryWindow(messages: ReadonlyArray<BridgeMessage>, cap = 24, tokenBudget?: number): Array<{ role: 'you' | 'manager' | 'system'; text: string }> {
+  const tail = messages.slice(-cap)
+  // D37 历史 token 预算双闸（防长对话撑爆上下文）：从最新往回累计，超预算即停
+  // ——宁可失忆旧话，不让组包超窗（lookatstudy 同款「从新往旧装」纪律）。
+  if (tokenBudget !== undefined && tokenBudget > 0) {
+    const kept: BridgeMessage[] = []
+    let used = 0
+    for (let i = tail.length - 1; i >= 0; i--) {
+      const cost = estimateTokens(tail[i].text)
+      if (kept.length > 0 && used + cost > tokenBudget) break // 至少保最新一条
+      kept.unshift(tail[i])
+      used += cost
+    }
+    return kept.map(m => ({ role: m.kind === 'user' ? 'you' as const : m.kind === 'agent' ? 'manager' as const : 'system' as const, text: m.text }))
+  }
+  return tail.map(m => ({ role: m.kind === 'user' ? 'you' as const : m.kind === 'agent' ? 'manager' as const : 'system' as const, text: m.text }))
 }
 
 /** 既有机械战报的幂等键集（syncBridgeNotices 去重用）。 */

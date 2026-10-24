@@ -24,13 +24,14 @@ import { detectOpencodeBin, detectCodexBin, detectPiBin, detectZcodeBin, detectC
 import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
 import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, proxySceneBlocksOf, proxyManagementBlocksOf, type StaffWorkItem } from './staff.ts'
-import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, type BridgeArtifact } from './bridge.ts'
+import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, estimateTokens, type BridgeArtifact, type BridgeMessageMeta } from './bridge.ts'
 import { boardProjection, bridgeDigest, directiveProjection, ledgerSlice } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
 import { backfillAttachMap } from './backfill.ts'
 import { issueProxySeat, seatByToken, loadProxySeats } from './proxy-seats.ts'
-import { runProxyLoop, proxyLoopEnvOf, mergeLoopEnv } from './proxy-loop.ts'
+import { runProxyLoop, proxyLoopEnvOf, mergeLoopEnv, thinkingDialectSupported } from './proxy-loop.ts'
+import { presetByBaseUrl } from './client/provider-presets.ts'
 import { readLoopConfig, writeLoopConfig, type LoopConfig } from './config.ts'
 import { renderScene, type SceneContext } from './scene.ts'
 import type { CampaignState } from './types.ts'
@@ -238,6 +239,12 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   const proxyLive = { seq: 0, text: '', reasoning: '', tools: [] as Array<{ label: string; done: boolean; detail?: string }> }
   // 对抗审查 B：bridgeKick 防抖计时柄（250ms 窗口吸收连发）。
   let bridgeKickTimer: ReturnType<typeof setTimeout> | undefined
+  // D37 loop 运行态：手动停止（AbortController+意图旗——catch 侧按旗区分「舰长
+  // 停止」与「失手」，前者不降级 spawn）+ 最近一轮真实计量（含 usage/耗时，供
+  // loop-config GET 回读与 agent 消息 meta 入账）。
+  let loopAbort: AbortController | undefined
+  let loopAbortRequested = false
+  let loopLastUsage: { model: string; effort: '' | 'fast' | 'deep'; elapsedMs: number; usage?: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number } } | undefined
   // 对抗审查 B2（回合水位）：watermark=最近一轮**已入账**回话所应答的最新 user ts。
   // pending=user.ts>watermark——治「轮中后到的话被『末条=agent』时间轴判答=静默
   // 吞话」（bridgeUnanswered 语义保留给 staff/digest 等旧消费者）。推进点=入账
@@ -331,19 +338,38 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           void proxyTick().catch(err => console.error('[stardeck] 代理舰长 kick 异常（跳过）:', err instanceof Error ? err.message : err))
         }, 250)
       },
+      /** D37 停止钮：意图旗先立（catch 侧据此判「舰长停止」不降级），再掐在途
+       *  controller（无在途轮=如实回 false，浮窗不发假战报）。 */
+      loopAbort: () => {
+        if (loopAbort === undefined) return false
+        loopAbortRequested = true
+        loopAbort.abort()
+        return true
+      },
       // D33 段3：模型配置窗口面。key 永不出 daemon——回执只带来源与有无。
       loopConfig: {
         get: () => {
           const eff = effectiveLoopEnv()
-          return { model: eff.model, baseUrl: eff.baseUrl, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env') }
+          return {
+            model: eff.model, baseUrl: eff.baseUrl, effort: eff.effort,
+            keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'),
+            // D37：思考方言支持（UI 门控——不支持的供应商档位钮禁用恒自动）。
+            effortSupported: thinkingDialectSupported(eff.baseUrl, eff.model),
+            // D37 上下文占用（分段估算，纯启发式 lookatstudy 同款系数）：
+            // 教学/历史/账本切片/新话——窗口取供应商注册表，未知=null 只报用量。
+            contextEstimate: loopContextEstimate(),
+            // D37 最近一轮真实计量（includeUsage 网关回报；未跑/失败=undefined）。
+            lastUsage: loopLastUsage,
+          }
         },
         save: (patch: Partial<LoopConfig>) => {
           if (patch.model !== undefined) loopCfg.model = patch.model
           if (patch.baseUrl !== undefined) loopCfg.baseUrl = patch.baseUrl
           if (patch.apiKey !== undefined) loopCfg.apiKey = patch.apiKey
+          if (patch.effort !== undefined) loopCfg.effort = patch.effort
           const out = writeLoopConfig(loopCfg)
           const eff = effectiveLoopEnv()
-          return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
+          return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, effort: eff.effort, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
         },
         test: async (overrides?: { model?: string; baseUrl?: string; apiKey?: string }) => {
           // P1 修（D33 critique A 八轮）：测「舰长所见」——表单半截输入未保存时
@@ -584,11 +610,33 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   let proxyResumeRetryAfter = 0
   const proxyChatOrder = () => {    const messages = loadBridgeMessages(stateDir)
     const pending = proxyPendingSince(messages)
+    // D37 历史预算双闸：24 条上限外再加 token 闸（供应商窗口×60%，未知=只条数闸）
+    // ——从最新往回装，超即停（防长对话撑爆组包）。
+    const win = presetByBaseUrl(effectiveLoopEnv().baseUrl)?.contextWindow ?? null
+    const history = bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && pending.some(c => c.ts === m.ts))), 24, win !== null ? Math.floor(win * 0.6) : undefined)
     return {
       pending: pending.map(m => ({ text: m.text, ts: m.ts })),
-      history: bridgeHistoryWindow(messages.filter(m => !(m.kind === 'user' && pending.some(c => c.ts === m.ts)))),
+      history,
       digest: JSON.stringify(bridgeDigest(stateDir)),
       ledger: JSON.stringify(ledgerSlice(stateDir)), // D28 知识面：近期账本切片（directive 尾 30+task 尾 30）
+    }
+  }
+  /** D37 上下文占用（lookatstudy ContextMeter 同款启发式）：按当前 loop 配置组一
+   *  次真实 order 分段估算——教学骨架/对话史/账本切片/舰长新话；窗口取供应商
+   *  注册表（未知=null 只报用量）。教学段=总量-动态段（钳非负）。 */
+  const loopContextEstimate = (): { total: number; teaching: number; history: number; ledger: number; pending: number; contextWindow: number | null } => {
+    const eff = effectiveLoopEnv()
+    const chat = proxyChatOrder()
+    const order = proxyOrderFor(chat, { verdictAuthorized: proxyVerdictRuntime })
+    const total = estimateTokens(order)
+    const history = chat.history.reduce((n, h) => n + estimateTokens(h.text), 0)
+    const ledger = estimateTokens(chat.digest) + estimateTokens(chat.ledger)
+    const pending = chat.pending.reduce((n, p) => n + estimateTokens(p.text), 0)
+    return {
+      total,
+      teaching: Math.max(0, total - history - ledger - pending),
+      history, ledger, pending,
+      contextWindow: presetByBaseUrl(eff.baseUrl)?.contextWindow ?? null,
     }
   }
   /** D28③ 绑席核心（POST /fleet 与代理舰长【绑席】块共用）：校验→切运行态→
@@ -612,11 +660,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   type ProxyHarvest = { commands: number; commandDropped: number; sceneArtifact: string | null; sceneRejected: string | null; management: number; managementDropped: number; verdicts: number; verdictsRejected: number }
   /** 对外入口：在途祝福包裹——本函数是代理身份 callTool 的唯一合法通道，
    *  伪造 agentId 直打 /tools/call 因无祝福过不了门。 */
-  const applyProxyReply = async (agentId: string, reply: string, sessionId?: string): Promise<ProxyHarvest> => {
+  const applyProxyReply = async (agentId: string, reply: string, sessionId?: string, meta?: BridgeMessageMeta): Promise<ProxyHarvest> => {
     proxyGateBless.add(agentId)
-    try { return await applyProxyReplyBlessed(agentId, reply, sessionId) } finally { proxyGateBless.delete(agentId) }
+    try { return await applyProxyReplyBlessed(agentId, reply, sessionId, meta) } finally { proxyGateBless.delete(agentId) }
   }
-  const applyProxyReplyBlessed = async (agentId: string, reply: string, sessionId?: string): Promise<ProxyHarvest> => {
+  const applyProxyReplyBlessed = async (agentId: string, reply: string, sessionId?: string, meta?: BridgeMessageMeta): Promise<ProxyHarvest> => {
     const ts = new Date().toISOString()
     // D28② 图景：先渲染（草稿对账过才随话轮带 artifact 入账；失败落 scene 战报
     // 诚实告知——下轮可重出，不硬凑半图）。
@@ -644,7 +692,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         console.warn(`[stardeck] 代理舰长图景拒收：${rendered.reason}`)
       }
     }
-    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts, text: reply, agentId, ...(sessionId !== undefined ? { sessionId } : {}), ...(artifact !== undefined ? { artifact } : {}) })
+    appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts, text: reply, agentId, ...(sessionId !== undefined ? { sessionId } : {}), ...(artifact !== undefined ? { artifact } : {}), ...(meta !== undefined ? { meta } : {}) })
     let commands = 0
     const { commands: commandTexts, dropped } = proxyCommandBlocksOf(reply)
     for (const text of commandTexts) {
@@ -821,10 +869,16 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         const packTs = pendingMsgs[pendingMsgs.length - 1]?.ts ?? ''
         const order = proxyOrderFor(proxyChatOrder(), { verdictAuthorized: proxyVerdictRuntime })
         proxyLive.text = ''
+        proxyLive.reasoning = ''
         proxyLive.tools = []
         proxyLive.seq += 1
+        // D37 手动停止：本轮专属 controller（意图旗供 catch 区分舰长停止/失手）。
+        loopAbort = new AbortController()
+        loopAbortRequested = false
+        const abortSignal = loopAbort.signal
         // 工具名→舰长语（呈现层词典在 copy.ts，daemon 侧只传机械名）。
         const out = await runProxyLoop(order, loopEnv, {
+          abortSignal,
           reads: {
             board: async () => ({ commands: directiveProjection(stateDir), tasks: boardProjection(stateDir) }),
             digest: () => bridgeDigest(stateDir),
@@ -844,11 +898,15 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
             }
             proxyLive.seq += 1
           },
-        })
+        }).finally(() => { if (loopAbort?.signal === abortSignal) loopAbort = undefined })
         if (out.text === '') throw new Error('本轮无终答文本')
+        // D37 计量：最近轮记录（loop-config GET 回读）+ 随终答入账 meta（回合事实
+        // 审计，旧消息零迁移——条件 spread 家法）。
+        loopLastUsage = { model: loopEnv.model, effort: loopEnv.effort, elapsedMs: out.elapsedMs, usage: out.usage }
+        const loopMeta: BridgeMessageMeta = { model: loopEnv.model, effort: loopEnv.effort, elapsedMs: out.elapsedMs, ...(out.usage !== undefined && out.usage.promptTokens !== undefined ? { promptTokens: out.usage.promptTokens } : {}), ...(out.usage !== undefined && out.usage.completionTokens !== undefined ? { completionTokens: out.usage.completionTokens } : {}) }
         // B6 修（D33 bug 表）：先入账后清 live——同一 SSE 帧携 rev+live:''，
         // 客户端一次换页（终答顶替打字机），无空窗无重复。
-        await applyProxyReply('proxy-loop', out.text)
+        await applyProxyReply('proxy-loop', out.text, undefined, loopMeta)
         // 对抗 B2（回合水位）：入账成功才推进——轮中后到的话（ts>packTs）保持
         // 未答态，续跑/哨位都会再吃，不再被「末条=agent」时间轴判答吞掉。
         proxyWatermark = packTs
@@ -869,6 +927,13 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         proxyLive.reasoning = ''
         proxyLive.tools = []
         proxyLive.seq += 1
+        // D37 停止钮：舰长主动停≠失手——丢弃在途（半截话不上账）、战报交代、
+        // 不降级 spawn（停止是意志不是故障；水位不动，新话照常再触发）。
+        if (loopAbortRequested) {
+          console.log('[stardeck] 代理舰长 loop 被舰长停止——在途丢弃，不降级')
+          appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts: new Date().toISOString(), noticeKind: 'terminal', dedupKey: `loopabort:${Date.now().toString(36)}`, text: '已停止本轮应答（在途内容已丢弃）。' })
+          return
+        }
         console.warn(`[stardeck] 代理舰长 loop 失手——本轮降级舰队席：${err instanceof Error ? err.message : String(err)}`)
         appendBridgeEvent(stateDir, { type: 'bridge_system_notice', ts: new Date().toISOString(), noticeKind: 'retry', dedupKey: `proxyloop:${Date.now().toString(36)}`, text: '内置 loop 本轮失手（详见作战日志）——改由舰队席应答。' })
       } finally {

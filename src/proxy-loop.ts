@@ -24,6 +24,9 @@ export interface ProxyLoopEnv {
   baseUrl: string
   apiKey: string
   model: string
+  /** D37 思考强度：''=自动（不干预请求体）/ 'fast'=关思考 / 'deep'=开思考——
+   *  仅当 baseUrl 命中思考方言表时生效（bodyPatch 打补丁），其余家族静默自动。 */
+  effort: '' | 'fast' | 'deep'
 }
 
 /** 旗面解析（纯）：基址+key 齐即 enabled（D32 翻默认——BYOK loop 是聊天窗
@@ -33,17 +36,20 @@ export function proxyLoopEnvOf(env: NodeJS.ProcessEnv): ProxyLoopEnv {
   const baseUrl = (env.Z_AI_BASE_URL ?? '').trim().replace(/\/+$/, '')
   const apiKey = (env.Z_AI_API_KEY ?? '').trim()
   const model = (env.STARDECK_PROXY_LOOP_MODEL ?? 'glm-5.3').trim()
-  return { enabled: baseUrl !== '' && apiKey !== '' && env.STARDECK_PROXY_LOOP !== '0', baseUrl, apiKey, model }
+  const effortRaw = (env.STARDECK_PROXY_LOOP_EFFORT ?? '').trim()
+  const effort: '' | 'fast' | 'deep' = effortRaw === 'fast' || effortRaw === 'deep' ? effortRaw : ''
+  return { enabled: baseUrl !== '' && apiKey !== '' && env.STARDECK_PROXY_LOOP !== '0', baseUrl, apiKey, model, effort }
 }
 
 /** D33 段3：config.loop 段与 env 的合并（纯）——config 优先（窗口刚改的先生效），
  *  env 回落，两处皆无=未配。硬关旗 STARDECK_PROXY_LOOP=0 恒压一切。 */
-export function mergeLoopEnv(env: NodeJS.ProcessEnv, cfg: { model: string; baseUrl: string; apiKey: string }): ProxyLoopEnv {
+export function mergeLoopEnv(env: NodeJS.ProcessEnv, cfg: { model: string; baseUrl: string; apiKey: string; effort?: '' | 'fast' | 'deep' }): ProxyLoopEnv {
   return proxyLoopEnvOf({
     ...env,
     Z_AI_BASE_URL: cfg.baseUrl !== '' ? cfg.baseUrl : env.Z_AI_BASE_URL,
     Z_AI_API_KEY: cfg.apiKey !== '' ? cfg.apiKey : env.Z_AI_API_KEY,
     STARDECK_PROXY_LOOP_MODEL: cfg.model !== '' ? cfg.model : env.STARDECK_PROXY_LOOP_MODEL,
+    STARDECK_PROXY_LOOP_EFFORT: cfg.effort !== undefined && cfg.effort !== '' ? cfg.effort : env.STARDECK_PROXY_LOOP_EFFORT,
   })
 }
 
@@ -60,6 +66,8 @@ export interface ProxyLoopDeps {
   onToolStep?: (toolName: string, phase: 'start' | 'done', detail?: string) => void
   /** 整轮看门狗毫秒（缺省 180s——超时 abort，调用侧降级）。 */
   watchdogMs?: number
+  /** D37 手动停止信号（daemon 持 AbortController；与看门狗组合生效）。 */
+  abortSignal?: AbortSignal
 }
 
 /** 工具参数/结果摘要（D36）：压平空白+截断——chip 行内可读，title 全文。 */
@@ -70,11 +78,44 @@ export function summarizeStepDetail(v: unknown, max: number): string {
   return s.length > max ? `${s.slice(0, max)}…` : s
 }
 
+/** D37 思考方言表（照搬 lookatstudy reasoning-effort.ts 的家族口径扩表）：
+ *  baseUrl 命中 → 按档位产出请求体补丁（fast=关思考，deep=开思考）。 */
+const THINKING_DIALECTS: Array<{ match: RegExp; patch: (fast: boolean) => Record<string, unknown> }> = [
+  { match: /z\.ai|bigmodel|glm/i, patch: fast => (fast ? { thinking: { type: 'disabled' }, reasoning_effort: 'low' } : { thinking: { type: 'enabled' } }) },
+  { match: /deepseek|moonshot|minimax/i, patch: fast => ({ thinking: { type: fast ? 'disabled' : 'enabled' } }) },
+  { match: /dashscope/i, patch: fast => ({ enable_thinking: !fast }) },
+]
+
+/** D37：供应商/模型是否命中思考方言表（UI 门控数据源——不支持的恒自动）。
+ *  匹配源=baseUrl+模型串（GLM 走自建代理端点时 baseUrl 是 127.0.0.1，模型
+ *  id 的 glm 字样仍可识别——家法同 lookatstudy 的 llmFamilyOf 双源嗅探）。 */
+export function thinkingDialectSupported(baseUrl: string, model: string): boolean {
+  return THINKING_DIALECTS.some(d => d.match.test(`${baseUrl} ${model}`))
+}
+
+/** D37 bodyPatch（照搬 lookatstudy withBodyPatch）：fetch 包装——请求体 JSON 解开、
+ *  浅并入方言补丁再序列化（openai-compatible SDK 无这些方言参数的原生面）。 */
+function withBodyPatch(fetchFn: typeof fetch, patch: Record<string, unknown>): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.body !== undefined && typeof init.body === 'string') {
+      try {
+        const body = JSON.parse(init.body) as Record<string, unknown>
+        init = { ...init, body: JSON.stringify({ ...body, ...patch }) }
+      } catch { /* 非 JSON 体原样透传 */ }
+    }
+    return fetchFn(input, init)
+  }) as typeof fetch
+}
+
 export interface ProxyLoopResult {
   /** 终答全文（trim 过——空串由调用侧按失败降级，不入账）。 */
   text: string
   steps: number
   toolCalls: number
+  /** D37 真实计量（includeUsage 下网关回报；流失败时 undefined——诚实缺席）。 */
+  usage?: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number }
+  /** D37 回合耗时（毫秒）。 */
+  elapsedMs: number
 }
 
 /** 只读三件（与 MCP 座席面同名同义——一份心智两处用）。写工具一件不出：
@@ -100,16 +141,29 @@ function readTools(deps: ProxyLoopDeps, counter: { n: number }): ToolSet {
 }
 
 /** 跑一轮：order 正文进 user 消息，模型可自查三件只读工具，终答全文返回。
- *  抛错=本轮失手（网络/网关/看门狗）——调用侧诚实降级舰队席。 */
+ *  抛错=本轮失手（网络/网关/看门狗/手动停止）——调用侧诚实降级舰队席
+ *  （手动停止由调用侧按自己的 abort 旗区分，不降级）。 */
 export async function runProxyLoop(order: string, env: ProxyLoopEnv, deps: ProxyLoopDeps): Promise<ProxyLoopResult> {
-  const provider = createOpenAICompatible({ name: 'stardeck-proxy-loop', baseURL: env.baseUrl, apiKey: env.apiKey })
+  const t0 = Date.now()
+  // D37 思考强度：方言命中（baseUrl+模型双源嗅探）且选了档位才打补丁（''/缺省=自动零干预）。
+  const effort: '' | 'fast' | 'deep' = env.effort === 'fast' || env.effort === 'deep' ? env.effort : ''
+  const dialect = THINKING_DIALECTS.find(d => d.match.test(`${env.baseUrl} ${env.model}`))
+  const patch = effort !== '' && dialect !== undefined ? dialect.patch(effort === 'fast') : null
+  const provider = createOpenAICompatible({
+    name: 'stardeck-proxy-loop',
+    baseURL: env.baseUrl,
+    apiKey: env.apiKey,
+    includeUsage: true, // D37：stream_options.include_usage——网关回报真实 usage
+    ...(patch !== null ? { fetch: withBodyPatch(globalThis.fetch, patch) } : {}),
+  })
   const counter = { n: 0 }
+  const watchdog = AbortSignal.timeout(deps.watchdogMs ?? 180_000)
   const result = streamText({
     model: provider.chatModel(env.model),
     messages: [{ role: 'user', content: order }],
     tools: readTools(deps, counter),
     stopWhen: stepCountIs(6),
-    abortSignal: AbortSignal.timeout(deps.watchdogMs ?? 180_000),
+    abortSignal: deps.abortSignal !== undefined ? AbortSignal.any([deps.abortSignal, watchdog]) : watchdog,
   })
   let text = ''
   for await (const part of result.fullStream) {
@@ -130,5 +184,14 @@ export async function runProxyLoop(order: string, env: ProxyLoopEnv, deps: Proxy
     }
   }
   const steps = (await result.steps).length
-  return { text: text.trim(), steps, toolCalls: counter.n }
+  // usage promise 在流失败路径可能 reject——catch 成 undefined（诚实缺席）。
+  // 字段名=spec v2 面名（inputTokens/outputTokens——1.0.58 实测，别按 v3 的
+  // promptTokens 读，读错=全 undefined 静默）。
+  const u = await result.usage.catch(() => undefined)
+  const usage = u === undefined ? undefined : {
+    promptTokens: typeof u.inputTokens === 'number' && Number.isFinite(u.inputTokens) ? u.inputTokens : undefined,
+    completionTokens: typeof u.outputTokens === 'number' && Number.isFinite(u.outputTokens) ? u.outputTokens : undefined,
+    reasoningTokens: typeof u.reasoningTokens === 'number' ? u.reasoningTokens : undefined,
+  }
+  return { text: text.trim(), steps, toolCalls: counter.n, usage, elapsedMs: Date.now() - t0 }
 }

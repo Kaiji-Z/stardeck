@@ -1176,6 +1176,22 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bridge-ta{width:100%;resize:vertical;font-family:var(--war-font);font-size:calc(13px*var(--war-fs));color:var(--war-text-1);background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 10px;outline:none;box-sizing:border-box}
 .war-bridge-ta:focus{border-color:var(--war-run-border,var(--war-run-strong))}
 .war-bridge-sendrow{display:flex;justify-content:flex-end}
+/* D37 工具条：思考档芯条+上下文占用环（lookatstudy composer 同形）+停止钮。 */
+.war-bridge-toolbar{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap}
+.war-bridge-chip{font-size:calc(11px*var(--war-fs));padding:2px 9px;border-radius:999px;display:inline-flex;gap:5px;align-items:center;line-height:1.5}
+.war-bridge-chip.warn{color:var(--war-fail,var(--war-text-1));border-color:var(--war-fail,var(--war-border))}
+.war-ctx-ring{display:inline-flex;flex:none}
+.war-ctx-ring-bg{stroke:var(--war-border-soft)}
+.war-ctx-ring-fg{stroke:var(--war-run-strong,var(--war-text-2));transition:stroke-dasharray .3s ease}
+.war-ctx-ring-fg.warn{stroke:var(--war-fail,var(--war-text-1))}
+.war-bridge-ctx{position:relative;display:inline-flex}
+.war-ctx-panel{position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:190px;background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:0 8px 22px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:3px}
+.war-ctx-panel-title{font-size:calc(11px*var(--war-fs));color:var(--war-text-3);margin-bottom:2px}
+.war-ctx-row{display:flex;justify-content:space-between;gap:10px;font-size:calc(11px*var(--war-fs))}
+.war-ctx-label{color:var(--war-text-2)}
+.war-ctx-val{color:var(--war-text-1);font-family:var(--war-font-code)}
+.war-ctx-panel-total{border-top:1px dashed var(--war-border-soft);margin-top:4px;padding-top:5px;font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bridge-stop{font-weight:700}
 /* critique6 P2：板让位区露 body 白底读作「死区」——画布底色铺满（三态壳退役后
  * 板恒全宽，此规则只余兜底语义）。 */
 .war-standalone-board{background:var(--war-canvas)}

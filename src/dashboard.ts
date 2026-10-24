@@ -265,6 +265,9 @@ export interface DashboardDeps {
   /** D36-A 发话即应答：bridge/messages 入账成功后的立即触发钩子（daemon 注入
    *  proxyTick；缺席=SSE 纯路由测试照旧，15s 哨位兜底不变）。 */
   bridgeKick?: () => void
+  /** D37 停止钮：掐在途内置 loop 轮。回执=是否确有在途轮被停（false=无在途，
+   *  浮窗据此不弹「已停止」假战报）。缺席 → /loop-abort 501（纯路由测试可省略）。 */
+  loopAbort?: () => boolean
   /** V18 HQ 工作区注册弹窗：宿主 workspace.list（只读；缺席如实报 null）。 */
   listWorkspaces?: () => Promise<Array<{ workspaceId: string; path: string; title: string; sessionCount: number }> | null>
   /** V18 注册时把真实目录幂等收编进宿主 registry（best-effort，失败不阻塞）。 */
@@ -275,6 +278,22 @@ export interface DashboardDeps {
   /** B1-件⑥ 收官清理：链归档后对成员任务 worktree best-effort 释放（index 侧
    *  接 workspace.ts releaseTaskWorkspace）。缺席 → 归档照常、不清理。 */
   releaseWorkspace?: (path: string) => { ok: boolean; note: string }
+  /** D33 段3：模型配置窗口面（daemon 注入；缺席 → loop-config/loop-test 404）。
+   *  key 永不出 daemon——回执只带来源与有无。D37：effort/contextEstimate/
+   *  lastUsage 扩展回读（思考强度/占用表/最近轮计量的数据源）。 */
+  loopConfig?: {
+    get(): {
+      model: string
+      baseUrl: string
+      effort: string
+      effortSupported?: boolean
+      keySource: 'none' | 'config' | 'env'
+      contextEstimate?: { total: number; teaching: number; history: number; ledger: number; pending: number; contextWindow: number | null }
+      lastUsage?: { model: string; effort: string; elapsedMs: number; usage?: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number } }
+    }
+    save(patch: { model?: string; baseUrl?: string; apiKey?: string; effort?: '' | 'fast' | 'deep' }): { ok: boolean; model: string; baseUrl: string; effort: string; keySource: string; error?: string }
+    test(overrides?: { model?: string; baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; latencyMs?: number; error?: string }>
+  }
 }
 
 const STATUS_ORDER: Record<CampaignState['status'], number> = { published: 0, in_progress: 1, reported: 2, draft: 3, failed: 4, closed: 5 }
@@ -643,12 +662,18 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         send(200, { ok: true, ...deps.loopConfig.get() })
         return
       } else if (r.method === 'POST' && pathname === '/warroom/api/loop-config' && deps.loopConfig !== undefined) {
-        const raw = JSON.parse(await readBody(r) || '{}') as { model?: unknown; baseUrl?: unknown; apiKey?: unknown }
-        const patch: { model?: string; baseUrl?: string; apiKey?: string } = {}
+        const raw = JSON.parse(await readBody(r) || '{}') as { model?: unknown; baseUrl?: unknown; apiKey?: unknown; effort?: unknown }
+        const patch: { model?: string; baseUrl?: string; apiKey?: string; effort?: '' | 'fast' | 'deep' } = {}
         if (typeof raw.model === 'string') patch.model = raw.model.trim()
         if (typeof raw.baseUrl === 'string') patch.baseUrl = raw.baseUrl.trim().replace(/\/+$/, '')
         if (typeof raw.apiKey === 'string') patch.apiKey = raw.apiKey.trim()
+        if (raw.effort === 'fast' || raw.effort === 'deep' || raw.effort === '') patch.effort = raw.effort
         send(200, { ok: true, saved: deps.loopConfig.save(patch) })
+        return
+      } else if (r.method === 'POST' && pathname === '/warroom/api/loop-abort' && deps.loopAbort !== undefined) {
+        // D37 停止钮：掐在途 loop 轮（daemon 侧战报交代+不降级）。无在途=200
+        // 如实回 stopped:false（幂等无害——连点两下第二下如实无事发生）。
+        send(200, { ok: true, stopped: deps.loopAbort() })
         return
       } else if (r.method === 'POST' && pathname === '/warroom/api/loop-test' && deps.loopConfig !== undefined) {
         // P1 修（D33 critique A 八轮）：body 可携所见字段覆盖（未保存先测）——

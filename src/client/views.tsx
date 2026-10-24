@@ -2894,13 +2894,18 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
   const [baseUrl, setBaseUrl] = useState('')
   const [keyInput, setKeyInput] = useState('')
   const [keySource, setKeySource] = useState<'config' | 'env' | 'none'>('none')
+  // D37 思考强度（三档段——随保存一并提交；表单态不直写 config）。
+  const [effort, setEffort] = useState<'' | 'fast' | 'deep'>('')
+  const [effortSupported, setEffortSupported] = useState(true)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const refresh = (): void => {
-    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; baseUrl?: string; keySource?: 'config' | 'env' | 'none' }) => {
+    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; baseUrl?: string; keySource?: 'config' | 'env' | 'none'; effort?: '' | 'fast' | 'deep'; effortSupported?: boolean }) => {
       if (typeof d.model === 'string') setModel(d.model)
       if (typeof d.baseUrl === 'string') setBaseUrl(d.baseUrl)
       if (d.keySource !== undefined) setKeySource(d.keySource)
+      if (d.effort === 'fast' || d.effort === 'deep' || d.effort === '') setEffort(d.effort)
+      if (typeof d.effortSupported === 'boolean') setEffortSupported(d.effortSupported)
     }).catch(() => { /* daemon 不在——来源行照实 none */ })
   }
   useEffect(refresh, [])
@@ -2973,6 +2978,19 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
           }, id))) : null,
         createElement('div', { className: 'war-settings-section' }, bc.baseUrlLabel),
         createElement('input', { type: 'text', className: 'war-bcard-input', value: baseUrl, 'data-loopcfg-base': '1', onChange: e => { setBaseUrl(String(e.target.value ?? '')) } }),
+        // D37 思考强度三档（lookatstudy 同形：自动/快速/深度——填表不提交）。
+        // 方言不支持的供应商：三档禁用恒自动（诚实提示，不硬凑档位）。
+        createElement('div', { className: 'war-settings-section' }, bc.effortLabel),
+        createElement('div', { className: 'war-skin-row', 'data-loopcfg-effort': '1' },
+          ...([['', bc.effortAuto], ['fast', bc.effortFast], ['deep', bc.effortDeep]] as const).map(([v, label]) => createElement('button', {
+            key: v, type: 'button',
+            className: `war-skin-opt war-skin-opt-sm${effort === v ? ' on' : ''}`,
+            'aria-pressed': effort === v, disabled: !effortSupported,
+            'data-loopcfg-effortopt': v,
+            title: effortSupported ? '' : bc.effortUnsupported,
+            onClick: () => { setEffort(v) },
+          }, label))),
+        !effortSupported ? createElement('p', { className: 'war-settings-note' }, bc.effortUnsupported) : null,
         // key 行：标签+领 key 链接同行（照搬 zcode access.apiKeyManagementUrl）。
         createElement('div', { className: 'war-loopcfg-keyrow' },
           createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
@@ -2989,7 +3007,7 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
       createElement('div', { className: 'war-loopdlg-foot' },
         createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-loopcfg-test': '1', onClick: test }, bc.testBtn),
         createElement('button', { type: 'button', className: 'war-btn primary', disabled: busy, 'data-loopcfg-save': '1', onClick: () => {
-          const patch: Record<string, string> = { model, baseUrl }
+          const patch: Record<string, string> = { model, baseUrl, effort }
           if (keyInput !== '') patch.apiKey = keyInput
           save(patch)
           setKeyInput('')

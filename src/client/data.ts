@@ -291,6 +291,52 @@ export interface BridgeChatMessage {
   refs?: Record<string, string>
   /** D28 图景附件：沙箱 iframe 渲染的已对账图页（GET /warroom/api/artifact/<id>）。 */
   artifact?: { id: string; title: string }
+  /** D37 回合计量（内置 loop 终答随账——消息 meta 行数据源）。 */
+  meta?: { model: string; effort: string; elapsedMs: number; promptTokens?: number; completionTokens?: number }
+}
+
+/** D37 loop 运行视图（GET loop-config 回读：思考档+占用表+最近轮计量）。 */
+export interface LoopView {
+  model: string
+  baseUrl: string
+  effort: '' | 'fast' | 'deep'
+  effortSupported?: boolean
+  keySource: 'none' | 'config' | 'env'
+  contextEstimate?: { total: number; teaching: number; history: number; ledger: number; pending: number; contextWindow: number | null }
+  lastUsage?: { model: string; effort: string; elapsedMs: number; usage?: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number } }
+}
+
+/** D37 拉取 loop 运行视图（daemon 不在=诚实 null——UI 面板隐藏）。 */
+export async function fetchLoopView(): Promise<LoopView | null> {
+  try {
+    const res = await fetch('/warroom/api/loop-config')
+    if (!res.ok) return null
+    const d = await res.json() as { ok?: boolean } & LoopView
+    return d.ok === true ? d : null
+  } catch { return null }
+}
+
+/** D37 保存思考强度档位（POST loop-config 局部补丁——即时生效）。 */
+export async function saveLoopEffort(effort: '' | 'fast' | 'deep'): Promise<boolean> {
+  try {
+    const res = await fetch('/warroom/api/loop-config', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ effort }),
+    })
+    const d = await res.json() as { saved?: { ok?: boolean } }
+    return d.saved?.ok === true
+  } catch { return false }
+}
+
+/** D37 停止在途 loop 轮（丢弃在途不降级）。回执=是否确有在途轮被停。 */
+export async function abortLoop(): Promise<boolean> {
+  try {
+    const res = await fetch('/warroom/api/loop-abort', { method: 'POST' })
+    if (!res.ok) return false
+    const d = await res.json() as { stopped?: boolean }
+    return d.stopped === true
+  } catch { return false }
 }
 
 /** D26 舰长发话入账（写通道本体：追加即受理，大副 15s tick 回话）。 */

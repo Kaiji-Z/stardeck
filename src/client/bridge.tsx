@@ -9,7 +9,7 @@
  */
 
 import { createElement, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { answerCommand, closeTask, createCommand, decidePlan, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage } from './data.ts'
+import { answerCommand, abortLoop, closeTask, createCommand, decidePlan, fetchLoopView, saveLoopEffort, sendBridgeMessage, useWar, warBoardStore, type BoardCommand, type BoardTask, type BridgeChatMessage, type LoopView } from './data.ts'
 import { activeCopy, subscribeSkin, skinId, subscribeLang, langId } from './copy.ts'
 import { collectInbox, type InboxItem } from './inbox.ts'
 import { reportBody } from './views.tsx'
@@ -394,6 +394,18 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const [actionNote, setActionNote] = useState<string | null>(null)
   const [awayFromBottom, setAwayFromBottom] = useState(false)
   const msgsRef = useRef<HTMLDivElement | null>(null)
+  // D37 loop 运行视图（思考档芯条+上下文占用环的数据源）：挂载拉一次+20s 兜底
+  // 轮询+每轮入账（消息数变化）即刷——占用表跟着真实组包走。
+  const [loopView, setLoopView] = useState<LoopView | null>(null)
+  const [ctxOpen, setCtxOpen] = useState(false)
+  const [effortBusy, setEffortBusy] = useState(false)
+  const refreshLoop = (): void => { void fetchLoopView().then(v => { if (v !== null) setLoopView(v) }) }
+  useEffect(() => {
+    refreshLoop()
+    const t = setInterval(refreshLoop, 20_000)
+    return () => { clearInterval(t) }
+  }, [])
+  useEffect(() => { refreshLoop(); setCtxOpen(false) }, [messages === null ? 0 : messages.length])
   // P1 修（D33 critique A）：决策坞截断可见性——可下滚时底部渐隐提示（默认态
   // 半行字不再读作渲染故障）。挂载/收件箱变化时量一次，滚动中跟量。
   const dockRef = useRef<HTMLDivElement | null>(null)
@@ -451,8 +463,28 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       nearBottomRef.current = true
       setSendNote(bc.sentNote)
       bridgeStore.refresh()
+      refreshLoop()
     } else setActionNote(out.error ?? bc.actionFail)
   }
+
+  // ---------- D37 工具条三件（思考档芯条/上下文占用环/停止钮的数据与动作） ----------
+  const effortLabelOf = (e: '' | 'fast' | 'deep'): string => e === '' ? bc.effortAuto : e === 'fast' ? bc.effortFast : bc.effortDeep
+  const liveActive = live !== '' || liveReasoning !== '' || liveTools.length > 0
+  const stopLoop = (): void => {
+    void abortLoop().then(stopped => { if (stopped) setSendNote(bc.stoppedNote) }) // stopped=false（无在途）不弹假战报
+  }
+  const cycleEffort = (): void => {
+    if (loopView === null || effortBusy) return
+    const next: '' | 'fast' | 'deep' = loopView.effort === '' ? 'fast' : loopView.effort === 'fast' ? 'deep' : ''
+    setEffortBusy(true)
+    void saveLoopEffort(next).then(ok => {
+      setEffortBusy(false)
+      if (ok) setLoopView({ ...loopView, effort: next })
+      else setActionNote(bc.actionFail)
+    })
+  }
+  const tkFmt = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+  const durFmt = (ms: number): string => ms >= 10_000 ? String(Math.round(ms / 1000)) : (ms / 1000).toFixed(1)
 
   const openFocusBtn = (commandId: string, key: string): ReactNode =>
     createElement('button', { key, className: 'war-btn war-bref', type: 'button', onClick: () => { onOpenBoard?.(commandId) } }, bc.openFocus)
@@ -468,6 +500,14 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         if (owner !== null) refs.push(openFocusBtn(owner.commandId, 'ref-task'))
       }
     }
+    // D37 消息 meta 行：agent 终答带回合计量（模型·思考档·耗时·tokens——
+    // 随账 meta 的诚实呈现；无 meta 的老消息/CLI 席回话零变化）。
+    const metaSuffix = m.kind === 'agent' && m.meta !== undefined
+      ? ` · ${bc.metaLine(m.meta.model, effortLabelOf(m.meta.effort === 'fast' ? 'fast' : m.meta.effort === 'deep' ? 'deep' : ''), durFmt(m.meta.elapsedMs),
+        m.meta.promptTokens !== undefined || m.meta.completionTokens !== undefined
+          ? `↑${tkFmt(m.meta.promptTokens ?? 0)} ↓${tkFmt(m.meta.completionTokens ?? 0)}`
+          : '')}`
+      : ''
     if (m.kind === 'system') {
       return createElement('div', { key: i, className: `war-bmsg war-bmsg-system war-bnotice-${m.noticeKind ?? 'info'}`, 'data-bridge-notice': m.noticeKind ?? 'info' },
         createElement('div', { className: 'war-bmsg-meta' }, `${role} · ${hhmm(m.ts)}`),
@@ -476,7 +516,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       )
     }
     return createElement('div', { key: i, className: `war-bmsg war-bmsg-${m.kind}` },
-      createElement('div', { className: 'war-bmsg-meta' }, `${role} · ${hhmm(m.ts)}`),
+      createElement('div', { className: 'war-bmsg-meta' }, `${role} · ${hhmm(m.ts)}${metaSuffix}`),
       m.kind === 'agent'
         ? createElement('div', { className: 'war-bmsg-body' }, reportBody(m.text))
         : createElement('div', { className: 'war-bmsg-body war-bmsg-plain' }, m.text),
@@ -600,10 +640,10 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       // 带参数/结果摘要——「正在回话」之外，loop 在想什么、查什么都看得见。
       live !== '' || liveTools.length > 0 || liveReasoning !== ''
         ? createElement('div', { className: 'war-bmsg war-bmsg-agent war-bmsg-live', 'data-bridge-live': '1' },
-            createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${bc.liveTyping}`),
+            createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${loopView !== null && loopView.model !== '' ? `${loopView.model} · ` : ''}${bc.liveTyping}`),
             liveReasoning !== ''
               ? createElement('details', { className: 'war-bmsg-reasoning', 'data-bridge-reasoning': '1', open: live === '' },
-                  createElement('summary', null, bc.liveThinking),
+                  createElement('summary', null, bc.thinkingChars(liveReasoning.length)),
                   createElement('div', { className: 'war-bmsg-reasoning-body' }, liveReasoning))
               : null,
             liveTools.length > 0
@@ -644,6 +684,50 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       actionNote !== null ? createElement('p', { className: 'war-bridge-err', role: 'alert' }, actionNote) : null,
       sendNote !== '' ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, sendNote) : null,
       proxyAway ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-proxy-away': '1' }, bc.proxyAway) : null,
+      // D37 工具条（lookatstudy composer 同形）：思考档芯条+上下文占用环——
+      // 档位点击循环切换（POST 即时生效）；占用环点击弹四段明细。
+      createElement('div', { className: 'war-bridge-toolbar', 'data-bridge-toolbar': '1' },
+        loopView !== null && (loopView.effortSupported ?? false)
+          ? createElement('button', {
+              type: 'button', className: 'war-btn war-bridge-chip', 'data-bridge-effort': loopView.effort,
+              disabled: effortBusy, title: bc.effortLabel, onClick: cycleEffort,
+            }, `${bc.effortLabel}·${effortLabelOf(loopView.effort)}`)
+          : null,
+        loopView?.contextEstimate !== undefined
+          ? (() => {
+              const est = loopView.contextEstimate!
+              const pct = est.contextWindow !== null && est.contextWindow > 0 ? Math.min(100, Math.round(est.total / est.contextWindow * 100)) : null
+              const warn = pct !== null && pct >= 85
+              const ctxRow = (label: string, value: number): ReactNode => createElement('div', { className: 'war-ctx-row' },
+                createElement('span', { className: 'war-ctx-label' }, label),
+                createElement('span', { className: 'war-ctx-val' }, `${tkFmt(value)}${est.total > 0 ? ` · ${Math.round(value / est.total * 100)}%` : ''}`))
+              return createElement('div', { className: 'war-bridge-ctx' },
+                createElement('button', {
+                  type: 'button', className: `war-btn war-bridge-chip${warn ? ' warn' : ''}`, 'data-bridge-ctx': pct !== null ? String(pct) : 'na',
+                  title: bc.ctxTitle, 'aria-expanded': ctxOpen, onClick: () => { setCtxOpen(o => !o) },
+                },
+                  createElement('svg', { viewBox: '0 0 16 16', width: 13, height: 13, 'aria-hidden': 'true', className: 'war-ctx-ring' },
+                    createElement('circle', { cx: 8, cy: 8, r: 6, className: 'war-ctx-ring-bg', strokeWidth: 2.5, fill: 'none' }),
+                    createElement('circle', {
+                      cx: 8, cy: 8, r: 6, className: `war-ctx-ring-fg${warn ? ' warn' : ''}`, strokeWidth: 2.5, fill: 'none',
+                      strokeDasharray: `${((pct ?? 0) / 100) * 37.7} 37.7`, transform: 'rotate(-90 8 8)',
+                    })),
+                  pct !== null ? `${pct}%` : tkFmt(est.total)),
+                ctxOpen
+                  ? createElement('div', { className: 'war-ctx-panel', 'data-bridge-ctxpanel': '1' },
+                      createElement('div', { className: 'war-ctx-panel-title' }, bc.ctxTitle),
+                      ctxRow(bc.ctxTeaching, est.teaching),
+                      ctxRow(bc.ctxHistory, est.history),
+                      ctxRow(bc.ctxLedger, est.ledger),
+                      ctxRow(bc.ctxPending, est.pending),
+                      createElement('div', { className: 'war-ctx-panel-total' },
+                        est.contextWindow !== null && est.contextWindow > 0
+                          ? bc.ctxTotal(tkFmt(est.total), tkFmt(est.contextWindow))
+                          : `${tkFmt(est.total)} · ${bc.ctxUnknown}`))
+                  : null)
+            })()
+          : null,
+      ),
       createElement('textarea', {
         className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
         disabled: proxyAway,
@@ -658,7 +742,11 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
         },
       }),
       createElement('div', { className: 'war-bridge-sendrow' },
-        createElement('button', { className: 'war-btn primary', type: 'button', disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),
+        // D37 停止钮：loop 在途（思考/正文/工具任一有流量）时发送钮变停止——
+        // 掐在途轮（丢弃不降级）；无在途=普通发送。
+        liveActive
+          ? createElement('button', { className: 'war-btn war-bridge-stop', type: 'button', 'data-bridge-stop': '1', onClick: stopLoop }, `■ ${bc.stopBtn}`)
+          : createElement('button', { className: 'war-btn primary', type: 'button', disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),
     ),
   )
 }

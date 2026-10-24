@@ -7,6 +7,7 @@
  * 启动：node --import tsx scripts/bridge-ui-check.ts（cwd=仓库根）
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import { createServer } from 'node:http'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,8 +40,32 @@ function playwrightCorePath(): string {
 }
 
 let daemon: ChildProcess | undefined
+let gate: ReturnType<typeof createServer> | undefined
 let exitCode = 0
 try {
+  // ── D37 慢答假网关：SSE chat 兼容面。普通问话秒答；「慢点答」标记轮先吐
+  // 思考流再挂 30s——造一个可停止的在途轮（停止钮 e2e 的对手方）。 ──
+  gate = createServer((req, res) => {
+    let raw = ''
+    req.on('data', c => { raw += c })
+    req.on('end', () => {
+      const slow = raw.includes('慢点答')
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+      const frame = (delta: Record<string, unknown>, finish: string | null): void => {
+        res.write(`data: ${JSON.stringify({ id: 'g1', object: 'chat.completion.chunk', created: 1, model: 'glm-test', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`)
+      }
+      if (slow) {
+        frame({ role: 'assistant', reasoning_content: '舰长要慢答，先把账面核一遍再开口……' }, null)
+        setTimeout(() => { frame({ content: '慢答正文（不应出现——已被停止）。' }, 'stop'); res.write('data: [DONE]\n\n'); res.end() }, 30_000)
+        return
+      }
+      frame({ role: 'assistant', content: '收到，一切照常。' }, 'stop')
+      res.write('data: [DONE]\n\n')
+      res.end()
+    })
+  })
+  await new Promise<void>(r => gate.listen(0, '127.0.0.1', r))
+  const gatePort = (gate.address() as { port: number }).port
   // ── 种账本：挂起澄清（带选项）+ reported 任务 → 聊天决策坞两卡齐 ──
   const now = new Date().toISOString()
   appendDirectiveEvent(stateDir, { type: 'directive_created', ts: now, directiveId: 'cmd-ui-clar', text: '给日常工具箱加一个每日格言小工具' })
@@ -50,11 +75,13 @@ try {
   appendEvent(stateDir, { type: 'task_created', ts: now, campaignId: 'task-ui-1', title: '给 README 加安装一节', brief: 'b', acceptance: 'a', priority: 'normal' })
   appendEvent(stateDir, { type: 'task_submitted', ts: now, campaignId: 'task-ui-1', from: 'oc-exec-1', report: '安装一节已补：三步命令 + 前置条件清单。' })
   appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: now, text: '收到——先看账面再答。', commandRefs: ['cmd-ui-clar'] })
-  console.log(`种账完毕：clarify cmd-ui-clar + reported task-ui-1 + agent 话轮带 refs（stateDir=${stateDir}）`)
+  // D37：带 meta 的 agent 话轮（消息 meta 行的种子——模型·思考档·耗时·tokens）。
+  appendBridgeEvent(stateDir, { type: 'bridge_agent_message', ts: now, text: '上一轮战报：两件事在跑，一件待签。', agentId: 'proxy-loop', meta: { model: 'glm-5.3', effort: 'deep', elapsedMs: 4200, promptTokens: 1200, completionTokens: 340 } })
+  console.log(`种账完毕：clarify cmd-ui-clar + reported task-ui-1 + agent 话轮带 refs/meta（stateDir=${stateDir}）`)
 
   daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
-    env: { ...process.env, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STATE_DIR: stateDir, STARDECK_WAR_ROOT: warRoot, STARDECK_PORT: String(PORT), STARDECK_STAFF: '0' },
+    env: { ...process.env, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STATE_DIR: stateDir, STARDECK_WAR_ROOT: warRoot, STARDECK_PORT: String(PORT), STARDECK_STAFF: '0', Z_AI_BASE_URL: `http://127.0.0.1:${gatePort}`, Z_AI_API_KEY: 'sk-ui-gate', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3' },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
@@ -198,6 +225,40 @@ try {
   check('B3：Enter 直发入账', true, 'enter send')
   const clearedVal = await page.locator('[data-bridge-input]').inputValue()
   check('B3：Enter 发送后输入框清空', clearedVal === '', JSON.stringify(clearedVal))
+  // ── D37 工具条三件 + meta 行 + 停止钮 e2e（浮窗开、输入在场时测）──
+  await page.waitForSelector('[data-bridge-toolbar]', { timeout: 10_000 })
+  const effortChip = await page.locator('[data-bridge-effort]').count()
+  const effortText0 = effortChip > 0 ? await page.locator('[data-bridge-effort]').textContent() : null
+  check('D37：思考档芯条在场（自动初相）', effortChip === 1 && (effortText0 ?? '').includes('自动'), effortText0 ?? 'missing')
+  await page.locator('[data-bridge-effort]').click()
+  await page.waitForFunction(() => document.querySelector('[data-bridge-effort]')?.getAttribute('data-bridge-effort') === 'fast', { timeout: 5_000 })
+  const cfgEffort = await page.evaluate(async () => await (await fetch('/warroom/api/loop-config')).json()) as { effort?: string }
+  check('D37：档位点击循环切换+落盘即时生效', cfgEffort.effort === 'fast', `effort=${cfgEffort.effort}`)
+  const ctxChip = await page.locator('[data-bridge-ctx]').count()
+  check('D37：上下文占用环在场', ctxChip === 1, `chip=${ctxChip}`)
+  await page.locator('[data-bridge-ctx]').click()
+  await page.waitForSelector('[data-bridge-ctxpanel]', { timeout: 5_000 })
+  const panelRows = await page.locator('[data-bridge-ctxpanel] .war-ctx-row').count()
+  check('D37：占用明细面板四段（教学/历史/账本/新话）', panelRows === 4, `rows=${panelRows}`)
+  await page.locator('[data-bridge-ctx]').click() // 再点收起
+  // meta 行：种子 agent 消息（effort=deep）带 模型·思考档·耗时·tokens 小字。
+  await page.waitForFunction(() => [...document.querySelectorAll('.war-bmsg-meta')].some(el => (el.textContent ?? '').includes('深度') && (el.textContent ?? '').includes('glm-5.3')), { timeout: 5_000 })
+  const metaLine = await page.locator('.war-bmsg-meta', { hasText: 'glm-5.3' }).filter({ hasText: '深度' }).first().textContent()
+  check('D37：agent 消息 meta 行（模型·思考档·耗时·tokens）', (metaLine ?? '').includes('4.2s') === true && (metaLine ?? '').includes('1.2k') === true, metaLine ?? 'missing')
+  // 停止钮 e2e：慢答轮（思考流已上屏、正文未出）→ 发送钮变 ■停止 → 点击 →
+  // 「已停止」terminal 战报 + 按钮复位（不降级——staff=0 也起不了 CLI 席）。
+  await page.locator('[data-bridge-input]').fill('慢点答：讲讲舰队现状')
+  await page.locator('[data-bridge-send]').click()
+  await page.waitForSelector('[data-bridge-reasoning]', { timeout: 20_000 })
+  const stopBtn = await page.locator('[data-bridge-stop]').count()
+  check('D37：在途轮发送钮变停止（■）', stopBtn === 1, `stop=${stopBtn}`)
+  await page.screenshot({ path: join(evidenceDir, 'd37-live-stop.png'), fullPage: false })
+  await page.locator('[data-bridge-stop]').click()
+  await page.waitForFunction(() => (document.body.textContent ?? '').includes('已停止本轮应答'), { timeout: 10_000 })
+  check('D37：停止→「已停止」terminal 战报（不降级）', true, 'terminal notice')
+  await page.waitForSelector('[data-bridge-stop]', { state: 'detached', timeout: 10_000 })
+  check('D37：停止后发送钮复位', true, 'stop detached')
+  await page.screenshot({ path: join(evidenceDir, 'd37-toolbar.png'), fullPage: false })
   // D33 B1：点穿聚焦页浮窗保持开（种子战报卡带「打开聚焦页」钮）。
   const refBtn = page.locator('.war-bref').first()
   if (await refBtn.count() > 0) {
@@ -269,6 +330,7 @@ try {
 } finally {
   daemon?.kill()
   await new Promise(r => setTimeout(r, 500))
+  try { gate?.close() } catch { /* best-effort */ }
   writeFileSync(join(evidenceDir, 'ui-check-results.json'), JSON.stringify(results, null, 2), 'utf8')
   try { rmSync(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 }) } catch { /* 断言已出，清理 best-effort */ }
 }

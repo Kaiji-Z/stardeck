@@ -689,6 +689,27 @@ export interface WarCopy {
     /** D28 图景附件：agent 话轮随附的已对账图页（沙箱 iframe 渲染）。 */
     sceneCaption: (title: string) => string
     sceneOpen: string
+    /** D37 思考强度三档（模型设置弹窗+浮窗工具条芯条共用）。 */
+    effortLabel: string
+    effortAuto: string
+    effortFast: string
+    effortDeep: string
+    effortUnsupported: string
+    /** D37 上下文占用表（环形表+四段明细面板）。 */
+    ctxTitle: string
+    ctxTeaching: string
+    ctxHistory: string
+    ctxLedger: string
+    ctxPending: string
+    ctxUnknown: string
+    ctxTotal: (used: string, win: string) => string
+    /** D37 停止钮（在途应答即时掐——丢弃在途不降级）。 */
+    stopBtn: string
+    stoppedNote: string
+    /** D37 消息 meta 行（模型·思考档·耗时·tokens，随终答入账的回合事实）。 */
+    metaLine: (model: string, effort: string, sec: string, tokens: string) => string
+    /** D37 思考流折叠区标题（带字数）。 */
+    thinkingChars: (n: number) => string
   }
 }
 
@@ -1337,6 +1358,22 @@ export const warCopy: WarCopy = {
     authOff: '未授权：一切定夺呈你亲手。',
     sceneCaption: (title: string) => `图景：${title}（沙箱渲染，零脚本）`,
     sceneOpen: '新窗看全图',
+    effortLabel: '思考强度',
+    effortAuto: '自动',
+    effortFast: '快速',
+    effortDeep: '深度',
+    effortUnsupported: '当前供应商不支持思考档位（恒自动）',
+    ctxTitle: '上下文占用',
+    ctxTeaching: '教学骨架',
+    ctxHistory: '对话历史',
+    ctxLedger: '账本切片',
+    ctxPending: '本轮新话',
+    ctxUnknown: '窗口未知·仅报用量',
+    ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
+    stopBtn: '停止',
+    stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
+    metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
+    thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },
 }
 
@@ -1981,6 +2018,22 @@ export const plainCopy: WarCopy = {
     authOff: '未授权：一切定夺呈你亲手。',
     sceneCaption: (title: string) => `一页图：${title}（安全沙箱里显示）`,
     sceneOpen: '新窗口看大图',
+    effortLabel: '思考强度',
+    effortAuto: '自动',
+    effortFast: '快速',
+    effortDeep: '深度',
+    effortUnsupported: '当前供应商不支持思考档位（恒自动）',
+    ctxTitle: '上下文占用',
+    ctxTeaching: '教学骨架',
+    ctxHistory: '对话历史',
+    ctxLedger: '账本切片',
+    ctxPending: '本轮新话',
+    ctxUnknown: '窗口未知·仅报用量',
+    ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
+    stopBtn: '停止',
+    stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
+    metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
+    thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },
 }
 

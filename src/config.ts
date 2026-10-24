@@ -196,9 +196,12 @@ export interface LoopConfig {
   model: string
   baseUrl: string
   apiKey: string
+  /** D37 思考强度（照搬 lookatstudy 三档）：''=自动不干预 / 'fast'=thinking disabled /
+   *  'deep'=thinking enabled——仅 GLM 家族端点生效（bodyPatch 方言，见 proxy-loop）。 */
+  effort: '' | 'fast' | 'deep'
 }
 
-const EMPTY_LOOP: LoopConfig = { model: '', baseUrl: '', apiKey: '' }
+const EMPTY_LOOP: LoopConfig = { model: '', baseUrl: '', apiKey: '', effort: '' }
 
 export function readLoopConfig(): LoopConfig {
   const path = configFilePath()
@@ -210,6 +213,7 @@ export function readLoopConfig(): LoopConfig {
       model: typeof l.model === 'string' ? l.model : '',
       baseUrl: typeof l.baseUrl === 'string' ? l.baseUrl : '',
       apiKey: typeof l.apiKey === 'string' ? l.apiKey : '',
+      effort: l.effort === 'fast' || l.effort === 'deep' ? l.effort : '',
     }
   } catch {
     return { ...EMPTY_LOOP }
@@ -237,6 +241,7 @@ export function writeLoopConfig(patch: Partial<LoopConfig>): { ok: true; loop: L
     model: patch.model !== undefined ? patch.model : prev.model,
     baseUrl: patch.baseUrl !== undefined ? patch.baseUrl : prev.baseUrl,
     apiKey: patch.apiKey !== undefined ? patch.apiKey : prev.apiKey,
+    effort: patch.effort !== undefined ? patch.effort : prev.effort,
   }
   try {
     mkdirSync(dirname(path), { recursive: true })

@@ -3,6 +3,20 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
 
+## [0.8.2] - 2026-10-24
+
+### Added（D37 对话频道补全：思考强度 + 上下文占用 + 停止/计量）
+
+- **思考强度三档**（自动/快速/深度，照搬 lookatstudy bodyPatch 方言表）：`LoopConfig.effort` 落 `config.loop` 段；GLM 家族（baseUrl+模型串双源嗅探，自建代理端点也认）按档打 `thinking:{type}`+`reasoning_effort` 请求体补丁，非方言家族 UI 门控禁用恒自动。两处 UI：模型设置弹窗三选段 + **浮窗工具条快捷芯条**（点击循环切换，POST 即时生效）。
+- **上下文占用表（ContextMeter）**：`provider-presets` 每档带 `contextWindow`；daemon 组包分段估算（教学骨架/对话历史/账本切片/本轮新话——CJK 1.1 token/字启发式）；浮窗工具条 14px 环形表+百分比（≥85% warning 色），点击弹四段明细面板；窗口未知=诚实只报用量。**历史预算双闸**：24 条上限外再加 token 闸（窗口×60%，从新往旧装，超即停，至少保最新一条）。
+- **停止钮**：在途轮（思考/正文/工具任一有流量）发送钮变 ■停止 → `POST /loop-abort` → daemon 掐在途 AbortController（与看门狗组合 signal）——丢弃在途不上账、「已停止」terminal 战报、**不降级 spawn**（停止是舰长意志非失手）；无在途回 `stopped:false` 不弹假战报。
+- **真实计量（usage 采集）**：loop 开 `includeUsage`（stream_options）+收 usage 帧解析（spec v2 面名 `inputTokens/outputTokens`，别按 v3 读——读错全 undefined 静默）；终答入账 agent 消息**条件 spread `meta`**（模型/思考档/耗时/tokens——回合事实审计，旧消息零迁移），浮窗消息 meta 行小字呈现（`glm-5.3 · 深度 · 4.2s · ↑1.2k ↓340`）；思考流折叠区标题带字数。
+- 词典四典 +18 键（effort 三档/占用四段/停止/meta 行/思考字数）；测试 582（+7：bodyPatch 方言三态/usage 采集含 stream_options 断言/abort 掐断/方言嗅探/estimateTokens/历史预算双闸/meta fold 零迁移）；UI 目检 42/42（新增 8 断言：芯条/档位切换落盘/占用环四段面板/meta 行/停止钮 e2e 慢答假网关全弧线）；live 17/17。
+
+### Fixed
+
+- 测试端口底数串话（档内坑录重演）：loop-config 端点细节甲/乙换独占底数 41410/41430（原 41310 与 mcp-proxy-face/proxy-kick 三文件共用、41330 与 cli-commands 共用——全量并行下 loop-test 打到别家 daemon 收 HTTP 404 误报「未配 key」断言败）。
+
 ## [0.8.1] - 2026-10-24
 
 ### Added（D36 流式详情 + 发话即应答 + 对抗审查回流）

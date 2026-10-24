@@ -26,10 +26,10 @@ test('loop 配置读写往返：loop 段落本机 config、既有键保留、清
   const prev = process.env.STARDECK_CONFIG
   process.env.STARDECK_CONFIG = cfgPath
   try {
-    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '' }, '无 loop 段=空配置')
+    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '' }, '无 loop 段=空配置')
     const w1 = writeLoopConfig({ model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1' })
     assert.equal(w1.ok, true)
-    assert.deepEqual(readLoopConfig(), { model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1' })
+    assert.deepEqual(readLoopConfig(), { model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1', effort: '' })
     const fileBody = JSON.parse(readFileSync(cfgPath, 'utf8')) as { executor?: string; loop?: unknown }
     assert.equal(fileBody.executor, 'opencode', '既有键原样保留')
     assert.ok(fileBody.loop !== undefined, 'loop 段在场')
@@ -109,6 +109,22 @@ test('真 daemon：loop-config 三端点 + /fleet 回读 + key 永不出线', { 
     assert.equal(t2.probe.ok, false, '覆盖坏基址=诚实报败')
     const diskPre = JSON.parse(readFileSync(join(stateDir, 'config.json'), 'utf8')) as { loop?: { apiKey?: string } }
     assert.equal(diskPre.loop?.apiKey, 'sk-loop-test', 'key 只落本机 config')
+    // D37 思考强度往返：POST effort=fast → GET 回读；非法档静默忽略；占用表在场。
+    const pe = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ effort: 'fast' }) }).then(r => r.json()) as { saved: { ok: boolean; effort?: string } }
+    assert.equal(pe.saved.ok, true)
+    assert.equal(pe.saved.effort, 'fast', 'effort 保存往返')
+    const pe2 = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ effort: 'turbo' }) }).then(r => r.json()) as { saved: { effort?: string } }
+    assert.equal(pe2.saved.effort, 'fast', '非法档静默忽略（不覆盖已存档）')
+    const ge = await fetch(`${base}/warroom/api/loop-config`).then(r => r.json()) as { effort: string; effortSupported?: boolean; contextEstimate?: { total: number; teaching: number; history: number; ledger: number; pending: number; contextWindow: number | null } }
+    assert.equal(ge.effort, 'fast')
+    assert.equal(ge.effortSupported, true, '模型串 glm-5.2 命中思考方言（双源嗅探）')
+    assert.ok(ge.contextEstimate !== undefined && ge.contextEstimate.total > 0, `占用表在场（total=${ge.contextEstimate?.total}）`)
+    assert.ok(ge.contextEstimate!.teaching > 0, '教学骨架分段在场')
+    assert.equal(ge.contextEstimate!.contextWindow, null, '自定义基址=窗口未知（诚实 null）')
+    // D37 停止钮端点：无在途轮 → stopped:false（不弹假战报的回执依据）。
+    const ab = await fetch(`${base}/warroom/api/loop-abort`, { method: 'POST' }).then(r => r.json()) as { ok: boolean; stopped: boolean }
+    assert.equal(ab.ok, true)
+    assert.equal(ab.stopped, false, '无在途=如实回未停')
   } catch (err) {
     console.error('DAEMON_STDERR_DUMP:', errDump.slice(-1500))
     throw err
@@ -173,13 +189,18 @@ test('端点缺席面：deps.loopConfig 未注入 → loop-config 路由 404（�
   const r1 = fakeRes()
   await captured!(fakeReq('GET', '/warroom/api/loop-config'), r1)
   assert.equal((r1 as { statusCode: number }).statusCode, 404, 'loopConfig 缺席 → 404（不 500 不炸）')
-  assert.equal(resWrites.length, 1, '恰一次写')
+  const r2 = fakeRes()
+  await captured!(fakeReq('POST', '/warroom/api/loop-abort'), r2)
+  assert.equal((r2 as { statusCode: number }).statusCode, 404, 'loopAbort 缺席 → 404（D37 同语义）')
+  assert.equal(resWrites.length, 2, '每请求恰一次写')
 })
 
 
 test('端点细节甲：未配 key 的 loop-test 诚实报错 + /fleet 初相（env 模型/none 来源）+ baseUrl 尾斜杠剥除', { timeout: 90_000 }, async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-loopd2-'))
-  const port = 41310 + (process.pid % 50)
+  // 底数全仓独占（41310 被 mcp-proxy-face/proxy-kick 占用——全量并行下双 daemon
+  // 共听串话，loop-test 打到别家 daemon 拿到 HTTP 404 而非「未配 key」）。
+  const port = 41410 + (process.pid % 50)
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3-air' },
@@ -209,7 +230,7 @@ test('端点细节甲：未配 key 的 loop-test 诚实报错 + /fleet 初相（
 
 test('端点细节乙：apiKey trim 入盘 + 清除（空串）后来源回 none', { timeout: 90_000 }, async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-loopd3-'))
-  const port = 41330 + (process.pid % 50)
+  const port = 41430 + (process.pid % 50) // 底数独占（41330 与 cli-commands 共用会串话）
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0' },
@@ -240,7 +261,7 @@ test('纯分支三件：env+cfg 双 key 时硬关仍禁；STARDECK_CONFIG 缺席
   const prev = process.env.STARDECK_CONFIG
   process.env.STARDECK_CONFIG = join(mkdtempSync(join(tmpdir(), 'sd-nofile-')), 'absent.json')
   try {
-    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '' }, '文件缺席=空配置')
+    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '' }, '文件缺席=空配置')
     writeLoopConfig({ model: 'only-model' })
     writeLoopConfig({ baseUrl: 'https://b' })
     const l = readLoopConfig()

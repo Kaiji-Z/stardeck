@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { appendBridgeEvent, loadBridgeMessages, foldBridge, bridgeUnanswered, bridgeHistoryWindow, bridgeNoticeKeys, collectBridgeNoticeEvents, syncBridgeNotices, type BridgeEvent } from '../src/bridge.ts'
+import { appendBridgeEvent, loadBridgeMessages, foldBridge, bridgeUnanswered, bridgeHistoryWindow, bridgeNoticeKeys, collectBridgeNoticeEvents, syncBridgeNotices, estimateTokens, type BridgeEvent, type BridgeMessage } from '../src/bridge.ts'
 import { appendDirectiveEvent } from '../src/directives.ts'
 import { appendEvent } from '../src/events.ts'
 
@@ -66,6 +66,41 @@ test('bridge：携史窗口——末 cap 条 + role 归一（you/manager/system�
   assert.equal(win[0]!.text, 'm25')
   assert.equal(win[4]!.role, 'manager')
   assert.equal(win[4]!.text, 'm29')
+})
+
+// ── D37：token 估算纯函数 + 携史窗口 token 预算双闸 ──
+
+test('D37 estimateTokens 启发式：CJK 1.1 token/字、其他 4 字符/token、空串零', () => {
+  assert.equal(estimateTokens(''), 0)
+  assert.equal(estimateTokens('你好吗'), 3, '3 CJK → round(3×1.1)=3')
+  assert.equal(estimateTokens('abcdefgh'), 2, '8 ASCII → 8/4=2')
+  assert.equal(estimateTokens('a你'), 1, '混合 → round(1.1+0.25)=1')
+})
+
+test('D37 bridgeHistoryWindow token 预算：从新往旧装、超即停、至少保最新；无预算=纯条数闸', () => {
+  const mk = (kind: 'user' | 'agent' | 'system', text: string): BridgeMessage => ({ kind, ts: '2026-10-24T00:00:00Z', text })
+  const m1 = mk('user', 'x'.repeat(400)) // ~100 token
+  const m2 = mk('agent', 'y'.repeat(400)) // ~100 token
+  const m3 = mk('user', '短') // 1 token
+  const m4 = mk('agent', '答') // 1 token
+  const budget = estimateTokens('短') + estimateTokens('答')
+  assert.deepEqual(bridgeHistoryWindow([m1, m2, m3, m4], 24, budget).map(w => w.text), ['短', '答'], '长旧话让位，预算内的最新话保住')
+  assert.equal(bridgeHistoryWindow([m1], 24, 1).length, 1, '预算再小也至少保最新一条')
+  assert.deepEqual(bridgeHistoryWindow([m1, m2, m3, m4], 3).map(w => w.text), ['y'.repeat(400), '短', '答'], '无预算=旧语义纯条数闸不变')
+  assert.deepEqual(bridgeHistoryWindow([m1, m2, m3, m4], 24, 10_000).length, 4, '预算宽裕=全装')
+})
+
+test('D37 bridge_agent_message meta 字段：入账→fold 透传（旧消息零迁移）', () => {
+  const msgs = foldBridge([
+    { type: 'bridge_user_message', ts: '01', text: '问' },
+    { type: 'bridge_agent_message', ts: '02', text: '答', agentId: 'proxy-loop', meta: { model: 'glm-5.3', effort: 'deep', elapsedMs: 4200, promptTokens: 1200, completionTokens: 340 } },
+  ] as BridgeEvent[])
+  assert.equal(msgs[1]!.meta?.model, 'glm-5.3')
+  assert.equal(msgs[1]!.meta?.effort, 'deep')
+  assert.equal(msgs[1]!.meta?.promptTokens, 1200)
+  // 老形态（无 meta）照常 fold——零迁移红线。
+  const legacy = foldBridge([{ type: 'bridge_agent_message', ts: '03', text: '老话' }] as BridgeEvent[])
+  assert.equal(legacy[0]!.meta, undefined)
 })
 
 test('bridge：机械战报五触发——澄清/定时派发/成任务/交证/失败/收官齐报到', () => {

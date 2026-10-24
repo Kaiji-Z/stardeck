@@ -14,6 +14,9 @@ export interface ProviderPreset {
   keyUrl: string
   /** 常用模型 id（datalist + 快捷药丸；存储仍走自由输入）。 */
   modelIds: string[]
+  /** D37 上下文窗口（token，常用主力档的公开口径；null=未知——占用表诚实只报
+   *  用量不报百分比）。窗口随模型有差，此值为表级近似。 */
+  contextWindow: number | null
 }
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
@@ -23,6 +26,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
     keyUrl: 'https://z.ai/manage-apikey/apikey-list',
     modelIds: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-4.7', 'glm-5-turbo'],
+    contextWindow: 128_000,
   },
   {
     id: 'zai-standard',
@@ -30,6 +34,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.z.ai/api/paas/v4',
     keyUrl: 'https://z.ai/manage-apikey/apikey-list',
     modelIds: ['glm-5.3', 'glm-5.3-flash', 'glm-5.2', 'glm-4.7'],
+    contextWindow: 128_000,
   },
   {
     id: 'deepseek',
@@ -37,6 +42,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.deepseek.com/v1',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     modelIds: ['deepseek-flash', 'deepseek-v4-pro'],
+    contextWindow: 128_000,
   },
   {
     id: 'kimi',
@@ -44,6 +50,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.moonshot.cn/v1',
     keyUrl: 'https://platform.kimi.com/console/api-keys',
     modelIds: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6'],
+    contextWindow: 256_000,
   },
   {
     id: 'qwen',
@@ -51,6 +58,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     keyUrl: 'https://bailian.console.aliyun.com/',
     modelIds: ['qwen3.8-max', 'qwen3.8-flash', 'qwen-plus', 'qwen-flash'],
+    contextWindow: 131_072,
   },
   {
     id: 'minimax',
@@ -58,6 +66,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.minimaxi.com/v1',
     keyUrl: 'https://platform.minimaxi.com/console/access?tab=api-keys',
     modelIds: ['MiniMax-M3', 'MiniMax-M2.7'],
+    contextWindow: null,
   },
   {
     id: 'openai',
@@ -65,6 +74,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.openai.com/v1',
     keyUrl: 'https://platform.openai.com/api-keys',
     modelIds: ['gpt-5.6', 'gpt-5.4', 'gpt-5.4-mini'],
+    contextWindow: 272_000,
   },
   {
     id: 'anthropic',
@@ -72,6 +82,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: 'https://api.anthropic.com/v1',
     keyUrl: 'https://console.anthropic.com/settings/keys',
     modelIds: ['claude-sonnet-5', 'claude-haiku-4-5-20251001'],
+    contextWindow: 200_000,
   },
 ]
 
