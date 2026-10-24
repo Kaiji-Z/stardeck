@@ -706,6 +706,8 @@ export interface WarCopy {
     /** D37 停止钮（在途应答即时掐——丢弃在途不降级）。 */
     stopBtn: string
     stoppedNote: string
+    /** D38 批判 P1：停止钮点了但无在途 loop 轮（CLI 席/kick 未开跑）的诚实回执。 */
+    stopIdleNote: string
     /** D37 消息 meta 行（模型·思考档·耗时·tokens，随终答入账的回合事实）。 */
     metaLine: (model: string, effort: string, sec: string, tokens: string) => string
     /** D37 思考流折叠区标题（带字数）。 */
@@ -1287,7 +1289,7 @@ export const warCopy: WarCopy = {
     inputPh: '跟代理舰长说点什么……（Enter 发送 · Shift+Enter 换行）',
     send: '发送',
     sending: '发送中…',
-    sentNote: '已入账——代理舰长下一轮回话（约 15 秒起档）。',
+    sentNote: '已入账——代理舰长正在应答。',
     loadFail: '频道消息读取失败（daemon 不在或舰桥未开）。',
     dockTitle: '等你定夺',
     dockEmpty: '没有等你定夺的事——舰队自转中，有事代理舰长会来请示。',
@@ -1372,6 +1374,7 @@ export const warCopy: WarCopy = {
     ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
     stopBtn: '停止',
     stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
+    stopIdleNote: '本轮无在途应答可停——大副哨位下一轮接管。',
     metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
     thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },
@@ -1947,7 +1950,7 @@ export const plainCopy: WarCopy = {
     inputPh: '说点什么……（Enter 发送 · Shift+Enter 换行）',
     send: '发送',
     sending: '发送中…',
-    sentNote: '已入账——下一轮回话（约 15 秒起档）。',
+    sentNote: '已入账——正在应答。',
     loadFail: '频道消息读取失败（daemon 不在或频道未开）。',
     dockTitle: '等你定夺',
     dockEmpty: '没有等你定夺的事——一切自动运转中，有事代理管家会来请示。',
@@ -2032,6 +2035,7 @@ export const plainCopy: WarCopy = {
     ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
     stopBtn: '停止',
     stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
+    stopIdleNote: '本轮无在途应答可停——大副哨位下一轮接管。',
     metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
     thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },

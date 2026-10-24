@@ -259,6 +259,30 @@ try {
   await page.waitForSelector('[data-bridge-stop]', { state: 'detached', timeout: 10_000 })
   check('D37：停止后发送钮复位', true, 'stop detached')
   await page.screenshot({ path: join(evidenceDir, 'd37-toolbar.png'), fullPage: false })
+  // ── D38 新设计语言断言（深色默认/玻璃面板/composer 一体卡/状态单槽/meta 弱化）──
+  const darkDefault = await page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))
+  check('D38：首跑深色默认（无存储偏好即 dark）', darkDefault, `dark=${darkDefault}`)
+  const panelGeo = await page.locator('[data-bridge-panel]').evaluate(el => {
+    const s = getComputedStyle(el)
+    return { radius: s.borderRadius, blur: s.backdropFilter || s.webkitBackdropFilter }
+  })
+  check('D38：面板 16px 大圆角', panelGeo.radius === '16px', `radius=${panelGeo.radius}`)
+  check('D38：面板玻璃材质（backdrop-filter blur 在场）', panelGeo.blur.includes('blur'), panelGeo.blur)
+  const composerGeo = await page.locator('[data-bridge-composer]').evaluate(el => ({
+    exists: el !== null,
+    hasInput: el.querySelector('[data-bridge-input]') !== null,
+    hasToolbar: el.querySelector('[data-bridge-toolbar]') !== null,
+    radius: getComputedStyle(el).borderRadius,
+  }))
+  check('D38：composer 一体卡（内含输入+工具条，16px 圆角）', composerGeo.exists && composerGeo.hasInput && composerGeo.hasToolbar && composerGeo.radius === '16px', JSON.stringify(composerGeo))
+  const sendGeo = await page.locator('[data-bridge-send]').evaluate(el => getComputedStyle(el).borderRadius)
+  check('D38：圆形 3D 发送钮（border-radius 50%）', sendGeo === '50%', `radius=${sendGeo}`)
+  const noteCount = await page.locator('.war-composer-note').count()
+  check('D38：状态单槽（提示互斥呈现，≤1 行）', noteCount <= 1, `notes=${noteCount}`)
+  const metaColor = await page.locator('.war-bmsg-meta').first().evaluate(el => getComputedStyle(el).color)
+  // D38 批判 P1 修后 meta=text-2 实色（text-3 曾 4.3:1、opacity .5 时 2.2:1 不达 AA）。
+  check('D38：meta 行弱化但不失读（text-2 实色）', metaColor === 'rgb(162, 165, 173)', metaColor)
+  await page.screenshot({ path: join(evidenceDir, 'd38-panel-dark.png'), fullPage: false })
   // D33 B1：点穿聚焦页浮窗保持开（种子战报卡带「打开聚焦页」钮）。
   const refBtn = page.locator('.war-bref').first()
   if (await refBtn.count() > 0) {
@@ -323,9 +347,24 @@ try {
   const drawerAfterEsc = await page.locator('.war-settings-drawer').count()
   check('D34：Esc 只关弹窗（抽屉保持开）', drawerAfterEsc === 1, `drawer=${drawerAfterEsc}`)
   await page.screenshot({ path: join(evidenceDir, 'settings-consolidated.png'), fullPage: false })
+  // D38 浅色往返：显式选浅 → 重载后深色属性摘除（浅色一等公民），截图存证。
+  // 重载后落回舰队门（门在时球不渲染）——与开场同法：门在场先点「开始调度」。
+  await page.evaluate(() => { try { localStorage.setItem('warroom-standalone-theme', 'light') } catch { /* 隐私模式 */ } })
+  await page.goto(`${base}/?cb=${Date.now() + 1}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.war-gate-actions, [data-bridge-ball]', { timeout: 40_000 })
+  if (await page.locator('.war-gate-actions').count() > 0) {
+    await page.locator('button', { hasText: '开始调度' }).first().click()
+  }
+  await page.waitForSelector('[data-bridge-ball]', { timeout: 20_000 })
+  const lightBoot = await page.evaluate(() => !document.body.hasAttribute('data-ds-dark-theme'))
+  check('D38：显式选浅=深色属性摘除（浅色往返）', lightBoot, `light=${lightBoot}`)
+  await page.screenshot({ path: join(evidenceDir, 'd38-board-light.png'), fullPage: false })
   await browser.close()
 } catch (err) {
   exitCode = 1
+  // 判决诚实刀：中途异常必须计入 results——否则已完成断言全绿时控制台仍打
+  // PASS（exitCode 只对脚本退出码负责， verdict 行会骗人）。
+  results.push({ name: '流程完整性（无中途异常）', pass: false, detail: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300) })
   console.error('UI 目检异常：', err instanceof Error ? err.message : String(err))
 } finally {
   daemon?.kill()

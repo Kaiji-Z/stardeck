@@ -192,7 +192,7 @@ function ClarifyCard(props: CardProps & { cmd: BoardCommand }): ReactNode {
   for (const m of text.matchAll(/(\d{1,2})([A-Z]);/g)) {
     const qi = parseInt(m[1]!, 10) - 1
     const opt = clar?.options?.[qi]?.[m[2]!.charCodeAt(0) - 65]
-    chosen.push(opt !== undefined ? `${m[1]}→${opt}` : `${m[1]}${m[2]}`)
+      chosen.push(opt !== undefined ? opt : `${m[1]}${m[2]}`)
   }
   const sendAnswer = (): void => {
     const composed = `${text.trim()} ${note.trim()}`.trim()
@@ -471,8 +471,21 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
   const effortLabelOf = (e: '' | 'fast' | 'deep'): string => e === '' ? bc.effortAuto : e === 'fast' ? bc.effortFast : bc.effortDeep
   const liveActive = live !== '' || liveReasoning !== '' || liveTools.length > 0
   const stopLoop = (): void => {
-    void abortLoop().then(stopped => { if (stopped) setSendNote(bc.stoppedNote) }) // stopped=false（无在途）不弹假战报
+    // D38 批判 P1 修：stopped=false（无在途 loop 轮——CLI 席在跑/kick 未开跑）
+    // 诚实回执不弹假战报；停止钮恒有出路语义。
+    void abortLoop().then(stopped => { setSendNote(stopped ? bc.stoppedNote : bc.stopIdleNote) })
   }
+  // D38 批判 P1 修（卡死轮黑洞）：末条是舰长发言=一轮待答——同位给停止出口，
+  // 不再只认 SSE 流帧（loop 未开跑/CLI 席在途时打字点无停止=信任流失）。
+  const roundPending = messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
+  // D38 composer 状态单槽：四类提示互斥换内容（离线>操作失败>停用>已发送——
+  // 旧五层纵叠抖动终局）；error=true 时槽元素携带 data-bridge-offline。
+  const statusNote: { kind: 'err' | 'info' | 'ok'; text: string; error?: boolean } | null =
+    error !== null ? { kind: 'err', text: bc.offlineBanner, error: true }
+      : actionNote !== null ? { kind: 'err', text: actionNote }
+      : proxyAway ? { kind: 'info', text: bc.proxyAway }
+      : sendNote !== '' ? { kind: 'ok', text: sendNote }
+      : null
   const cycleEffort = (): void => {
     if (loopView === null || effortBusy) return
     const next: '' | 'fast' | 'deep' = loopView.effort === '' ? 'fast' : loopView.effort === 'fast' ? 'deep' : ''
@@ -502,11 +515,12 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     }
     // D37 消息 meta 行：agent 终答带回合计量（模型·思考档·耗时·tokens——
     // 随账 meta 的诚实呈现；无 meta 的老消息/CLI 席回话零变化）。
+    // D38 降噪：自动档不显示档位段；faint 小字由样式层承担。
     const metaSuffix = m.kind === 'agent' && m.meta !== undefined
-      ? ` · ${bc.metaLine(m.meta.model, effortLabelOf(m.meta.effort === 'fast' ? 'fast' : m.meta.effort === 'deep' ? 'deep' : ''), durFmt(m.meta.elapsedMs),
-        m.meta.promptTokens !== undefined || m.meta.completionTokens !== undefined
-          ? `↑${tkFmt(m.meta.promptTokens ?? 0)} ↓${tkFmt(m.meta.completionTokens ?? 0)}`
-          : '')}`
+      ? ` · ${m.meta.model}`
+        + (m.meta.effort === 'fast' ? ` · ${bc.effortFast}` : m.meta.effort === 'deep' ? ` · ${bc.effortDeep}` : '')
+        + ` · ${durFmt(m.meta.elapsedMs)}s`
+        + (m.meta.promptTokens !== undefined || m.meta.completionTokens !== undefined ? ` · ↑${tkFmt(m.meta.promptTokens ?? 0)} ↓${tkFmt(m.meta.completionTokens ?? 0)}` : '')
       : ''
     if (m.kind === 'system') {
       return createElement('div', { key: i, className: `war-bmsg war-bmsg-system war-bnotice-${m.noticeKind ?? 'info'}`, 'data-bridge-notice': m.noticeKind ?? 'info' },
@@ -658,7 +672,7 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
             live !== '' ? createElement('div', { className: 'war-bmsg-body' }, reportBody(live)) : null)
         : messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
           ? createElement('div', { className: 'war-bmsg war-bmsg-typing', 'data-bridge-typing': '1' },
-              createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, '●●●'),
+              createElement('span', { className: 'war-typing-dots', 'aria-hidden': 'true' }, createElement('i', null), createElement('i', null), createElement('i', null)),
               createElement('span', { className: 'war-typing-label' }, bc.processing))
           : null,
     ),
@@ -680,13 +694,28 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
     // 浮层药丸两轮实评都压可读正文，占位条零重叠且滚到底即消失。
     dockMore ? createElement('div', { className: 'war-bridge-dock-hintbar', 'data-bridge-dock-more': '1', 'aria-hidden': 'true' }, bc.dockMoreHint) : null,
     createElement('div', { className: 'war-bridge-input', ref: inputBandRef },
-      error !== null ? createElement('p', { className: 'war-bridge-offline', role: 'alert', 'data-bridge-offline': '1' }, bc.offlineBanner) : null,
-      actionNote !== null ? createElement('p', { className: 'war-bridge-err', role: 'alert' }, actionNote) : null,
-      sendNote !== '' ? createElement('p', { className: 'war-bcard-hint', role: 'status' }, sendNote) : null,
-      proxyAway ? createElement('p', { className: 'war-bcard-hint', 'data-bridge-proxy-away': '1' }, bc.proxyAway) : null,
-      // D37 工具条（lookatstudy composer 同形）：思考档芯条+上下文占用环——
-      // 档位点击循环切换（POST 即时生效）；占用环点击弹四段明细。
-      createElement('div', { className: 'war-bridge-toolbar', 'data-bridge-toolbar': '1' },
+      // D38 composer 一体卡：状态单槽换内容（互斥呈现，不再纵叠）；composer
+      // 卡内=textarea+工具条+圆形 3D 发送/停止钮。
+      statusNote !== null
+        ? createElement('p', { className: 'war-composer-note', role: statusNote.kind === 'err' ? 'alert' : 'status', 'data-bridge-note': statusNote.kind, ...(statusNote.error === true ? { 'data-bridge-offline': '1' } : {}) }, statusNote.text)
+        : null,
+      createElement('div', { className: 'war-composer', 'data-bridge-composer': '1' },
+        createElement('textarea', {
+          className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
+          disabled: proxyAway,
+          onChange: e => {
+            const v = String(e.target.value ?? '')
+            draftStore.input = v
+            setInput(v)
+          },
+          // B3 修（Telegram 语法）：Enter 直发、Shift+Enter 换行（Ctrl/Cmd+Enter 兼容保留）。
+          onKeyDown: e => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
+          },
+        }),
+        // D37→D38 工具条入卡底行：思考档芯条+上下文占用环——档位点击循环
+        // 切换（POST 即时生效）；占用环点击弹四段明细。
+        createElement('div', { className: 'war-bridge-toolbar', 'data-bridge-toolbar': '1' },
         loopView !== null && (loopView.effortSupported ?? false)
           ? createElement('button', {
               type: 'button', className: 'war-btn war-bridge-chip', 'data-bridge-effort': loopView.effort,
@@ -727,26 +756,13 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
                   : null)
             })()
           : null,
+          createElement('span', { className: 'war-bridge-toolspring', 'aria-hidden': 'true' }),
+          // D37→D38 停止钮：在途流（思考/正文/工具任一有流量）或待答轮（末条
+          // 是舰长发言）时同位变停止——掐在途轮不降级；无在途=诚实回执。
+          liveActive || roundPending
+            ? createElement('button', { className: 'war-bridge-stop', type: 'button', 'aria-label': bc.stopBtn, title: bc.stopBtn, 'data-bridge-stop': '1', onClick: stopLoop }, '■')
+            : createElement('button', { className: 'war-bridge-send', type: 'button', 'aria-label': sending ? bc.sending : bc.send, disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, '↑')),
       ),
-      createElement('textarea', {
-        className: 'war-bridge-ta', rows: 2, placeholder: proxyAway ? bc.proxyAway : bc.inputPh, value: input, 'data-bridge-input': '1',
-        disabled: proxyAway,
-        onChange: e => {
-          const v = String(e.target.value ?? '')
-          draftStore.input = v
-          setInput(v)
-        },
-        // B3 修（Telegram 语法）：Enter 直发、Shift+Enter 换行（Ctrl/Cmd+Enter 兼容保留）。
-        onKeyDown: e => {
-          if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
-        },
-      }),
-      createElement('div', { className: 'war-bridge-sendrow' },
-        // D37 停止钮：loop 在途（思考/正文/工具任一有流量）时发送钮变停止——
-        // 掐在途轮（丢弃不降级）；无在途=普通发送。
-        liveActive
-          ? createElement('button', { className: 'war-btn war-bridge-stop', type: 'button', 'data-bridge-stop': '1', onClick: stopLoop }, `■ ${bc.stopBtn}`)
-          : createElement('button', { className: 'war-btn primary', type: 'button', disabled: proxyAway || sending || input.trim() === '', 'data-bridge-send': '1', onClick: () => { void send() } }, sending ? bc.sending : bc.send)),
     ),
   )
 }

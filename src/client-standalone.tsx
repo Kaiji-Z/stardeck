@@ -21,11 +21,12 @@ import { clampPanelSize, storedPanelSize, PANEL_KEY, PANEL_MIN_W, PANEL_MIN_H, t
 
 ensureWarStyles()
 
-// 开机应用明暗偏好（设置抽屉「深色界面」落 warroom-standalone-theme）——
-// 渲染前置属性，避免深色用户首帧白闪。插件形态无此逻辑（明暗随宿主）。
+// 开机应用明暗偏好（D38 深色缺省：无存储偏好即深色，显式选浅才摘属性）——
+// 渲染前置属性，避免首帧闪错主题。设置抽屉「深色界面」开关照旧（开=存 dark）。
+// 插件形态无此逻辑（明暗随宿主）。
 try {
-  if (localStorage.getItem('warroom-standalone-theme') === 'dark') document.body.setAttribute('data-ds-dark-theme', 'true')
-} catch { /* storage unavailable */ }
+  if (localStorage.getItem('warroom-standalone-theme') !== 'light') document.body.setAttribute('data-ds-dark-theme', 'true')
+} catch { document.body.setAttribute('data-ds-dark-theme', 'true') }
 // standalone 标记——固定 chrome 让位的 CSS 钩子（板头让出顶右簇宽度）。
 document.body.setAttribute('data-stardeck-standalone', '1')
 
@@ -113,6 +114,12 @@ function App(): ReturnType<typeof createElement> {
   }, [])
   // P2 修（D33 critique A 复评）：Esc 收浮窗（同仓设置抽屉/聚焦模态已有 Esc——
   // 同一双标）；模态/抽屉在场时让位（它们自带 Esc 处理，避免一按双关）。
+  // D38 批判 P2 修：收窗后焦点回球——键盘流程「球→Enter→读→Esc」不断链。
+  const ballRef = useRef<HTMLButtonElement | null>(null)
+  const closeChat = useCallback((): void => {
+    setChatOpen(false)
+    ballRef.current?.focus()
+  }, [])
   useEffect(() => {
     if (!chatOpen) return
     const onKey = (e: KeyboardEvent): void => {
@@ -120,11 +127,11 @@ function App(): ReturnType<typeof createElement> {
       if (document.querySelector('.war-settings-backdrop, .war-modal') !== null) return
       const target = e.target as HTMLElement | null
       if (target !== null && target.closest('.war-settings-backdrop, .war-modal') !== null) return
-      setChatOpen(false)
+      closeChat()
     }
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey) }
-  }, [chatOpen])
+  }, [chatOpen, closeChat])
   // 球拖拽：pointer capture 三段（down 记起点 / move 超 6px 判拖 / up 落位持久化）。
   // 开关窗走 onClick——鼠标拖放后的 click 用抑制旗吞掉；键盘 Enter/Space 只发
   // click 不发 pointer 序列，天然落在同一开关通路上（D31 批判 P0：此前开关挂
@@ -220,7 +227,7 @@ function App(): ReturnType<typeof createElement> {
   // 可拖拽悬浮球（bridge ON 才在）：点按=开关聊天窗，拖动=移位（位置持久化）。
   const ball = bridgeOn
     ? createElement('button', {
-        className: 'war-root war-tg-ball', type: 'button', 'data-bridge-ball': '1',
+        className: 'war-root war-tg-ball', type: 'button', 'data-bridge-ball': '1', ref: ballRef,
         'aria-label': bc.title, title: bc.title,
         style: { right: ballPos.right, bottom: ballPos.bottom },
         onPointerDown: onBallDown, onPointerMove: onBallMove, onPointerUp: onBallUp,
@@ -246,7 +253,7 @@ function App(): ReturnType<typeof createElement> {
             createElement('span', { className: 'war-tg-title' }, bc.title),
             // B4 修（D33 bug 表）：头部副行=动态状态（格言移空态欢迎语，420px 永不截断）。
             createElement('span', { className: 'war-tg-motto', 'data-bridge-status': data?.bridge?.proxy === false ? 'off' : 'on' }, data?.bridge?.proxy === false ? bc.statusOff : bc.statusOn)),
-          createElement('button', { className: 'war-btn war-tg-close', type: 'button', 'aria-label': activeCopy().settings.close, 'data-bridge-panel-close': '1', onClick: () => { setChatOpen(false) } }, '✕')),
+          createElement('button', { className: 'war-btn war-tg-close', type: 'button', 'aria-label': activeCopy().settings.close, 'data-bridge-panel-close': '1', onClick: closeChat }, '✕')),
         createElement('div', { className: 'war-tg-body' }, createElement(BridgePane, { onOpenBoard: openBoard })),
       )
     : null

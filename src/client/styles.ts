@@ -23,67 +23,70 @@
  */
 
 export const WAR_CSS = `
-/* ═══ L1/L2 语义令牌层 · 浅色缺省（v5.0）══════════════════════════════════════ */
+/* ═══ L1/L2 语义令牌层 · D38 新设计语言（lookatstudy 语系×舰桥青×深色缺省）══════
+ * 色阶分层（层级靠深浅不靠描边）+ 信号蓝强调 + 软阴影三档 + 16px 大圆角 +
+ * 具名动效曲线。两个定义块全字面值自洽（不再依赖宿主 --dsw-* 别名——独立
+ * 形态换肤=整块重映射本层，组件规则零改动）。 */
 .war-root{--war-fs:1;
-  /* 海拔：浅色主题宿主四层 bg 同为白（宿主分层塌缩），由灰画布 vs 白容器自建层级；
-   * 深色主题直接用宿主真实海拔四级（950 画布 / 875 区 / 850 卡 / 800 凹槽）。 */
-  --war-canvas: var(--dsw-static-neutral-bluish-50);
-  --war-zone-bg: var(--dsw-alias-bg-base);
-  --war-card-bg: var(--dsw-alias-bg-layer-1);
-  --war-pop-bg: var(--dsw-alias-bg-layer-1);
-  --war-well-bg: var(--dsw-static-neutral-bluish-75);
-  /* 文本/边框/字体（V12.2 中间层收编：组件规则不再直穿 --dsw-alias-*） */
-  --war-text-1: var(--dsw-alias-label-primary);
-  --war-text-2: var(--dsw-alias-label-secondary);
-  --war-text-3: var(--dsw-alias-label-tertiary);
-  --war-border: var(--dsw-alias-border-l2);
-  --war-border-soft: var(--dsw-alias-border-l1);
-  --war-border-hover: var(--dsw-alias-label-secondary);
-  --war-font: var(--dsw-font-family);
-  --war-font-code: var(--dsw-font-markdown-code);
-  --war-scrollbar: var(--dsw-alias-scrollbar-bg-l2, auto);
-  /* 状态前景（12px 正文级 → 各主题 ≥4.5:1）：浅色压黑保白底对比；
-   * 深色用宿主 primary 原值（为深底调的明度，实测 4.8-7.3:1）。 */
-  --war-run: color-mix(in srgb, var(--dsw-alias-state-business-primary) 62%, #000);
-  --war-run-strong: color-mix(in srgb, var(--dsw-alias-state-business-primary) 72%, #000);
-  --war-sched-text: var(--war-run-strong);
-  --war-wait: color-mix(in srgb, var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary)) 58%, #000);
-  --war-done: color-mix(in srgb, var(--dsw-alias-state-success-label, var(--dsw-alias-state-success-primary)) 58%, #000);
-  --war-fail: color-mix(in srgb, var(--dsw-alias-state-error-label, var(--dsw-alias-state-error-primary)) 58%, #000);
-  /* 状态原色（描边/圆点/彩带/辉光共用的饱和档；正文前景用上面压黑档） */
-  --war-run-border: var(--dsw-alias-state-business-primary);
-  --war-wait-border: var(--dsw-alias-state-warn-primary);
-  --war-done-border: var(--dsw-alias-state-success-primary);
-  --war-fail-border: var(--dsw-alias-state-error-primary);
+  /* 海拔五级表面阶：canvas（画布）→ zone（三区容器）→ card（卡片）→
+   * pop（浮层）→ well（凹槽/悬浮）——浅色白卡靠灰画布自建层级。 */
+  --war-canvas: #eef0f3;
+  --war-zone-bg: #f7f8fa;
+  --war-card-bg: #ffffff;
+  --war-pop-bg: #ffffff;
+  --war-well-bg: #f1f3f6;
+  /* 文本/边框/字体（全部字面值；faint 档只用于非要素，白底 ≥4.5:1） */
+  --war-text-1: #17191e;
+  --war-text-2: #565a63;
+  --war-text-3: #6e727b;
+  --war-border: #d8dbe1;
+  --war-border-soft: #e6e8ed;
+  --war-border-hover: #9aa0ab;
+  --war-font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --war-font-code: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --war-scrollbar: #c9cdd4;
+  /* 状态前景（正文级 → 白底 ≥4.5:1 压暗档）+ 饱和档（描边/圆点/彩带） */
+  --war-run: #0369a1;
+  --war-run-strong: #0284c7;
+  --war-sched-text: #0369a1;
+  --war-wait: #b45309;
+  --war-done: #047857;
+  --war-fail: #b91c1c;
+  --war-run-border: #0ea5e9;
+  --war-wait-border: #f59e0b;
+  --war-done-border: #10b981;
+  --war-fail-border: #ef4444;
   /* 三区彩带（任务/星球/任务回报的顶部身份色） */
-  --war-band-task: var(--dsw-alias-state-business-primary);
-  --war-band-field: var(--dsw-alias-label-tertiary);
-  --war-band-report: var(--dsw-alias-state-success-primary);
-  /* 动作（实心按钮）与焦点环 */
-  --war-action-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 78%, #000);
-  --war-action-fg: #fff;
-  --war-focus: var(--dsw-alias-state-business-primary);
+  --war-band-task: #0ea5e9;
+  --war-band-field: #9aa0ab;
+  --war-band-report: #10b981;
+  /* 动作（3D 实心按钮：实底+深档下边缘）与焦点环 */
+  --war-action-bg: #0369a1;
+  --war-action-edge: #075985;
+  --war-action-fg: #ffffff;
+  --war-focus: #0ea5e9;
   /* 状态底染（ghost/警示卡/坞带）——透明基，随底色自然合成 */
-  --war-run-tint: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);
-  --war-wait-tint: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent);
-  --war-done-tint: color-mix(in srgb, var(--dsw-alias-state-success-primary) 8%, transparent);
-  --war-fail-tint: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
-  /* 选项卡选中态（档位/时机/cron 预设/皮肤）：底染要量得出（旧 7% 两主题实测
-   * 仅 1.09-1.12:1，等于没有）——三通道=底染+名字色+圆点标记。 */
-  --war-select-tint: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, var(--war-card-bg));
-  --war-select-name: var(--war-run-strong);
-  --war-dock-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 5%, var(--dsw-alias-bg-base));
-  --war-dock-inset: inset 0 2px 8px rgba(15, 23, 42, .07);
-  /* 投影三档 + 遮罩：浅色蓝黑低强度，深色纯黑高强度 */
-  --war-shadow-1: 0 1px 2px rgba(15, 23, 42, .05), 0 2px 8px rgba(15, 23, 42, .07);
-  --war-shadow-2: 0 4px 14px rgba(15, 23, 42, .1);
-  --war-shadow-3: 0 14px 32px rgba(15, 23, 42, .16);
-  --war-backdrop: rgba(15, 23, 42, .34);
-  /* 圆角阶（皮肤可调轮廓性格；布局级数值不进令牌） */
-  --war-r-pill: 999px; --war-r-lg: 12px; --war-r-md: 10px; --war-r-sm: 8px;
-  /* 星域场景组（V12.2）：浅=纸面证件风/蓝图纸面，深=深空玻璃/战术雷达。
-   * 执行卡、名签、tooltip、切换钮、图例、hint、战术盘、速报日志色全组在此
-   * ——TS 侧 war-tokens.ts 按名读取，回退哨兵锁死同值。 */
+  --war-run-tint: color-mix(in srgb, #0ea5e9 8%, transparent);
+  --war-wait-tint: color-mix(in srgb, #f59e0b 8%, transparent);
+  --war-done-tint: color-mix(in srgb, #10b981 8%, transparent);
+  --war-fail-tint: color-mix(in srgb, #ef4444 8%, transparent);
+  /* 选项卡选中态：底染+名字色双通道（量得出、非装饰） */
+  --war-select-tint: color-mix(in srgb, #0ea5e9 12%, var(--war-card-bg));
+  --war-select-name: #0369a1;
+  --war-dock-bg: color-mix(in srgb, #0ea5e9 4%, var(--war-zone-bg));
+  --war-dock-inset: inset 0 2px 8px rgba(15, 23, 42, .06);
+  /* 投影三档（软阴影；1px 描边与大模糊不并存的铁律在组件层守）+ 遮罩 */
+  --war-shadow-1: 0 1px 3px -1px rgba(15, 23, 42, .08), 0 2px 6px -2px rgba(15, 23, 42, .06);
+  --war-shadow-2: 0 4px 12px -2px rgba(15, 23, 42, .12);
+  --war-shadow-3: 0 12px 32px -8px rgba(15, 23, 42, .2);
+  --war-backdrop: rgba(15, 23, 42, .32);
+  /* 圆角阶（16px 大圆角是本语言的形状签名） */
+  --war-r-pill: 999px; --war-r-lg: 16px; --war-r-md: 12px; --war-r-sm: 10px;
+  /* 动效曲线四 token（lookatstudy motion-presets 同源）：入场/回弹/按压/悬停 */
+  --war-ease-expo: cubic-bezier(.16, 1, .3, 1);
+  --war-ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --war-ease-quart: cubic-bezier(.25, 1, .5, 1);
+  /* 星域场景组：浅=纸面证件风/蓝图纸面（本轮不动，哨兵锁值） */
   --war-wz-wait: #b07800; --war-wz-battle: #d9480f; --war-wz-held: #1971c2; --war-wz-hl: #0e7490; --war-wz-active: #1971c2; --war-wz-settled: #2f9e44; --war-wz-failed: #c92a2a;
   --war-wz-line: rgba(176,120,0,.72);
   --war-wz-card-bg: rgba(252,253,255,.92); --war-wz-card-border: rgba(176,120,0,.5);
@@ -94,8 +97,6 @@ export const WAR_CSS = `
   --war-wz-toggle-bg: rgba(255,255,255,.78); --war-wz-toggle-border: rgba(28,78,128,.45); --war-wz-toggle-text: #33506e;
   --war-wz-toggle-on-bg: linear-gradient(180deg,rgba(25,113,194,.24),rgba(25,113,194,.08));
   --war-wz-toggle-on-text: #0b3a63; --war-wz-toggle-hover-text: #0b3a63;
-  /* critique B 取证：3D 天空 #8fc3ec 上的 HUD 文字需 ≥4.5:1——#4a648a 只有 3.2:1，
-     加深到 #24405c（4.9:1）；foot-stat 同挂此墨色。 */
   --war-wz-legend-text: #24405c; --war-wz-hint: #24405c;
   --war-wz-tip-bg: rgba(252,253,255,.95); --war-wz-tip-border: rgba(28,78,128,.35);
   --war-wz-tip-shadow: 0 4px 10px rgba(30,60,100,.2); --war-wz-tip-text: #23405e;
@@ -107,15 +108,12 @@ export const WAR_CSS = `
   --war-wz-chip-wait-text: #8a5f00; --war-wz-chip-wait-bg: rgba(176,120,0,.12); --war-wz-chip-wait-border: rgba(176,120,0,.5);
   --war-wz-chip-battle-text: #c2410c; --war-wz-chip-battle-bg: rgba(217,72,15,.1); --war-wz-chip-battle-border: rgba(217,72,15,.5);
   --war-wz-chip-held-text: #1971c2; --war-wz-chip-held-bg: rgba(25,113,194,.1); --war-wz-chip-held-border: rgba(25,113,194,.5);
-  /* V18.2 星球生命周期态 chip（与 V18 发光四档同源：settled 绿/failed 红/idle 中性） */
   --war-wz-chip-settled-text: #2b7a3a; --war-wz-chip-settled-bg: rgba(47,158,68,.1); --war-wz-chip-settled-border: rgba(47,158,68,.5);
   --war-wz-chip-failed-text: #b8322f; --war-wz-chip-failed-bg: rgba(201,42,42,.1); --war-wz-chip-failed-border: rgba(201,42,42,.5);
   --war-wz-chip-idle-text: #5b6167; --war-wz-chip-idle-bg: rgba(120,130,140,.12); --war-wz-chip-idle-border: rgba(120,130,140,.45);
-  /* 速报日志色（kind 化：order 下令/engage 接敌/triumph 达成/retreat 败退/
-   * return 返航/review 待验收）——浅色压深保白蓝图对比，深色原亮值。 */
   --war-log-order: #8a5f00; --war-log-engage: #c2410c; --war-log-triumph: #1971c2;
   --war-log-retreat: #b3261e; --war-log-return: #6741d9; --war-log-review: #b07800;
-  /* 2D 战术盘双皮（浅=蓝图纸面）：canvas 绘制经 war-tokens.ts 读取 */
+  /* 2D 战术盘双皮（浅=蓝图纸面）：canvas 绘制经 war-tokens.ts 读取（哨兵锁值） */
   --war-tac-bg0: #f8fbfe; --war-tac-bg1: #eef4fa; --war-tac-bg2: #e3edf7;
   --war-tac-grid: rgba(70,110,160,.12); --war-tac-ring: rgba(90,130,180,.55); --war-tac-ring-txt: rgba(80,120,170,.6);
   --war-tac-cross: rgba(90,130,180,.32); --war-tac-tick: rgba(90,130,180,.45); --war-tac-bearing: rgba(70,105,150,.65);
@@ -125,12 +123,8 @@ export const WAR_CSS = `
   --war-tac-garrison: rgba(25,113,194,.75); --war-tac-name: rgba(40,70,110,.9); --war-tac-name-hl: #0b3a53;
   --war-tac-sq-battle: #d9480f; --war-tac-sq-ret: #6741d9; --war-tac-sq-dep: #1971c2; --war-tac-sq-hold: #b07800;
   --war-tac-corner: rgba(28,78,128,.5);
-  /* 3D 天穹（浅=暖阳光斑+浅蓝天幕，画布 alpha:true 透出）/ 晕影 / 2D 海图纸 /
-   * 标签光晕（浅=白晕压天幕，深=黑晕压星海——canvas 上的 DOM 标签可读性保险） */
+  /* 3D 天穹（浅=暖阳光斑+浅蓝天幕）/ 晕影 / 海图纸 / 标签光晕（本轮不动） */
   --war-label-halo: 0 0 6px rgba(255,255,255,.75);
-  /* V18.9.7 天穹重做：天顶 azure→天际暖白（旧 #c9e5f8→#f5faff 太苍白，读成雾不读成天）；
-   * 阳光斑=暖霞（.45 弱化）：CSS 不经 3D 色调映射、旧 .95 白斑亮度(252)压过太阳芯的
-   * ACES 封顶(229)——「太阳中间一颗灰点」的真根因（用户实抓+像素取证）；晕影 .55→.3 */
   --war-sky-bg: radial-gradient(circle at 68% 16%, rgba(255,228,168,.45), rgba(255,228,168,0) 30%), linear-gradient(180deg, #8fc3ec 0%, #b5d9f4 44%, #dcedfa 72%, #f7f3e6 100%);
   --war-sky-vig: radial-gradient(ellipse at center, transparent 62%, rgba(255,255,255,.3) 100%);
   --war-chart-bg:
@@ -139,7 +133,6 @@ export const WAR_CSS = `
     linear-gradient(color-mix(in srgb, var(--war-border-soft) 28%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--war-border-soft) 28%, transparent) 1px, transparent 1px),
     color-mix(in srgb, #efe6d2 40%, var(--war-canvas));
-  /* 2D 星域 HQ 太阳（lit 态）：浅色压深字 + 柔辉，深色原亮 + 双层辉光 */
   --war-sun: color-mix(in srgb, #f6c453 45%, #2b1d00);
   --war-sun-glow: 0 0 10px color-mix(in srgb, #f6c453 38%, transparent);
   font-family:var(--war-font);color:var(--war-text-1);display:flex;flex-direction:column;height:100%;min-height:0;background:var(--war-canvas);position:relative;scrollbar-color:var(--war-scrollbar) transparent}
@@ -149,41 +142,58 @@ export const WAR_CSS = `
  * 实测：composer 恒溢出弹窗右缘 8px、modal 实宽 678 超 max-width 640）。 */
 .war-root *,.war-root *::before,.war-root *::after{box-sizing:border-box}
 
-/* ═══ L3 深色覆盖（宿主 body 单开关，插件不设第二套）══════════════════════════ */
+/* ═══ L3 深色覆盖（缺省主题——独立壳首跑即深，显式选浅才摘 data-ds-dark-theme）═══
+ * 全字面覆写（不再依赖宿主 shim 翻转）：近黑五级表面阶 + 亮文字阶 + 信号蓝。
+ * 星域/战术盘/日志/链色四组字面值有回退哨兵双向锁死，改值必须锁步 war-tokens.ts。 */
 body[data-ds-dark-theme] .war-root{
-  /* 深色层梯：宿主暗色层不塌缩，四级容器各落一层（浅色因 layer 全白不覆盖
-   * zone/card/pop，靠灰画布分层）。层梯可辨性由 shoot-theme 断言兜底。 */
-  --war-canvas: var(--dsw-alias-bg-base);
-  --war-zone-bg: var(--dsw-alias-bg-layer-1);
-  --war-card-bg: var(--dsw-alias-bg-layer-2);
-  --war-well-bg: var(--dsw-alias-bg-layer-3);
-  --war-pop-bg: var(--dsw-alias-bg-layer-3);
-  --war-run: var(--dsw-alias-state-business-primary);
-  --war-run-strong: var(--dsw-alias-state-business-primary);
-  --war-sched-text: color-mix(in srgb, var(--dsw-alias-state-business-primary) 72%, #fff); /* V18.9.5：定时 chip 暗色 4.17→≥4.5（B 实测）；白档混合同 --war-fail 先例 */
-  --war-wait: var(--dsw-alias-state-warn-primary);
-  --war-done: var(--dsw-alias-state-success-primary);
-  --war-fail: color-mix(in srgb, var(--dsw-alias-state-error-primary) 75%, #fff); /* V13：红基色天生暗于琥珀/绿，86% 白档在 well 底仅 4.29:1——败因行 12px 正文要 4.5+ */
-  --war-action-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 70%, #000);
-  --war-run-tint: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent);
-  --war-wait-tint: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);
-  --war-done-tint: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
-  --war-fail-tint: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);
-  --war-select-tint: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--war-card-bg));
-  --war-select-name: #fff;
-  --war-dock-bg: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, var(--dsw-alias-bg-base));
+  --war-canvas: #0a0b0e;
+  --war-zone-bg: #101114;
+  --war-card-bg: #16171b;
+  --war-pop-bg: #1c1d22;
+  --war-well-bg: #22242a;
+  --war-text-1: #f2f3f5;
+  --war-text-2: #a2a5ad;
+  --war-text-3: #83868e;
+  --war-border: #2a2c33;
+  --war-border-soft: #1f2127;
+  --war-border-hover: #3d4049;
+  --war-scrollbar: #3a3d45;
+  /* 状态前景（深底亮档，正文级 ≥4.5:1）+ 饱和档 */
+  --war-run: #45c1f7;
+  --war-run-strong: #38bdf8;
+  --war-sched-text: #7dd3fc;
+  --war-wait: #fbbf24;
+  --war-done: #34d399;
+  --war-fail: #f87171;
+  --war-run-border: #38bdf8;
+  --war-wait-border: #fbbf24;
+  --war-done-border: #34d399;
+  --war-fail-border: #f87171;
+  --war-band-task: #38bdf8;
+  --war-band-field: #3d4049;
+  --war-band-report: #34d399;
+  --war-action-bg: #0369a1;
+  --war-action-edge: #075985;
+  --war-action-fg: #ffffff;
+  --war-focus: #38bdf8;
+  --war-run-tint: color-mix(in srgb, #38bdf8 14%, transparent);
+  --war-wait-tint: color-mix(in srgb, #fbbf24 12%, transparent);
+  --war-done-tint: color-mix(in srgb, #34d399 12%, transparent);
+  --war-fail-tint: color-mix(in srgb, #f87171 14%, transparent);
+  --war-select-tint: color-mix(in srgb, #38bdf8 18%, var(--war-card-bg));
+  --war-select-name: #bfe9ff;
+  --war-dock-bg: color-mix(in srgb, #38bdf8 7%, var(--war-canvas));
   --war-dock-inset: inset 0 2px 8px rgba(0, 0, 0, .32);
-  --war-shadow-1: 0 2px 8px rgba(0, 0, 0, .35);
-  --war-shadow-2: 0 4px 14px rgba(0, 0, 0, .45);
-  --war-shadow-3: 0 14px 36px rgba(0, 0, 0, .55);
+  --war-shadow-1: 0 1px 3px -1px rgba(0, 0, 0, .3);
+  --war-shadow-2: 0 4px 12px -2px rgba(0, 0, 0, .4);
+  --war-shadow-3: 0 12px 32px -8px rgba(0, 0, 0, .55);
   --war-backdrop: rgba(0, 0, 0, .55);
-  /* 星域场景组 · 深空玻璃/战术雷达皮 */
+  /* 星域场景组 · 深空玻璃/战术雷达皮（哨兵锁值，本轮不动） */
   --war-wz-wait: #ffc24d; --war-wz-battle: #ff6a55; --war-wz-held: #66d4ff; --war-wz-hl: #6fe3ff; --war-wz-active: #5aa9ff; --war-wz-settled: #4cd98e; --war-wz-failed: #ff5f56;
   --war-wz-line: rgba(255,179,92,.78);
   --war-wz-card-bg: rgba(8,14,28,.84); --war-wz-card-border: rgba(255,179,92,.4);
   --war-wz-card-text: #cfe6ff; --war-wz-card-dim: #7e9cc0;
   --war-wz-card-hover-border: rgba(255,179,92,.9); --war-wz-card-hover-text: #eef8ff;
-  /* critique B 取证：彩色辉光（dark-glow / 1px 边+26px 大模糊）→ 定向阴影。 */
   --war-wz-card-shadow: 0 2px 10px rgba(2,10,24,.5); --war-wz-card-hover-shadow: 0 4px 14px rgba(2,10,24,.6);
   --war-wz-dot: #6fe3ff; --war-wz-dot-glow: #6fe3ff;
   --war-wz-toggle-bg: rgba(8,14,28,.6); --war-wz-toggle-border: rgba(111,227,255,.4); --war-wz-toggle-text: #8fb6dd;
@@ -200,7 +210,6 @@ body[data-ds-dark-theme] .war-root{
   --war-wz-chip-wait-text: #ffc24d; --war-wz-chip-wait-bg: rgba(255,176,32,.12); --war-wz-chip-wait-border: rgba(255,176,32,.45);
   --war-wz-chip-battle-text: #ff6a55; --war-wz-chip-battle-bg: rgba(255,64,48,.12); --war-wz-chip-battle-border: rgba(255,80,64,.5);
   --war-wz-chip-held-text: #66d4ff; --war-wz-chip-held-bg: rgba(77,163,255,.12); --war-wz-chip-held-border: rgba(77,163,255,.5);
-  /* V18.2 星球生命周期态 chip（深=V18 态色原亮值） */
   --war-wz-chip-settled-text: #4cd98e; --war-wz-chip-settled-bg: rgba(76,217,142,.1); --war-wz-chip-settled-border: rgba(76,217,142,.45);
   --war-wz-chip-failed-text: #ff5f56; --war-wz-chip-failed-bg: rgba(255,95,86,.1); --war-wz-chip-failed-border: rgba(255,95,86,.45);
   --war-wz-chip-idle-text: #9aa7b4; --war-wz-chip-idle-bg: rgba(150,165,180,.1); --war-wz-chip-idle-border: rgba(150,165,180,.4);
@@ -503,10 +512,15 @@ body[data-ds-dark-theme] .war-root{
 .war-dock-unread{font-size:calc(12px*var(--war-fs));color:var(--war-run);font-weight:600}
 
 /* --- buttons ------------------------------------------------------------------ */
-.war-btn{cursor:pointer;border-radius:var(--war-r-sm);border:1px solid var(--war-border);background:var(--war-well-bg);color:var(--war-text-1);font-size:calc(12px*var(--war-fs));padding:4px 10px;font-family:var(--war-font)}
+.war-btn{cursor:pointer;border-radius:var(--war-r-sm);border:1px solid var(--war-border-soft);background:var(--war-well-bg);color:var(--war-text-1);font-size:calc(12px*var(--war-fs));padding:4px 10px;font-family:var(--war-font);transition:background .15s var(--war-ease-quart),border-color .15s var(--war-ease-quart)}
+.war-btn:hover{border-color:var(--war-border)}
 .war-btn.war-focus-btn{font-size:calc(17px*var(--war-fs));line-height:calc(22px*var(--war-fs));padding:0 8px} /* ◎ 加大（基类在后压同名，升特异性两连；纵向 0 衬垫保 R5 行高 24） */
-/* 实心主按钮：动作底色双主题各自压黑定档，白字 ≥4.5:1（token 联动宿主主色）。 */
-.war-btn.primary{background:var(--war-action-bg);color:var(--war-action-fg);border-color:transparent}
+/* 实心主按钮 = 3D 按压签名（lookatstudy btn-3d 语系）：实底+深档硬下边缘，
+ * active 下沉边缘变薄——全应用一种按压手感。 */
+.war-btn.primary{background:var(--war-action-bg);color:var(--war-action-fg);border-color:transparent;box-shadow:0 2px 0 0 var(--war-action-edge);transition:box-shadow .12s var(--war-ease-quart),transform .12s var(--war-ease-quart),filter .12s var(--war-ease-quart)}
+.war-btn.primary:hover{filter:brightness(1.08)}
+.war-btn.primary:active{transform:translateY(2px);box-shadow:0 0 0 0 var(--war-action-edge)}
+.war-btn.primary:disabled{opacity:.5;cursor:default;transform:none;box-shadow:0 2px 0 0 var(--war-action-edge);filter:none}
 .war-btn:disabled{opacity:.5;cursor:default}
 
 /* --- V7.1 审查整改：键盘焦点轮廓 / 决策失败反馈 / 图例浮层 ---------------------- */
@@ -694,9 +708,9 @@ h2.war-col-title{margin:0;font-size:calc(13px*var(--war-fs))}
 .war-clarify-q li{line-height:calc(18px*var(--war-fs))}
 .war-clarify-stem{color:var(--war-text-1)}
 .war-clarify-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.war-clarify-opt{font-size:calc(11px*var(--war-fs));padding:2px 10px;cursor:pointer;border-radius:999px;border:1px solid var(--war-border);background:transparent;color:var(--war-text-1);font-family:var(--war-font)}
-.war-clarify-opt:hover{border-color:var(--war-run-strong);color:var(--war-run-strong)}
-.war-clarify-opt-on{border-color:var(--war-run-strong);color:var(--war-run-strong);background:var(--war-well-bg);font-weight:600}
+.war-clarify-opt{font-size:calc(11.5px*var(--war-fs));padding:3px 11px;cursor:pointer;border-radius:var(--war-r-pill);border:1px solid transparent;background:color-mix(in srgb,var(--war-text-1) 6%,transparent);color:var(--war-text-1);font-family:var(--war-font);transition:background .15s var(--war-ease-quart),color .15s var(--war-ease-quart)}
+.war-clarify-opt:hover{background:color-mix(in srgb,var(--war-run-border) 10%,transparent);color:var(--war-run-strong)}
+.war-clarify-opt-on{background:color-mix(in srgb,var(--war-run-border) 16%,transparent);color:var(--war-run-strong);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--war-run-border) 45%,transparent);font-weight:600}
 .war-clarify-note{margin:4px 0 0;font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 /* --- V10 战线链色与身份 -------------------------------------------------------
  * 链是隐形语义的可见显影：8 个低饱和槽位、双主题各自成章（浅=压黑保白底对比，
@@ -1118,53 +1132,62 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 /* min-width:0：flex 项默认 min-width:auto 会被 head 里 nowrap 的键位提示撑出
  * min-content——分屏 38% 列缩不进去，舰长气泡右侧被板列盖住（critique6 P1 实测
  * .war-bridge 658 > 列宽 548）。 */
-.war-bridge{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:var(--war-canvas);font-family:var(--war-font)}
-.war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+/* D38 阅读流正典（claude.ai/lookatstudy 同源）：AI 全宽扁平无气泡、舰长右对齐
+ * 微染气泡+右下收小尾角、机械战报居中弱化药丸——层级靠对齐与微染，不靠描边。
+ * 新消息入场 200ms expo 上浮（motion 纪律：状态传达非装饰）。 */
+.war-bridge{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;background:transparent;font-family:var(--war-font)}
+.war-bridge-msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
 .war-bridge-welcome{color:var(--war-text-2);font-size:calc(13px*var(--war-fs));padding:8px 2px}
 .war-bridge-err{color:var(--war-fail,var(--war-text-2));font-size:calc(12px*var(--war-fs));margin:0}
-.war-bmsg{max-width:72%;display:flex;flex-direction:column;gap:3px;padding:8px 11px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-card-bg);font-size:calc(13.5px*var(--war-fs))}
-.war-bmsg-user{align-self:flex-end;background:color-mix(in srgb,var(--war-run-strong) 14%,var(--war-card-bg));border-right:3px solid color-mix(in srgb,var(--war-run-strong) 55%,var(--war-border))}
-.war-bmsg-agent{align-self:flex-start;border-left:3px solid var(--war-border-hover)}
-.war-bmsg-system{align-self:center;max-width:96%;background:var(--war-well-bg);border-style:dashed;font-size:calc(12px*var(--war-fs))}
-.war-bmsg-meta{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
-.war-bmsg-body{color:var(--war-text-1);line-height:1.55;overflow-wrap:anywhere}
+.war-bmsg{max-width:100%;display:flex;flex-direction:column;gap:3px;padding:2px 0;animation:war-msg-enter .22s var(--war-ease-expo)}
+.war-bmsg-user{align-self:flex-end;max-width:85%;padding:8px 13px;border-radius:18px 18px 6px 18px;background:color-mix(in srgb,var(--war-text-1) 6%,var(--war-card-bg))}
+.war-bmsg-user .war-bmsg-plain{font-weight:600}
+.war-bmsg-agent{align-self:stretch}
+.war-bmsg-agent .war-bmsg-body{font-size:calc(13.5px*var(--war-fs));line-height:1.65;max-width:80ch}
+.war-bmsg-system{align-self:center;max-width:96%;padding:4px 12px;border-radius:var(--war-r-pill);background:color-mix(in srgb,var(--war-text-1) 4%,transparent);font-size:calc(12px*var(--war-fs))}
+.war-bmsg-meta{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
+.war-bmsg-body{color:var(--war-text-1);line-height:1.6;overflow-wrap:anywhere}
 .war-bmsg-plain{white-space:pre-wrap}
 .war-bmsg-refs{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .war-bmsg-chips{display:inline-flex;gap:6px;flex-wrap:wrap}
 .war-bref{font-size:calc(11px*var(--war-fs));padding:1px 8px}
-.war-bnotice-reported{border-color:var(--war-run-border,var(--war-border))}
-.war-bnotice-retry{border-color:var(--war-fail,var(--war-border))}
+.war-bnotice-reported{color:var(--war-run)}
+.war-bnotice-retry{color:var(--war-fail)}
 .war-bmsg-scenewrap{margin-top:6px;display:flex;flex-direction:column;gap:4px}
 .war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
-.war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-well-bg)}
-/* D36 流式详情：思考流折叠区（正文未出时展开、正文开始即折叠）+工具行内摘要。 */
-.war-bmsg-reasoning{border-left:2px solid var(--war-border);margin:2px 0;padding:1px 0 1px 8px;font-size:calc(11px*var(--war-fs))}
-.war-bmsg-reasoning summary{cursor:pointer;color:var(--war-text-3);user-select:none;list-style:none}
-.war-bmsg-reasoning summary::before{content:'◂ ';font-size:9px}
+.war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);background:var(--war-well-bg)}
+/* D36 流式详情：思考流折叠区（正文未出时展开、正文开始即折叠）——well 微染圆角卡。 */
+.war-bmsg-reasoning{margin:2px 0;padding:6px 10px;border:1px solid var(--war-border-soft);border-radius:var(--war-r-sm);background:color-mix(in srgb,var(--war-text-1) 3%,transparent);font-size:calc(11.5px*var(--war-fs))}
+.war-bmsg-reasoning summary{cursor:pointer;color:var(--war-text-2);font-weight:600;user-select:none;list-style:none}
+.war-bmsg-reasoning summary::before{content:'▸ ';font-size:9px;color:var(--war-text-3)}
 .war-bmsg-reasoning[open] summary::before{content:'▾ '}
-.war-bmsg-reasoning-body{white-space:pre-wrap;color:var(--war-text-3);max-height:150px;overflow-y:auto;margin-top:2px;line-height:1.5}
+.war-bmsg-reasoning-body{white-space:pre-wrap;color:var(--war-text-3);max-height:160px;overflow-y:auto;margin-top:4px;padding-top:4px;border-top:1px solid var(--war-border-soft);line-height:1.6}
 .war-bmsg-tooldetail{color:var(--war-text-3);font-size:calc(10px*var(--war-fs));max-width:280px;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes war-msg-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.war-bmsg{animation:none}}
 .war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:52%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scroll-snap-type:y proximity;position:relative;scroll-padding-top:30px}
 /* P1 修（D33 critique A）：坞可下滚时底部渐隐+浮 pills——默认窗里被截的卡读得出「下面还有」。
    实弹教训：snap 初始吸附把首卡头滚进 sticky 段头（不透明底）底下=「卡没头」——scroll-padding 让吸附位让开段头。 */
-.war-bridge-dock-fade{position:sticky;bottom:-8px;height:30px;margin-top:-30px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--war-canvas))}
+.war-bridge-dock-fade{position:sticky;bottom:-8px;height:30px;margin-top:-30px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--war-pop-bg))}
 /* 可下滚提示=独立布局条（坞/输入带之间）——零重叠，滚到底随 dockMore 消失。 */
-.war-bridge-dock-hintbar{flex:0 0 auto;text-align:center;font-size:calc(10px*var(--war-fs));color:var(--war-text-2);padding:2px 0 3px;border-top:1px solid var(--war-border-soft);background:var(--war-canvas);letter-spacing:.04em}
+.war-bridge-dock-hintbar{flex:0 0 auto;text-align:center;font-size:calc(11px*var(--war-fs));color:var(--war-text-2);padding:2px 0 3px;border-top:1px solid var(--war-border-soft);background:var(--war-pop-bg);letter-spacing:.04em}
 /* B2 修（D33 bug 表）：滚动吸附卡边界——动作钮永不与卡头分离（孤按钮悬空=误触终局风险）。 */
 .war-bridge-dock .war-bcard{scroll-snap-align:start}
-/* B5 断网 banner：常驻黄条（恢复自清）。 */
-.war-bridge-offline{margin:0;padding:5px 10px;border:1px solid var(--war-fail-border,var(--war-border));border-radius:var(--war-r-md);background:color-mix(in srgb,var(--war-fail,#b45309) 8%,transparent);color:var(--war-fail,#b45309);font-size:calc(12px*var(--war-fs))}
 /* B4：格言降级为欢迎语第二行（弱化小字，完整可读不截断）。 */
 .war-bridge-welcome-motto{display:block;margin-top:4px;font-size:calc(12px*var(--war-fs));color:var(--war-text-3)}
 .war-bridge-dock[data-bridge-dock='empty']{max-height:none}
-.war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em;position:sticky;top:0;background:var(--war-canvas);padding:4px 0;z-index:1}
-.war-bcard{border:1px solid var(--war-border);border-radius:8px;background:var(--war-card-bg);padding:8px 11px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--war-shadow-1)}
+.war-bridge-dockhead{font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-text-2);letter-spacing:.04em;position:sticky;top:0;background:color-mix(in srgb,var(--war-pop-bg) 92%,transparent);backdrop-filter:blur(8px);padding:4px 0;z-index:1}
+/* D38 决策卡统一卡面：12px 圆角+发丝边+accent 身份 tag 药丸（全应用一种药丸习语）。 */
+.war-bcard{border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);background:var(--war-card-bg);padding:10px 12px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--war-shadow-1)}
 .war-bcard-head{display:flex;align-items:center;gap:8px;min-width:0}
-.war-bcard-tag{flex:none;font-size:calc(11px*var(--war-fs));padding:1px 8px;border-radius:var(--war-r-pill);background:var(--war-well-bg);color:var(--war-text-1);white-space:nowrap}
+.war-bcard-tag{flex:none;font-size:calc(11px*var(--war-fs));font-weight:600;padding:1px 9px;border-radius:var(--war-r-pill);background:color-mix(in srgb,var(--war-run-border) 12%,transparent);color:var(--war-run-strong);white-space:nowrap}
+/* 族色语义与板收件箱同源（澄清/签发=等待琥珀、验收=运行蓝、重试=失败红）——形状统一药丸不破坏 D38 药丸习语。 */
+.war-bcard[data-bridge-card='clarify'] .war-bcard-tag,.war-bcard[data-bridge-card='sign'] .war-bcard-tag{background:color-mix(in srgb,var(--war-wait-border) 14%,transparent);color:var(--war-wait)}
+.war-bcard[data-bridge-card='retry'] .war-bcard-tag{background:color-mix(in srgb,var(--war-fail-border) 14%,transparent);color:var(--war-fail)}
 .war-bcard-title{flex:1;min-width:0;font-size:calc(13px*var(--war-fs));color:var(--war-text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.war-bcard-id{flex:none;font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
-.war-bcard-input{width:100%;min-height:34px;resize:vertical;font-family:var(--war-font);font-size:calc(12px*var(--war-fs));color:var(--war-text-1);background:var(--war-well-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:5px 8px;outline:none;box-sizing:border-box}
+.war-bcard-id{flex:none;font-size:calc(11px*var(--war-fs));color:var(--war-text-3);font-family:var(--war-font-code)}
+.war-bcard-input{width:100%;min-height:34px;resize:vertical;font-family:var(--war-font);font-size:calc(12px*var(--war-fs));color:var(--war-text-1);background:color-mix(in srgb,var(--war-text-1) 4%,transparent);border:1px solid var(--war-border-soft);border-radius:var(--war-r-sm);padding:5px 8px;outline:none;box-sizing:border-box}
 .war-bcard-input:focus-visible{outline:2px solid var(--war-focus);outline-offset:1px}
 .war-bcard-field{display:flex;flex-direction:column;gap:2px}
 .war-bcard-flabel{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
@@ -1172,26 +1195,40 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bcard-evi{font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
 .war-bcard-body{max-height:180px;overflow-y:auto;font-size:calc(12px*var(--war-fs))}
 .war-bcard-actions{display:flex;gap:8px;flex-wrap:wrap}
-.war-bridge-input{border-top:1px solid var(--war-border-soft);padding:8px 16px 12px;display:flex;flex-direction:column;gap:6px}
-.war-bridge-ta{width:100%;resize:vertical;font-family:var(--war-font);font-size:calc(13px*var(--war-fs));color:var(--war-text-1);background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 10px;outline:none;box-sizing:border-box}
-.war-bridge-ta:focus{border-color:var(--war-run-border,var(--war-run-strong))}
-.war-bridge-sendrow{display:flex;justify-content:flex-end}
-/* D37 工具条：思考档芯条+上下文占用环（lookatstudy composer 同形）+停止钮。 */
-.war-bridge-toolbar{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap}
-.war-bridge-chip{font-size:calc(11px*var(--war-fs));padding:2px 9px;border-radius:999px;display:inline-flex;gap:5px;align-items:center;line-height:1.5}
-.war-bridge-chip.warn{color:var(--war-fail,var(--war-text-1));border-color:var(--war-fail,var(--war-border))}
+/* D38 composer 一体卡：textarea+状态槽+工具条+发送钮一张 16px 圆角卡——状态
+ * 提示单槽换内容（旧五层纵叠抖动终局），focus-within 微亮+accent 描边。 */
+.war-bridge-input{padding:8px 14px 14px;display:flex;flex-direction:column}
+.war-composer{display:flex;flex-direction:column;border:1px solid var(--war-border-soft);border-radius:var(--war-r-lg);background:color-mix(in srgb,var(--war-text-1) 4%,var(--war-card-bg));transition:border-color .15s var(--war-ease-quart),background .15s var(--war-ease-quart)}
+.war-composer:focus-within{border-color:color-mix(in srgb,var(--war-run-border) 75%,var(--war-border-soft));background:color-mix(in srgb,var(--war-text-1) 6%,var(--war-card-bg))}
+.war-composer-note{margin:0;padding:7px 12px 0;font-size:calc(12px*var(--war-fs));color:var(--war-text-2)}
+.war-composer-note[data-bridge-note='err']{color:var(--war-fail)}
+.war-composer-note[data-bridge-note='ok']{color:var(--war-done)}
+.war-composer-note[data-bridge-note='info']{color:var(--war-run)}
+.war-bridge-ta{width:100%;resize:none;font-family:var(--war-font);font-size:calc(13.5px*var(--war-fs));color:var(--war-text-1);background:transparent;border:none;border-radius:var(--war-r-lg);padding:10px 12px 4px;outline:none;box-sizing:border-box;min-height:44px}
+/* D37→D38 工具条：caption 药丸习语（无描边、选中/警示态染底）+圆形 3D 发送/停止钮同位切换。 */
+.war-bridge-toolbar{display:flex;gap:6px;align-items:center;padding:2px 8px 8px}
+.war-bridge-toolspring{flex:1}
+.war-bridge-chip{font-size:calc(11.5px*var(--war-fs));padding:3px 10px;border-radius:var(--war-r-pill);border-color:transparent;background:transparent;color:var(--war-text-2);display:inline-flex;gap:5px;align-items:center;line-height:1.4;transition:background .15s var(--war-ease-quart),color .15s var(--war-ease-quart)}
+.war-bridge-chip:hover{background:color-mix(in srgb,var(--war-text-1) 7%,transparent)}
+.war-bridge-chip[data-bridge-effort='fast'],.war-bridge-chip[data-bridge-effort='deep']{background:color-mix(in srgb,var(--war-run-border) 14%,transparent);color:var(--war-run-strong)}
+.war-bridge-chip.warn{color:var(--war-fail,var(--war-text-1));background:color-mix(in srgb,var(--war-fail) 10%,transparent)}
+.war-bridge-send{width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:var(--war-action-bg);color:var(--war-action-fg);font-size:15px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 3px 0 0 var(--war-action-edge);transition:transform .12s var(--war-ease-quart),box-shadow .12s var(--war-ease-quart),filter .12s var(--war-ease-quart)}
+.war-bridge-send:hover{filter:brightness(1.08)}
+.war-bridge-send:active{transform:translateY(2px);box-shadow:0 1px 0 0 var(--war-action-edge)}
+.war-bridge-send:disabled{opacity:.4;box-shadow:none;transform:none;filter:none}
+.war-bridge-stop{width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:color-mix(in srgb,var(--war-fail-border) 14%,var(--war-card-bg));color:var(--war-fail);font-size:13px;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1.5px var(--war-fail-border);transition:transform .12s var(--war-ease-quart)}
+.war-bridge-stop:active{transform:scale(.94)}
 .war-ctx-ring{display:inline-flex;flex:none}
 .war-ctx-ring-bg{stroke:var(--war-border-soft)}
 .war-ctx-ring-fg{stroke:var(--war-run-strong,var(--war-text-2));transition:stroke-dasharray .3s ease}
 .war-ctx-ring-fg.warn{stroke:var(--war-fail,var(--war-text-1))}
 .war-bridge-ctx{position:relative;display:inline-flex}
-.war-ctx-panel{position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:190px;background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:0 8px 22px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:3px}
+.war-ctx-panel{position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:190px;background:var(--war-pop-bg);border:1px solid var(--war-border-soft);border-radius:var(--war-r-md);padding:8px 11px;box-shadow:var(--war-shadow-2);display:flex;flex-direction:column;gap:3px}
 .war-ctx-panel-title{font-size:calc(11px*var(--war-fs));color:var(--war-text-3);margin-bottom:2px}
 .war-ctx-row{display:flex;justify-content:space-between;gap:10px;font-size:calc(11px*var(--war-fs))}
 .war-ctx-label{color:var(--war-text-2)}
 .war-ctx-val{color:var(--war-text-1);font-family:var(--war-font-code)}
 .war-ctx-panel-total{border-top:1px dashed var(--war-border-soft);margin-top:4px;padding-top:5px;font-size:calc(11px*var(--war-fs));color:var(--war-text-2);font-family:var(--war-font-code)}
-.war-bridge-stop{font-weight:700}
 /* critique6 P2：板让位区露 body 白底读作「死区」——画布底色铺满（三态壳退役后
  * 板恒全宽，此规则只余兜底语义）。 */
 .war-standalone-board{background:var(--war-canvas)}
@@ -1200,28 +1237,33 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width:0;width:100%}
 /* D29 语调刀：【块】标记 chip（账本原文不动，呈现层给视觉身份）+跨日分隔条。 */
 .war-md-token{display:inline-block;padding:0 5px;border:1px solid var(--war-border-soft);border-radius:5px;background:var(--war-well-bg);color:var(--war-text-2);font-family:var(--war-font-code);font-size:.92em;line-height:1.5}
-.war-bmsg-day{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-2);padding:2px 10px;margin:4px 0;border-bottom:1px dashed var(--war-border-soft)}
+.war-bmsg-day{align-self:center;display:flex;align-items:center;gap:8px;font-size:calc(11px*var(--war-fs));color:var(--war-text-3);padding:2px 4px;margin:2px 0}
+.war-bmsg-day::before,.war-bmsg-day::after{content:'';width:24px;height:1px;background:var(--war-border-soft)}
 .war-cmdtab-name{font-size:calc(12px*var(--war-fs));color:var(--war-text-1)}
-/* D29 critique：代理舰长在途指示——呼吸点+诚实标签（收到回话即被顶走）。 */
-.war-bmsg-typing{display:flex;align-items:center;gap:8px;background:transparent;border:1px dashed var(--war-border-soft);color:var(--war-text-2)}
-.war-typing-dots{font-size:8px;letter-spacing:3px;color:var(--war-text-3);animation:war-typing 1.4s ease-in-out infinite}
+/* D29 critique：代理舰长在途指示——三点弹跳（accent）+诚实标签（收到回话即被顶走）。 */
+.war-bmsg-typing{display:flex;align-items:center;gap:9px;background:transparent;border:none;color:var(--war-text-2)}
+.war-typing-dots{display:inline-flex;gap:3px;align-items:center}
+.war-typing-dots i{width:5px;height:5px;border-radius:50%;background:var(--war-run-strong);animation:war-dot-bounce 1.2s var(--war-ease-quart) infinite}
+.war-typing-dots i:nth-child(2){animation-delay:.15s}
+.war-typing-dots i:nth-child(3){animation-delay:.3s}
 .war-typing-label{font-size:calc(12px*var(--war-fs))}
+@keyframes war-dot-bounce{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 @keyframes war-typing{0%,100%{opacity:.35}50%{opacity:1}}
-@media (prefers-reduced-motion: reduce){.war-typing-dots{animation:none;opacity:.7}}
+@media (prefers-reduced-motion: reduce){.war-typing-dots i{animation:none;opacity:.6}}
 /* D32 流式打字机：在途回话逐字上屏（光标呼吸），终答入账后被真消息顶替。 */
-.war-bmsg-live{max-width:100%;border:none;background:transparent;padding:2px 0;border-radius:0;box-shadow:none}
+.war-bmsg-live{max-width:100%;padding:2px 0}
 .war-bmsg-live .war-bmsg-body::after{content:'▍';margin-left:2px;color:var(--war-run-strong,var(--war-border-hover));animation:war-typing 1.2s ease-in-out infinite}
 @media (prefers-reduced-motion: reduce){.war-bmsg-live .war-bmsg-body::after{animation:none}}
 /* D33 段2（lookatstudy 移植）：工具步骤 chip / 回底浮钮 / 时间戳弱化 / 未读分隔 / 复制钮 */
-.war-bmsg-tools{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
-.war-bmsg-tool{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:999px;border:1px solid var(--war-border-soft);background:var(--war-well-bg);color:var(--war-text-2);font-size:calc(11px*var(--war-fs));font-family:var(--war-font-code)}
-.war-bmsg-tool.done{color:var(--war-text-1);border-color:var(--war-border)}
-.war-tg-panel .war-bmsg-meta{opacity:.45;transition:opacity .15s ease}
-.war-tg-panel .war-bmsg:hover .war-bmsg-meta{opacity:1}
+.war-bmsg-tools{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 4px}
+.war-bmsg-tool{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:var(--war-r-pill);border:none;background:color-mix(in srgb,var(--war-text-1) 6%,transparent);color:var(--war-text-2);font-size:calc(11px*var(--war-fs));font-family:var(--war-font-code)}
+.war-bmsg-tool.done{color:var(--war-text-1);background:color-mix(in srgb,var(--war-text-1) 9%,transparent)}
+.war-tg-panel .war-bmsg-meta{transition:color .15s ease}
+.war-tg-panel .war-bmsg:hover .war-bmsg-meta{color:var(--war-text-1)}
 .war-bmsg-new{align-self:center;font-size:calc(11px*var(--war-fs));color:var(--war-run-strong,var(--war-text-2));padding:2px 12px;margin:4px 0;border-bottom:1px solid color-mix(in srgb,var(--war-run-strong) 45%,transparent);letter-spacing:.06em}
 .war-bmsg-copy{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;opacity:.55}
 .war-bmsg-copy:hover{opacity:1}
-.war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;box-shadow:var(--war-shadow-2)}
+.war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:var(--war-text-1);color:var(--war-canvas);box-shadow:var(--war-shadow-2)}
 .war-bridge{position:relative}
 /* D33 段3：对话模型配置段（抽屉内）。 */
 .war-loopcfg{display:flex;flex-direction:column;gap:6px;padding-top:2px}
@@ -1249,59 +1291,59 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-looplaunch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
 .war-looplaunch-text{display:flex;flex-direction:column;gap:1px;min-width:0}
 .war-looplaunch-text .war-set-toggle-hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* ── 可拖拽舰桥悬浮球 + Telegram 式聊天浮窗（2026-10-21 舰长定案）────────────
- * 球可拖动（点按=开关窗、拖动=移位、位置持久化）；浮窗贴球择向弹出（右下半球
- * →向左上开），拖动实时跟随。消息排版对齐 lookatstudy 中栏 UI 配置：AI 消息=
- * 扁平全宽 prose（80ch 行长纪律）、舰长消息=右对齐小气泡（85% 上限、非对称圆
- * 角）、机械战报=居中弱化卡。色板仍走皮肤 token——设置抽屉管色，此层只管结构
- * 与字阶。挂 .war-root 的浮件须反制其基类布局属性（flex-direction:column+
- * height:100% 会把球撑成满高柱——chrome 竖排 P0 同源）。 */
+/* ── 可拖拽舰桥悬浮球 + 玻璃浮窗（D38 新语言）────────────────────────────
+ * 球=玻璃圆盘+信号蓝星标（hover 亮环缩放）；浮窗=16px 圆角玻璃壳（pop 92%
+ * +blur 饱和）+软浮影+玻璃 header（在役状态点）；弹入 200ms expo 上浮。
+ * 消息排版=claude.ai 阅读流（已在 .war-bmsg 基座），此处只管壳与字阶微调。
+ * 挂 .war-root 的浮件须反制其基类布局属性（flex-direction:column+height:100%
+ * 会把球撑成满高柱——chrome 竖排 P0 同源）。 */
 .war-tg-ball{position:fixed;right:18px;bottom:18px;z-index:60;width:54px;height:54px;flex:none;
   display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;touch-action:none;
-  background:var(--war-card-bg);border:1px solid var(--war-border);border-radius:50%;
-  box-shadow:0 6px 18px color-mix(in srgb,#000 24%,transparent);
-  transition:box-shadow .15s cubic-bezier(.16,1,.3,1)}
-.war-tg-ball:hover{box-shadow:0 8px 24px color-mix(in srgb,#000 32%,transparent)}
-.war-tg-ball:active{cursor:grabbing}
-.war-tg-ball svg{width:28px;height:28px;display:block;pointer-events:none}
+  background:color-mix(in srgb,var(--war-card-bg) 78%,transparent);
+  backdrop-filter:blur(12px) saturate(1.1);-webkit-backdrop-filter:blur(12px) saturate(1.1);
+  border:1px solid var(--war-border-soft);border-radius:50%;
+  box-shadow:var(--war-shadow-2);
+  transition:box-shadow .18s var(--war-ease-expo),transform .18s var(--war-ease-expo)}
+.war-tg-ball:hover{box-shadow:var(--war-shadow-3),0 0 0 4px color-mix(in srgb,var(--war-run-border) 22%,transparent);transform:scale(1.05)}
+.war-tg-ball:active{transform:scale(.96);cursor:grabbing}
+.war-tg-ball svg{width:28px;height:28px;display:block;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2))}
 .war-tg-ball-badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
   display:flex;align-items:center;justify-content:center;box-sizing:content-box;pointer-events:none;
-  background:var(--war-run-strong,#3b82f6);color:#fff;font-size:calc(11px*var(--war-fs));font-weight:700;
+  background:var(--war-action-bg);color:var(--war-action-fg);font-size:calc(11px*var(--war-fs));font-weight:700;
   border:2px solid var(--war-canvas)}
 .war-tg-pill{position:fixed;right:18px;bottom:86px;z-index:60;height:auto;width:fit-content;flex:none;
   padding:7px 12px;border-radius:999px;cursor:pointer;
-  background:var(--war-card-bg);border:1px solid var(--war-border);box-shadow:var(--war-shadow-1);
+  background:color-mix(in srgb,var(--war-card-bg) 78%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--war-border-soft);box-shadow:var(--war-shadow-1);
   color:var(--war-text-2);font-family:var(--war-font-code);font-size:calc(13px*var(--war-fs))}
 .war-tg-pill-solo{bottom:18px}
 .war-tg-panel{position:fixed;z-index:70;height:auto;display:flex;flex-direction:column;
-  background:var(--war-canvas);border:1px solid var(--war-border);border-radius:14px;overflow:hidden;
-  box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent);
+  background:color-mix(in srgb,var(--war-pop-bg) 92%,transparent);
+  backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);
+  border:1px solid var(--war-border-soft);border-radius:var(--war-r-lg);overflow:hidden;
+  box-shadow:var(--war-shadow-3);
   resize:both;min-width:360px;min-height:420px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
-  animation:war-tg-pop .18s cubic-bezier(.16,1,.3,1)}
+  animation:war-tg-pop .2s var(--war-ease-expo)}
 /* resize 手柄与圆角共存的视觉提示（Chromium 手柄自带三角，深肤下再描一道淡边）。 */
 .war-tg-panel::after{content:'';position:absolute;right:0;bottom:0;width:18px;height:18px;pointer-events:none;
   background:linear-gradient(135deg,transparent 50%,color-mix(in srgb,var(--war-text-3) 35%,transparent) 50%)}
-@keyframes war-tg-pop{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:none}}
+@keyframes war-tg-pop{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.war-tg-panel{animation:none}}
-.war-tg-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--war-border-soft);background:var(--war-card-bg);flex:none}
-.war-tg-head-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.war-tg-title{font-size:calc(16px*var(--war-fs));font-weight:600;color:var(--war-text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.war-tg-motto{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.war-tg-close{min-width:34px;flex:none}
+.war-tg-head{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--war-border-soft);background:color-mix(in srgb,var(--war-card-bg) 45%,transparent);flex:none}
+.war-tg-head-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.war-tg-title{font-size:calc(15px*var(--war-fs));font-weight:600;color:var(--war-text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.war-tg-motto{font-size:calc(12px*var(--war-fs));color:var(--war-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:6px}
+.war-tg-motto::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--war-done-border);flex:none}
+.war-tg-motto[data-bridge-status='off']::before{background:var(--war-fail-border)}
+.war-tg-close{min-width:32px;width:32px;height:32px;padding:0;border-radius:50%;border-color:transparent;background:transparent;color:var(--war-text-2)}
+.war-tg-close:hover{background:color-mix(in srgb,var(--war-text-1) 8%,transparent);color:var(--war-text-1)}
 .war-tg-body{flex:1;min-height:0;display:flex}
-/* —— lookatstudy 中栏配置：消息层重排（只作用浮窗内，板面会议室不受影响）—— */
-.war-tg-panel .war-bmsg{max-width:100%;border:none;background:transparent;padding:2px 0;border-radius:0;box-shadow:none}
-.war-tg-panel .war-bmsg-user{align-self:flex-end;max-width:85%;padding:8px 12px;border-radius:16px 16px 4px 16px;
-  background:color-mix(in srgb,var(--war-run-strong) 12%,var(--war-card-bg))}
-.war-tg-panel .war-bmsg-user .war-bmsg-plain{font-weight:600}
-.war-tg-panel .war-bmsg-agent{align-self:stretch}
-.war-tg-panel .war-bmsg-agent .war-bmsg-body{font-size:calc(14px*var(--war-fs));line-height:1.65;max-width:80ch}
-.war-tg-panel .war-bmsg-system{align-self:center;max-width:92%;padding:4px 10px;border:1px dashed var(--war-border-soft);border-radius:var(--war-r-md);background:var(--war-well-bg)}
-.war-tg-panel .war-bmsg-meta{opacity:.85}
-.war-tg-panel .war-bridge-msgs{padding:14px 18px;gap:14px}
-.war-tg-panel .war-bridge-dock{padding:10px 18px}
-.war-tg-panel .war-bridge-input{padding:10px 18px 14px}
-.war-tg-panel .war-bridge-ta{min-height:44px;resize:none}
+/* —— 浮窗内字阶微调（阅读流基座在 .war-bmsg，此处只调节奏）—— */
+.war-tg-panel .war-bridge-msgs{padding:16px 20px;gap:14px}
+.war-tg-panel .war-bmsg-agent .war-bmsg-body{font-size:calc(14px*var(--war-fs))}
+.war-tg-panel .war-bridge-dock{padding:10px 20px}
+.war-tg-panel .war-bridge-input{padding:10px 16px 16px}
 
 
 `
