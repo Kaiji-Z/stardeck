@@ -51,11 +51,23 @@ export interface ProxyLoopDeps {
   /** 只读投影闭包（daemon 传入——与 MCP 座席面 read_* 同源同数据）。 */
   reads: { board: () => Promise<unknown>; digest: () => Promise<unknown>; ledger: () => Promise<unknown> }
   onTextDelta?: (delta: string) => void
+  /** D36 思考流（lookatstudy/DSH 同形）：模型 reasoning 增量（GLM 的
+   *  reasoning_content 经 @ai-sdk/openai-compatible 映射为 reasoning part）。 */
+  onReasoningDelta?: (delta: string) => void
   /** D33 段2（lookatstudy tool-call part 同形）：工具步骤透明化——start=模型发起
-   *  调用、done=结果返回。UI 内联 chip 呈现，让「它在查账」可见。 */
-  onToolStep?: (toolName: string, phase: 'start' | 'done') => void
+   *  调用、done=结果返回。UI 内联 chip 呈现，让「它在查账」可见。
+   *  D36：第三参 detail=参数/结果摘要（start=入参、done=出参，截断白噪声）。 */
+  onToolStep?: (toolName: string, phase: 'start' | 'done', detail?: string) => void
   /** 整轮看门狗毫秒（缺省 180s——超时 abort，调用侧降级）。 */
   watchdogMs?: number
+}
+
+/** 工具参数/结果摘要（D36）：压平空白+截断——chip 行内可读，title 全文。 */
+export function summarizeStepDetail(v: unknown, max: number): string {
+  let s = ''
+  try { s = typeof v === 'string' ? v : JSON.stringify(v) ?? '' } catch { s = String(v) }
+  s = s.replace(/\s+/g, ' ').trim()
+  return s.length > max ? `${s.slice(0, max)}…` : s
 }
 
 export interface ProxyLoopResult {
@@ -104,10 +116,15 @@ export async function runProxyLoop(order: string, env: ProxyLoopEnv, deps: Proxy
     if (part.type === 'text-delta') {
       text += part.text
       deps.onTextDelta?.(part.text)
+    } else if (part.type === 'reasoning-delta' || part.type === 'reasoning') {
+      // ai v5 正名 reasoning-delta；旧命名 reasoning 也兜（part.text 场地两侧同名）。
+      const d = typeof (part as { text?: unknown }).text === 'string' ? (part as { text: string }).text : ''
+      if (d !== '') deps.onReasoningDelta?.(d)
     } else if (part.type === 'tool-call') {
-      deps.onToolStep?.(part.toolName, 'start')
+      deps.onToolStep?.(part.toolName, 'start', summarizeStepDetail((part as { input?: unknown }).input, 60))
     } else if (part.type === 'tool-result') {
-      deps.onToolStep?.(part.toolName, 'done')
+      const r = (part as { output?: unknown; result?: unknown }).output ?? (part as { result?: unknown }).result
+      deps.onToolStep?.(part.toolName, 'done', summarizeStepDetail(r, 100))
     } else if (part.type === 'error') {
       throw part.error instanceof Error ? part.error : new Error(String(part.error))
     }

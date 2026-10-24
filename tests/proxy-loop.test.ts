@@ -133,3 +133,40 @@ test('runProxyLoop：纯文本轮 onToolStep 零回调', { timeout: 30_000 }, as
     assert.equal(out.toolCalls, 0)
   } finally { server.close() }
 })
+
+// ── D36 流式详情：思考流（reasoning_content→onReasoningDelta）+工具参数/结果摘要 ──
+test('runProxyLoop：onReasoningDelta 收思考流 + onToolStep 带参数/结果摘要', { timeout: 30_000 }, async () => {
+  const { server, url } = scriptedSseServer([
+    () => ({ chunks: [
+      { role: 'assistant', reasoning_content: '先看账面' },
+      { reasoning_content: '再核速览' },
+      { content: null, tool_calls: [{ id: 'tc1', type: 'function', function: { name: 'read_board', arguments: '{"limit":3}' } }] },
+    ], finish: 'tool_calls' }),
+    () => ({ chunks: [{ role: 'assistant', content: '查完，两件事在跑。' }], finish: 'stop' }),
+  ])
+  try {
+    const reasoning: string[] = []
+    const steps: Array<[string, string, string | undefined]> = []
+    const out = await runProxyLoop('问况', { enabled: true, baseUrl: await url, apiKey: 'k', model: 'glm-test' }, {
+      reads: { board: async () => ({ commands: ['c1', 'c2'] }), digest: async () => ({}), ledger: async () => ({}) },
+      onReasoningDelta: d => { reasoning.push(d) },
+      onToolStep: (name, phase, detail) => { steps.push([name, phase, detail]) },
+    })
+    assert.equal(out.text, '查完，两件事在跑。')
+    assert.equal(reasoning.join(''), '先看账面再核速览', `思考流拼接：${JSON.stringify(reasoning)}`)
+    assert.equal(steps.length, 2)
+    // read_board 的 schema 是空 z.object({})——zod 校验剥掉模型多给的参数，
+    // 入参摘要 '{}' 属实（摘要在场即可，参数有无由工具 schema 定）。
+    assert.ok(typeof steps[0]![2] === 'string', `start 摘要在场：${steps[0]![2]}`)
+    assert.ok(steps[1]![2] !== undefined && steps[1]![2]!.length > 0, `done 摘要带出参：${steps[1]![2]}`)
+  } finally { server.close() }
+})
+
+test('summarizeStepDetail：压平空白/截断/非法对象不炸', async () => {
+  const { summarizeStepDetail } = await import('../src/proxy-loop.ts')
+  assert.equal(summarizeStepDetail({ a: 1 }, 60), '{"a":1}')
+  assert.ok(summarizeStepDetail({ deep: 'x'.repeat(200) }, 40).endsWith('…'))
+  assert.equal(summarizeStepDetail('  a\n b  ', 60), 'a b')
+  const cyc: Record<string, unknown> = {}; cyc.self = cyc
+  assert.ok(typeof summarizeStepDetail(cyc, 10) === 'string', '循环引用走 String() 兜底')
+})

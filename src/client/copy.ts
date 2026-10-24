@@ -616,6 +616,8 @@ export interface WarCopy {
     clarifyNotePh: string
     /** D32 打字机：在途回话的 meta 标签。 */
     liveTyping: string
+    /** D36 思考流折叠区标签。 */
+    liveThinking: string
     /** B5 断网 banner（常驻至恢复）。 */
     offlineBanner: string
     /** B4 头部状态行。 */
@@ -1278,6 +1280,7 @@ export const warCopy: WarCopy = {
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选——Enter 发送 · Shift+Enter 换行）',
     liveTyping: '正在输入…',
+    liveThinking: '思考过程',
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
     statusOff: '代理舰长离役（降级）',
@@ -1921,6 +1924,7 @@ export const plainCopy: WarCopy = {
     chosenLabel: '已选：',
     clarifyNotePh: '补充说明（可选——Enter 发送 · Shift+Enter 换行）',
     liveTyping: '正在输入…',
+    liveThinking: '思考过程',
     offlineBanner: '舰桥失联——正在自动重试',
     statusOn: '代理舰长在线',
     statusOff: '代理舰长离役（降级）',

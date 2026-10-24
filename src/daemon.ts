@@ -234,7 +234,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // D32 流式上屏：内置 loop 的打字机缓冲（onTextDelta 增量、入账/失手即清）。
   // SSE 帧随 seq 变化推送 {live}——会话态不进账本，读投影纪律不破。
   // D33 段2：tools=本轮工具步骤（label+done），lookatstudy tool-call part 同形。
-  const proxyLive = { seq: 0, text: '', tools: [] as Array<{ label: string; done: boolean }> }
+  // D36：reasoning=思考流缓冲（GLM reasoning_content）；tools 增 detail=参数/结果摘要。
+  const proxyLive = { seq: 0, text: '', reasoning: '', tools: [] as Array<{ label: string; done: boolean; detail?: string }> }
   // D33 段3：loop 供给运行态（config.loop 段优先，env 回落；窗口 POST 即时翻新）。
   const loopCfg: LoopConfig = readLoopConfig()
   const effectiveLoopEnv = () => mergeLoopEnv(process.env, loopCfg)
@@ -301,7 +302,10 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         },
       },
       // D32 流式上屏：SSE 帧随 live.seq 变化推 {live} 打字机文本。
-      proxyLive: () => ({ seq: proxyLive.seq, text: proxyLive.text, tools: proxyLive.tools }),
+      proxyLive: () => ({ seq: proxyLive.seq, text: proxyLive.text, reasoning: proxyLive.reasoning, tools: proxyLive.tools }),
+      /** D36-A 发话即应答：bridge/messages 入账成功即触发一轮 proxyTick（15s
+       *  哨位降为兜底——平均省 7.5s 起步延迟；守卫链防重入）。 */
+      bridgeKick: () => { void proxyTick().catch(err => console.error('[stardeck] 代理舰长 kick 异常（跳过）:', err instanceof Error ? err.message : err)) },
       // D33 段3：模型配置窗口面。key 永不出 daemon——回执只带来源与有无。
       loopConfig: {
         get: () => {
@@ -792,10 +796,16 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           },
           // D32 打字机：增量推进 live 缓冲——SSE 帧随 seq 推 {live}，浮窗逐字上屏。
           onTextDelta: d => { proxyLive.text += d; proxyLive.seq += 1 },
+          // D36 思考流：reasoning_content 增量入缓冲（与正文同 seq 节流）。
+          onReasoningDelta: d => { proxyLive.reasoning += d; proxyLive.seq += 1 },
           // D33 段2：工具步骤 chip（start 入列 done 翻面，重名步骤各自成行）。
-          onToolStep: (name, phase) => {
-            if (phase === 'start') proxyLive.tools.push({ label: name, done: false })
-            else { const hit = [...proxyLive.tools].reverse().find(t => t.label === name && !t.done); if (hit !== undefined) hit.done = true }
+          // D36：detail=入参/出参摘要（done 时以结果摘要替换入参摘要）。
+          onToolStep: (name, phase, detail) => {
+            if (phase === 'start') proxyLive.tools.push({ label: name, done: false, detail })
+            else {
+              const hit = [...proxyLive.tools].reverse().find(t => t.label === name && !t.done)
+              if (hit !== undefined) { hit.done = true; if (detail !== undefined) hit.detail = detail }
+            }
             proxyLive.seq += 1
           },
         })
@@ -804,12 +814,19 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         // 客户端一次换页（终答顶替打字机），无空窗无重复。
         await applyProxyReply('proxy-loop', out.text)
         proxyLive.text = ''
+        proxyLive.reasoning = ''
         proxyLive.tools = []
         proxyLive.seq += 1
         console.log(`[stardeck] 代理舰长 loop 回话入账（${out.text.length} 字，${out.steps} 步/工具 ${out.toolCalls} 次）`)
+        // D36-A：应答期间舰长又发了话——不等下一轮 15s 哨位，微延迟续跑一轮
+        //（守卫链天然防重入；只续一层，风暴由 tick 兜底节奏约束）。
+        if (bridgeUnanswered(loadBridgeMessages(stateDir)).length > 0) {
+          setTimeout(() => { void proxyTick().catch(err => console.error('[stardeck] 代理舰长续跑异常（跳过）:', err instanceof Error ? err.message : err)) }, 400)
+        }
         return
       } catch (err) {
         proxyLive.text = ''
+        proxyLive.reasoning = ''
         proxyLive.tools = []
         proxyLive.seq += 1
         console.warn(`[stardeck] 代理舰长 loop 失手——本轮降级舰队席：${err instanceof Error ? err.message : String(err)}`)

@@ -1138,6 +1138,13 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bmsg-scenehead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .war-bmsg-scenetag{font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 .war-bmsg-scene{width:100%;box-sizing:border-box;min-height:300px;border:1px solid var(--war-border-soft);border-radius:8px;background:var(--war-well-bg)}
+/* D36 流式详情：思考流折叠区（正文未出时展开、正文开始即折叠）+工具行内摘要。 */
+.war-bmsg-reasoning{border-left:2px solid var(--war-border);margin:2px 0;padding:1px 0 1px 8px;font-size:calc(11px*var(--war-fs))}
+.war-bmsg-reasoning summary{cursor:pointer;color:var(--war-text-3);user-select:none;list-style:none}
+.war-bmsg-reasoning summary::before{content:'◂ ';font-size:9px}
+.war-bmsg-reasoning[open] summary::before{content:'▾ '}
+.war-bmsg-reasoning-body{white-space:pre-wrap;color:var(--war-text-3);max-height:150px;overflow-y:auto;margin-top:2px;line-height:1.5}
+.war-bmsg-tooldetail{color:var(--war-text-3);font-size:calc(10px*var(--war-fs));max-width:280px;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .war-bridge-dock{border-top:1px solid var(--war-border-soft);padding:8px 16px;max-height:52%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scroll-snap-type:y proximity;position:relative;scroll-padding-top:30px}
 /* P1 修（D33 critique A）：坞可下滚时底部渐隐+浮 pills——默认窗里被截的卡读得出「下面还有」。
    实弹教训：snap 初始吸附把首卡头滚进 sticky 段头（不透明底）底下=「卡没头」——scroll-padding 让吸附位让开段头。 */

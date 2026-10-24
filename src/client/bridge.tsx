@@ -18,7 +18,8 @@ import { reportBody } from './views.tsx'
 class BridgeStore {
   private snapshot: BridgeChatMessage[] | null = null
   private live = '' // D32 打字机：内置 loop 在途文本（SSE {live} 帧驱动，终答入账即清）
-  private liveTools: Array<{ label: string; done: boolean }> = [] // D33 段2：本轮工具步骤
+  private liveTools: Array<{ label: string; done: boolean; detail?: string }> = [] // D33 段2：本轮工具步骤（D36 带 detail 摘要）
+  private liveReasoning = '' // D36 思考流：reasoning 增量（空串也随帧清）
   private error: string | null = null
   private timer: ReturnType<typeof setInterval> | undefined
   private source: EventSource | undefined
@@ -43,7 +44,8 @@ class BridgeStore {
 
   getSnapshot = (): BridgeChatMessage[] | null => this.snapshot
   getLive = (): string => this.live
-  getLiveTools = (): Array<{ label: string; done: boolean }> => this.liveTools
+  getLiveTools = (): Array<{ label: string; done: boolean; detail?: string }> => this.liveTools
+  getLiveReasoning = (): string => this.liveReasoning
   getError = (): string | null => this.error
   refresh = (): void => { void this.tick() }
 
@@ -53,10 +55,14 @@ class BridgeStore {
       const es = new EventSource('/warroom/api/events')
       es.onmessage = (ev: MessageEvent<string>) => {
         try {
-          const frame = JSON.parse(ev.data) as { rev?: string; live?: string; liveTools?: Array<{ label: string; done: boolean }> }
+          const frame = JSON.parse(ev.data) as { rev?: string; live?: string; liveReasoning?: string; liveTools?: Array<{ label: string; done: boolean; detail?: string }> }
           let changed = false
           if (frame.live !== undefined && frame.live !== this.live) {
             this.live = frame.live
+            changed = true
+          }
+          if (frame.liveReasoning !== undefined && frame.liveReasoning !== this.liveReasoning) {
+            this.liveReasoning = frame.liveReasoning
             changed = true
           }
           if (frame.liveTools !== undefined && frame.liveTools !== this.liveTools) {
@@ -98,12 +104,13 @@ class BridgeStore {
 
 export const bridgeStore = new BridgeStore()
 
-function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null; live: string; liveTools: Array<{ label: string; done: boolean }> } {
+function useBridge(): { messages: BridgeChatMessage[] | null; error: string | null; live: string; liveReasoning: string; liveTools: Array<{ label: string; done: boolean; detail?: string }> } {
   const messages = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getSnapshot, bridgeStore.getSnapshot)
   const error = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getError, bridgeStore.getError)
   const live = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLive, bridgeStore.getLive)
+  const liveReasoning = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLiveReasoning, bridgeStore.getLiveReasoning)
   const liveTools = useSyncExternalStore(bridgeStore.subscribe, bridgeStore.getLiveTools, bridgeStore.getLiveTools)
-  return { messages, error, live, liveTools }
+  return { messages, error, live, liveReasoning, liveTools }
 }
 
 /** D33 段2：loop 工具机械名→舰长语（与 copy 词典同源；导出供单测钉映射）。 */
@@ -362,7 +369,7 @@ function RetryCard(props: CardProps & { task: BoardTask }): ReactNode {
 export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }): ReactNode {
   const { onOpenBoard } = props
   const { data } = useWar()
-  const { messages, error, live, liveTools } = useBridge()
+  const { messages, error, live, liveReasoning, liveTools } = useBridge()
   useSyncExternalStore(subscribeSkin, skinId)
   useSyncExternalStore(subscribeLang, langId)
   const bc = activeCopy().bridge
@@ -589,12 +596,24 @@ export function BridgePane(props: { onOpenBoard?: (commandId?: string) => void }
       })(),
       // D32 打字机：内置 loop 在途文本逐字上屏（SSE {live} 帧），终答入账后被
       // 真消息顶替；光标呼吸在 CSS（::after）。无在途文本时回落处理中指示。
-      live !== '' || liveTools.length > 0
+      // D36 流式详情（lookatstudy/DSH 同形）：思考流（reasoning 浅色区）+工具行
+      // 带参数/结果摘要——「正在回话」之外，loop 在想什么、查什么都看得见。
+      live !== '' || liveTools.length > 0 || liveReasoning !== ''
         ? createElement('div', { className: 'war-bmsg war-bmsg-agent war-bmsg-live', 'data-bridge-live': '1' },
             createElement('div', { className: 'war-bmsg-meta' }, `${bc.roleManager} · ${bc.liveTyping}`),
+            liveReasoning !== ''
+              ? createElement('details', { className: 'war-bmsg-reasoning', 'data-bridge-reasoning': '1', open: live === '' },
+                  createElement('summary', null, bc.liveThinking),
+                  createElement('div', { className: 'war-bmsg-reasoning-body' }, liveReasoning))
+              : null,
             liveTools.length > 0
               ? createElement('div', { className: 'war-bmsg-tools', 'data-bridge-tools': '1' },
-                  ...liveTools.map((t, j) => createElement('span', { key: `t-${j}`, className: `war-bmsg-tool${t.done ? ' done' : ''}` }, `${t.done ? '✓' : '⚙'} ${toolStepLabelOf(t.label)}`)))
+                  ...liveTools.map((t, j) => createElement('span', {
+                    key: `t-${j}`, className: `war-bmsg-tool${t.done ? ' done' : ''}`,
+                    title: t.detail ?? '',
+                  },
+                    `${t.done ? '✓' : '⚙'} ${toolStepLabelOf(t.label)}`,
+                    t.detail !== undefined && t.detail !== '' ? createElement('span', { key: 'd', className: 'war-bmsg-tooldetail' }, ` ${t.detail}`) : null)))
               : null,
             live !== '' ? createElement('div', { className: 'war-bmsg-body' }, reportBody(live)) : null)
         : messages !== null && messages.length > 0 && messages[messages.length - 1]!.kind === 'user'
