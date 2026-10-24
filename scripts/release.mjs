@@ -125,10 +125,11 @@ for (;;) {
       let uploaded = false
       for (let attempt = 0; attempt < 10 && !uploaded; attempt++) {
         // Release 对象可能尚未存在（CI 只发 npm 不建 Release）——view 探测缺席才
-        // create（--clobber 是 upload 的旗不是 create 的：v0.8.0 实弹事故——create
-        // 带它直接打出用法帮助退非零，被「已存在则忽略」吞掉，upload 才报 not found）。
+        // create。v0.8.1 实弹：create 必须走 shell:false——args 数组直传 gh.exe；
+        // shell:true 在 Windows cmd 下把带空格/中文的 title/notes 引号拼接撕碎
+        // （v0.8.0 的 --clobber 只是共犯，真凶一直是引号），create 静默非零被容错吞。
         if (sh('gh', ['release', 'view', tag], false) !== 0) {
-          sh('gh', ['release', 'create', tag, '--title', `stardeck v${next}`, '--notes', `stardeck ${next} — 见 CHANGELOG`, '--latest'], true)
+          sh('gh', ['release', 'create', tag, '--title', `stardeck v${next}`, '--notes', `stardeck ${next} — 见 CHANGELOG`, '--latest'], false)
         }
         uploaded = sh('gh', ['release', 'upload', tag, ...installers.map(f => `desktop/release/${f}`), '--clobber'], false) === 0
         if (!uploaded) await new Promise(resolve => setTimeout(resolve, 30_000))
