@@ -3,6 +3,21 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
 
+## [0.8.7] - 2026-10-25
+
+### Added（D38.4 按钮语言统一：聊天窗五方言归一——四类角色一种语法）
+
+舰长点名「聊天窗口里的按钮都用统一的按钮语言」。此前五方言并存（方圆角实底主钮/琥珀 warn/透明 chip/裸文本幽灵/三种圆形钮），统一为**四类角色一种语法**（styles.ts 按钮语言段正典注释）：
+
+- **主行动**（送达答复/签发/验收/重试/发送）：pill 化（radius 999px）+实底 action+3D 下缘+active 下沉——「立体=可立即执行」专属主行动；28px。
+- **危险/确认**（打回/驳回/两步确认第二步）：弃琥珀改 **fail 红系**（outline 45%+fail 字+tint 底）——与停止钮/撤回臂起同一色语，琥珀只留给等待语义 tag；与主钮同形同高 28px。
+- **芯片**（澄清选项药丸/思考档/占用/?）：24px pill 同语法（padding 3px 11px 对齐）；选中=run tint+名字色；键帽=18px 参考件永不 hover（?/⏎ 同形歧义靠交互分化终局）。
+- **幽灵**（复制/撤回/点穿/关闭✕/坞开关）：共享语法段——无边透明 text-2、hover ghost 底+text-1 显形；尺寸随语境。
+- **FAB 专座**（发送 34 action/停止 34 fail/跳底 34 中性）：三钮同圆同尺寸色承语义；stop/jump 补齐 hover 提亮+active 下沉（transition 缓动缺口收口）；stop 残留 `scale(.94)` 旧 active 与 send/jump translateY 不同源——统一 translateY。
+- **宪法升全应用**：基础 `.war-btn` 升 pill（批判实证：全局 primary pill 化后弹窗脚部方圆混排=地方法病）；板侧 `primary+warn` 双类组合方言违例归 primary 单角色。
+- **批判后收口（A 38 PASS / B 37 FAIL→P1×2 按 B 实测验证修法落地）**：复制钮残留 `opacity:.55`（D33 旧规则未收编，有效对比 3.13/2.49）删除——幽灵档 text-2 本色 7.43/6.91 即达 AA；浅色澄清选中/hover 字 run-strong→run（3.48→5.05/5.37）。
+- 目检 75/75（+4 按钮语言断言：主钮 radius=999px/warn 色 rgb(248,113,113)/芯片 pill/高度标尺 28>24>18——computed style 机械锁；esbuild keepNames 把 evaluate 内嵌函数注名 `__name` 浏览器不存在的坑在档）；测试 594 全绿。
+
 ## [0.8.6] - 2026-10-25
 
 ### Added（D38.3 批判残余收口刀：撤回 × 坞折叠 × 弹层链——「后续全做」）

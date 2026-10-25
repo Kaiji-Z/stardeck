@@ -415,6 +415,25 @@ try {
   check('D38.3：点弹层外即收', keysGone, `gone=${keysGone}`)
   const msgsFade = await page.locator('[data-bridge-msgs]').evaluate(el => getComputedStyle(el).maskImage)
   check('D38.2：消息流顶部 12px 淡出（滚出内容不硬切，复评 B 席 #8）', msgsFade.includes('linear-gradient'), msgsFade)
+  // ── D38.4 按钮语言统一：四类角色同语法断言（注意：evaluate 回调里不许有
+  // 内嵌具名函数——esbuild keepNames 注名 __name 在浏览器上下文不存在）。 ──
+  const readBtn = page.locator('[data-bridge-card="clarify"] [data-bridge-act="answer"]')
+  const readWarn = page.locator('[data-bridge-act="knock"]')
+  const readChip = page.locator('[data-bridge-effort]')
+  const readKbd = page.locator('[data-bridge-toolbar] .war-kbd')
+  const btnLang = {
+    primary: await readBtn.evaluate(el => { const s = getComputedStyle(el); return { h: s.height, r: s.borderRadius, c: s.color } }),
+    warn: await readWarn.evaluate(el => { const s = getComputedStyle(el); return { h: s.height, r: s.borderRadius, c: s.color } }),
+    chip: await readChip.evaluate(el => { const s = getComputedStyle(el); return { h: s.height, r: s.borderRadius, c: s.color } }),
+    kbd: await readKbd.evaluate(el => { const s = getComputedStyle(el); return { h: s.height, r: s.borderRadius, c: s.color } }),
+  }
+  const pr = parseFloat(btnLang.primary.h)
+  const ch = parseFloat(btnLang.chip.h)
+  const kb = parseFloat(btnLang.kbd.h)
+  check('D38.4：主钮 pill 化（radius 999px，立体语法专属主行动）', btnLang.primary.r === '999px', btnLang.primary.r)
+  check('D38.4：危险钮 fail 色系（warn 弃琥珀一统红语）', btnLang.warn.c === 'rgb(248, 113, 113)', btnLang.warn.c)
+  check('D38.4：芯片 pill 同语法', btnLang.chip.r === '999px', btnLang.chip.r)
+  check('D38.4：高度标尺 主钮>芯片>键帽', pr > ch && ch > kb, `primary=${pr} chip=${ch} kbd=${kb}`)
   // ── D38.3 舰长撤回 e2e：发话 → 悬停撤回（臂起确认态） → 再点真撤 → 已撤回药丸 ──
   await page.locator('[data-bridge-input]').fill('撤回目检：这句话马上撤。')
   await page.locator('[data-bridge-send]').click()

@@ -515,12 +515,15 @@ body[data-ds-dark-theme] .war-root{
 .war-dock-unread{font-size:calc(12px*var(--war-fs));color:var(--war-run);font-weight:600}
 
 /* --- buttons ------------------------------------------------------------------ */
-.war-btn{cursor:pointer;border-radius:var(--war-r-sm);border:1px solid var(--war-border-soft);background:var(--war-well-bg);color:var(--war-text-1);font-size:calc(12px*var(--war-fs));padding:4px 10px;font-family:var(--war-font);transition:background .15s var(--war-ease-quart),border-color .15s var(--war-ease-quart)}
+/* D38.4 批判 P2 收口：基础 .war-btn 升 pill——四角色宪法升全应用语法
+ * （A 席实证：全局 primary pill 化后弹窗脚部方圆混排=宪法只管聊天窗的地方法病）。 */
+.war-btn{cursor:pointer;border-radius:var(--war-r-pill);border:1px solid var(--war-border-soft);background:var(--war-well-bg);color:var(--war-text-1);font-size:calc(12px*var(--war-fs));padding:4px 10px;font-family:var(--war-font);transition:background .15s var(--war-ease-quart),border-color .15s var(--war-ease-quart)}
 .war-btn:hover{border-color:var(--war-border)}
 .war-btn.war-focus-btn{font-size:calc(17px*var(--war-fs));line-height:calc(22px*var(--war-fs));padding:0 8px} /* ◎ 加大（基类在后压同名，升特异性两连；纵向 0 衬垫保 R5 行高 24） */
 /* 实心主按钮 = 3D 按压签名（lookatstudy btn-3d 语系）：实底+深档硬下边缘，
- * active 下沉边缘变薄——全应用一种按压手感。 */
-.war-btn.primary{background:var(--war-action-bg);color:var(--war-action-fg);border-color:transparent;box-shadow:0 2px 0 0 var(--war-action-edge);transition:box-shadow .12s var(--war-ease-quart),transform .12s var(--war-ease-quart),filter .12s var(--war-ease-quart)}
+ * active 下沉边缘变薄——全应用一种按压手感。D38.4 pill 化（与 FAB 圆钮同一
+ * 立体语法：可立即执行的主行动才配立体）。 */
+.war-btn.primary{border-radius:var(--war-r-pill);padding:4px 14px;background:var(--war-action-bg);color:var(--war-action-fg);border-color:transparent;box-shadow:0 2px 0 0 var(--war-action-edge);transition:box-shadow .12s var(--war-ease-quart),transform .12s var(--war-ease-quart),filter .12s var(--war-ease-quart)}
 .war-btn.primary:hover{filter:brightness(1.08)}
 .war-btn.primary:active{transform:translateY(2px);box-shadow:0 0 0 0 var(--war-action-edge)}
 .war-btn.primary:disabled{opacity:.5;cursor:default;transform:none;box-shadow:0 2px 0 0 var(--war-action-edge);filter:none}
@@ -712,8 +715,10 @@ h2.war-col-title{margin:0;font-size:calc(13px*var(--war-fs))}
 .war-clarify-stem{color:var(--war-text-1)}
 .war-clarify-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .war-clarify-opt{font-size:calc(11.5px*var(--war-fs));padding:3px 11px;cursor:pointer;border-radius:var(--war-r-pill);border:1px solid transparent;background:color-mix(in srgb,var(--war-text-1) 6%,transparent);color:var(--war-text-1);font-family:var(--war-font);transition:background .15s var(--war-ease-quart),color .15s var(--war-ease-quart)}
-.war-clarify-opt:hover{background:color-mix(in srgb,var(--war-run-border) 10%,transparent);color:var(--war-run-strong)}
-.war-clarify-opt-on{background:color-mix(in srgb,var(--war-run-border) 16%,transparent);color:var(--war-run-strong);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--war-run-border) 45%,transparent);font-weight:600}
+/* D38.4 批判 P1 收口：选中/hover 字色 run-strong→run——浅色 run-strong #0284c7
+ * on 16% tint 实测 3.48 不达 AA（B 席实测）；run #0369a1 = 5.05/5.37。 */
+.war-clarify-opt:hover{background:color-mix(in srgb,var(--war-run-border) 10%,transparent);color:var(--war-run)}
+.war-clarify-opt-on{background:color-mix(in srgb,var(--war-run-border) 16%,transparent);color:var(--war-run);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--war-run-border) 45%,transparent);font-weight:600}
 .war-clarify-note{margin:4px 0 0;font-size:calc(11px*var(--war-fs));color:var(--war-text-2)}
 /* --- V10 战线链色与身份 -------------------------------------------------------
  * 链是隐形语义的可见显影：8 个低饱和槽位、双主题各自成章（浅=压黑保白底对比，
@@ -1071,7 +1076,10 @@ body[data-ds-dark-theme] .war-root .war-board.war-mapmode .war-zone{box-shadow:0
 /* --- V9.10 聚焦页状态机补全：warn ghost / 改档按钮组 / 任务产出+历次执行行 --- */
 .war-tour-ghost.warn{border-color:color-mix(in srgb, var(--war-wait-border) 55%, var(--war-border));background:var(--war-wait-tint)}
 .war-tour-ghost.warn .war-tour-ghost-icon{color:var(--war-wait)}
-.war-btn.war-btn-warn{border-color:var(--war-wait-border);color:var(--war-wait);background:color-mix(in srgb, var(--war-wait-border) 8%, var(--war-card-bg))}
+/* D38.4 危险/确认档：fail 色系一统（弃琥珀——打回/驳回/两步确认第二步都是
+ * 「即将做不可逆或需慎重的事」，与停止钮/撤回臂起同一色语）；主钮同形同高。 */
+.war-btn.war-btn-warn{border-radius:var(--war-r-pill);padding:4px 14px;border-color:color-mix(in srgb,var(--war-fail-border) 45%,transparent);color:var(--war-fail);background:color-mix(in srgb,var(--war-fail-border) 8%,var(--war-card-bg))}
+.war-btn.war-btn-warn:hover{background:color-mix(in srgb,var(--war-fail-border) 15%,var(--war-card-bg))}
 .war-sub-btns{display:inline-flex;gap:6px;flex-wrap:wrap}
 .war-sub-attempts{display:inline-flex;flex-direction:column;gap:6px;min-width:0}
 .war-sub-attempts .war-cd-session{width:100%}
@@ -1225,7 +1233,7 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 /* D37→D38 工具条：caption 药丸习语（无描边、选中/警示态染底）+圆形 3D 发送/停止钮同位切换。 */
 .war-bridge-toolbar{display:flex;gap:6px;align-items:center;padding:2px 8px 8px}
 .war-bridge-toolspring{flex:1}
-.war-bridge-chip{font-size:calc(11.5px*var(--war-fs));padding:3px 10px;border-radius:var(--war-r-pill);border-color:transparent;background:transparent;color:var(--war-text-2);display:inline-flex;gap:5px;align-items:center;line-height:1.4;transition:background .15s var(--war-ease-quart),color .15s var(--war-ease-quart)}
+.war-bridge-chip{font-size:calc(11.5px*var(--war-fs));padding:3px 11px;border-radius:var(--war-r-pill);border-color:transparent;background:transparent;color:var(--war-text-2);display:inline-flex;gap:5px;align-items:center;line-height:1.4;transition:background .15s var(--war-ease-quart),color .15s var(--war-ease-quart)}
 .war-bridge-chip:hover{background:color-mix(in srgb,var(--war-text-1) 7%,transparent)}
 .war-bridge-chip[data-bridge-effort='fast'],.war-bridge-chip[data-bridge-effort='deep']{background:color-mix(in srgb,var(--war-run-border) 14%,transparent);color:var(--war-run-strong)}
 .war-bridge-chip.warn{color:var(--war-fail,var(--war-text-1));background:color-mix(in srgb,var(--war-fail) 10%,transparent)}
@@ -1233,8 +1241,11 @@ body[data-ds-dark-theme] .war-root .war-front-group{background:color-mix(in srgb
 .war-bridge-send:hover{filter:brightness(1.08)}
 .war-bridge-send:active{transform:translateY(2px);box-shadow:0 1px 0 0 var(--war-action-edge)}
 .war-bridge-send:disabled{opacity:.4;box-shadow:none;transform:none;filter:none}
-.war-bridge-stop{width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:color-mix(in srgb,var(--war-fail-border) 14%,var(--war-card-bg));color:var(--war-fail);font-size:13px;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1.5px var(--war-fail-border);transition:transform .12s var(--war-ease-quart)}
-.war-bridge-stop:active{transform:scale(.94)}
+.war-bridge-stop{width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:color-mix(in srgb,var(--war-fail-border) 14%,var(--war-card-bg));color:var(--war-fail);font-size:13px;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1.5px var(--war-fail-border);transition:transform .12s var(--war-ease-quart),filter .12s var(--war-ease-quart)}
+/* D38.4 FAB 专座统一交互：三钮同 34px 圆，色承语义（action 发送/fail 停止/
+ * 中性跳底），hover 提亮+active 下沉同一手感。 */
+.war-bridge-stop:hover,.war-jump-bottom:hover{filter:brightness(1.08)}
+.war-bridge-stop:active,.war-jump-bottom:active{transform:translateY(1px)}
 .war-ctx-ring{display:inline-flex;flex:none}
 .war-ctx-ring-bg{stroke:var(--war-border-soft)}
 .war-ctx-ring-fg{stroke:var(--war-run-strong,var(--war-text-2));transition:stroke-dasharray .3s ease}
@@ -1282,8 +1293,14 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-tg-panel .war-bmsg-meta{transition:color .15s ease}
 .war-tg-panel .war-bmsg:hover .war-bmsg-meta{color:var(--war-text-1)}
 .war-bmsg-new{align-self:center;font-size:calc(11px*var(--war-fs));color:var(--war-run-strong,var(--war-text-2));padding:2px 12px;margin:4px 0;border-bottom:1px solid color-mix(in srgb,var(--war-run-strong) 45%,transparent);letter-spacing:.06em}
-.war-bmsg-copy{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;opacity:.55}
-.war-bmsg-copy:hover{opacity:1}
+/* D38.4 按钮语言 · 幽灵档：低显著行内件（复制/撤回/点穿/关闭/坞开关）同一
+ * 语法——无边透明、text-2、hover ghost 底+text-1 显形；尺寸随各自语境
+ * （消息行 20px/头部圆 32px 由后位规则保尺寸）。 */
+.war-bmsg-copy,.war-bmsg-recall,.war-bref,.war-tg-close,.war-bridge-docktoggle{border-color:transparent;background:transparent;color:var(--war-text-2)}
+.war-bmsg-copy:hover,.war-bmsg-recall:hover,.war-bref:hover,.war-tg-close:hover,.war-bridge-docktoggle:hover{background:color-mix(in srgb,var(--war-text-1) 8%,transparent);color:var(--war-text-1)}
+/* D38.4 批判 P1 收口：复制钮残留 opacity:.55（D33 旧规则未收编）——有效对比
+ * 3.13/2.49 不达 AA；幽灵档 text-2 本色 7.43/6.91 即达，删弱化回归语法。 */
+.war-bmsg-copy{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end}
 /* D38.3 舰长撤回：悬停显形的小出口（臂起=红字确认态常显）；已撤回话轮=中性药丸。 */
 .war-bmsg-recall{font-size:calc(11px*var(--war-fs));padding:1px 8px;align-self:flex-end;border:none;background:none;color:var(--war-text-3);opacity:0;transition:opacity .15s ease}
 .war-bmsg-user:hover .war-bmsg-recall,.war-bmsg-recall:focus-visible,.war-bmsg-recall.arm{opacity:1}
@@ -1294,7 +1311,7 @@ body[data-stardeck-standalone] .war-standalone-board>div{flex:1 1 auto;min-width
 .war-bridge-dock.collapsed .war-bcard,.war-bridge-dock.collapsed .war-bridge-dock-fade,.war-bridge-dock.collapsed .war-bcard-hint,.war-bridge-dock.collapsed .war-bridge-dock-hintbar{display:none}
 .war-bridge-docktoggle{display:inline-flex;align-items:center;gap:6px;min-height:0;padding:0;border:none;background:none;font:inherit;color:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
 .war-bridge-docktoggle:hover{color:var(--war-text-1)}
-.war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:var(--war-text-1);color:var(--war-canvas);box-shadow:var(--war-shadow-2)}
+.war-jump-bottom{position:absolute;right:14px;bottom:calc(var(--war-dock-h,0px) + 64px);z-index:5;width:34px;height:34px;min-width:34px;padding:0;border-radius:50%;border:none;background:var(--war-text-1);color:var(--war-canvas);box-shadow:var(--war-shadow-2);transition:transform .12s var(--war-ease-quart),filter .12s var(--war-ease-quart),box-shadow .12s var(--war-ease-quart)}
 .war-bridge{position:relative}
 /* D33 段3：对话模型配置段（抽屉内）。 */
 .war-loopcfg{display:flex;flex-direction:column;gap:6px;padding-top:2px}

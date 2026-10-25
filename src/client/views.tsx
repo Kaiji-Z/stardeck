@@ -1748,7 +1748,9 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
           : null,
         cmd.status === 'talking' && (standalone || staffTarget !== null)
           ? subActions([createElement('button', {
-            className: 'war-btn primary war-btn-warn',
+            // D38.4 按钮语言：primary+warn 组合方言违例修正——进入对话答复是
+            // 主行动不是破坏动作，归 primary 单一角色。
+            className: 'war-btn primary',
             onClick: () => { void markTalking(cmd.commandId); openStaffPane(staffTarget) },
           }, fp.talkingEnterBtn)])
           : null,
