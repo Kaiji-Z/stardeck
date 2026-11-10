@@ -3,7 +3,7 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
 
-## [Unreleased]
+## [0.9.0] - 2026-11-11
 
 ### Added（D39 进水口与哨兵：对齐 dsh-superagent 的上游差距）
 

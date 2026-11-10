@@ -30,6 +30,9 @@ stardeck 是一个**本地优先**的多 agent 编排器：它不替 agent 干�
 
 ## 核心特性
 
+**📡 事件源进水口（v0.9.0，环境送活进来）**
+活不只从你嘴里来：GitHub issue/PR/评论经**确定性准入门**（零模型）自动建卡进全链——名单内作者=显式请求，名单外按 off/**observe**/auto 三档（observe=只记录「若自动会接」，攒决策史再放权）；有活卡的 issue 线程来了新评论自动挂卡（「外部进件」——收上下文≠收授权），任务收官还能机械组稿回帖告知 issue 作者（默认关，开启即授权）。**Watchdog 哨兵**同班：外勤「活着但卡住」（龄期×日志静默双超窗）自动记旗上板，你翻日志核实或驳回重派。`POST /sources/ingest` 是通用注入契约——飞书/CI/脚本都是后续源。
+
 **💬 舰桥频道（v0.3.0 对话范式，默认视图；v0.4.0 对话者=代理舰长；v0.5.0 百事通：全知+图景+全能管理）**
 打开就是聊天窗：说目标、问战况、问概念、闲聊都在这里。**代理舰长**（v0.4.0）是你在频道里的代理人——把你的自然语言拟成【命令】块，系统收割成命令卡交大副分诊（说了就成单）；机械战报（交证待验收/澄清挂起/失败重试/收官/定时派发/图景对账失败）自动推进频道；v0.5.0 起他百事通化——征召令自带近期账本切片+只读查证通道（GET /board、/bridge/digest、/ledger），讲复杂态势可附【图景】块（系统确定性渲染成零脚本单文件图页，编号逐一对账、对不上整页拒收），撤令/重派/停定时令/换席四个管理块口头直落（系统代执行+战报回报）；请示出决策卡——澄清选择题药丸点选即答（`1A;2B`）、任务书五项卡可逐项修改后签发、验收卡带证据摘要一键定夺。不习惯对话模式？右上角一键切回看板（`STARDECK_BRIDGE=0` 可永久回退老形态；`STARDECK_PROXY=0` 只关对话者保留战报与决策卡）。
 
@@ -180,7 +183,9 @@ bin/stardeck.mjs ─→ dist/cli.mjs ─→ src/daemon.ts（守护进程装配�
                                       ├─ executor.ts（执行者适配器：无头框定 + 会话捕获 + 跳转）
                                       ├─ staff.ts（AI 大副：分诊/计划/发布工单）
                                       ├─ steer.ts（RPC 续跑：板内答复/批注转达送进在途会话）
-                                      ├─ 巡检 15s（失联回收 + 补征召）+ staffTick（到点派发）
+                                      ├─ sources.ts（事件源进水口：GitHub 轮询 + 通用 ingest + 确定性准入门）
+                                      ├─ watchdog.ts（活着但卡住判据：龄期×日志静默双超窗）
+                                      ├─ 巡检 15s（失联回收 + 补征召 + 哨兵记旗）+ staffTick（到点派发）+ sourceTick（轮询/扇出/回写）
                                       └─ 板 UI（React + WebGL 星域；中英双语）
 src/ 其余 = 账本内核：append-only JSONL + fold（永不过写，只派生状态）
 ```
@@ -272,11 +277,15 @@ node bin/stardeck.mjs          # 起 daemon + 自动开浏览器（pnp 装包用
 
 stardeck is a **local-first** multi-agent orchestrator: it doesn't do the agents' work — it owns the full loop of *order → brief → execute → evidence → acceptance*. Say a goal in the chat window; an AI Acting Captain shapes it into a command card, the first mate triages it, field agents execute with evidence — you just accept. Any CLI coding agent (opencode / pi / zcode / Claude Code / …) takes orders through an injected MCP bridge or extension; **ledgers, tokens and evidence are verified mechanically by the system, never taken on the agent's word**.
 
+- **Event sources (v0.9.0)**: GitHub issues/PRs/comments flow in through a deterministic admission gate (zero model calls — allow list is explicit, off-list follows an off/observe/auto tier) and become command cards; follow-up comments on live cards attach as context-only "external follow-ups"; finished tasks can write a mechanical report back to the issue (off by default). A Watchdog sentinel flags executors that are alive but stuck. `POST /sources/ingest` is the generic injection contract for future sources.
 - **3D starfield board**: every campaign is a planet; execution progresses in real time on the starfield (WebGL, 2D radar view, list view fallback).
 - **Outside the session belongs to the system; inside belongs to the agent**: workspace materialization, conscription, patrol and acceptance belong to stardeck; file edits and commands run with the agent's own tools — clean boundaries, no overreach.
 - **The exit protocol is not negotiable**: `war_claim` token-based claiming, `war_submit` evidence verification (all checks pass + tests exit 0 + no out-of-bounds files — the KillCredit), `war_close_task` human acceptance.
 
 ## Highlights
+
+**📡 Event sources (v0.9.0 — the environment sends work in)**
+Work no longer arrives only from you: GitHub issues/PRs/comments pass a **deterministic admission gate** (zero model calls) and land as command cards in the existing pipeline — allow-listed authors are explicit requests, off-list ones follow the off/**observe**/auto tier (observe records "would admit" without creating cards). New comments on an issue with a live card attach as "external follow-ups" (receiving context is not receiving authority); at task end a mechanical report can be posted back to the issue (off by default). The **Watchdog sentinel** rides along: executors that are alive but stuck (age × log-silence double window) get flagged on the board for you to inspect or re-dispatch.
 
 **🌊 3D starfield (default view)**
 Every campaign is a planet: executing campaigns advance along their orbits, finished ones turn captured, campaign rings segment per task. One-click dark mode, hover to highlight related card families, wheel zoom, middle-drag rotate.
@@ -405,7 +414,9 @@ bin/stardeck.mjs ─→ dist/cli.mjs ─→ src/daemon.ts (daemon assembly)
                                       ├─ executor.ts (executor adapters: headless framing + session capture + jump)
                                       ├─ staff.ts (AI first mate: triage / plan / publish worklist)
                                       ├─ steer.ts (RPC resume: in-board answers & relays into live sessions)
-                                      ├─ patrol 15s (lost-agent recovery + re-conscription) + staffTick (scheduled dispatch)
+                                      ├─ sources.ts (event intake: GitHub polling + generic ingest + admission gate)
+                                      ├─ watchdog.ts (alive-but-stuck: age × log-silence double window)
+                                      ├─ patrol 15s (lost-agent recovery + re-conscription + watchdog flags) + staffTick (scheduled dispatch) + sourceTick (poll/fan-out/write-back)
                                       └─ board UI (React + WebGL starfield; bilingual)
 src/ rest = ledger kernel: append-only JSONL + fold (never overwrite; state is derived)
 ```
