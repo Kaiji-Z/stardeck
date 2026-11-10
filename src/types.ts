@@ -118,6 +118,9 @@ export interface CampaignState {
   readonly units: Map<string, UnitRecord>
   /** B1-件⑥：worktree 随链归档释放的账面投影（事件 workspace_released 落 fold）。 */
   workspaceReleased?: { at: string; path: string; ok: boolean; note?: string }
+  /** D39-B Watchdog 哨兵旗（task_watchdog_flagged 落 fold）：当前 attempt 疑似
+   *  卡住——板面「疑似卡住」徽标与舰桥战报的数据源；结算/活性事件清旗。 */
+  watchdog?: { flaggedAt: string; reason: string }
 }
 
 /** One 队内子任务 (V4-R3) — the commander's work breakdown inside a task.
@@ -235,6 +238,11 @@ export type WarEvent =
    *  （触发点=归档而非任务终态——直接终态即删会摧毁 deliverables 与续接前情）。
    *  ok=false 时 note 是留置原因（非 worktree/清理失败），同样落账可审计。 */
   | { type: 'workspace_released'; ts: string; campaignId: string; path: string; ok: boolean; note?: string }
+  /** D39-B Watchdog 哨兵：巡检对「活着但卡住」的执行者记旗（in_progress+进程
+   *  活着，但龄期与日志静默双超窗）。观察档纯记旗零破坏；enforce 档（旗
+   *  STARDECK_WATCHDOG_ENFORCE）随后 kill——收尾走既有失联回收路径。fold 侧：
+   *  任一结算/活性事件（claim/submit/fail/requeue/close/comment）清旗。 */
+  | { type: 'task_watchdog_flagged'; ts: string; campaignId: string; reason: string; silenceMs?: number; ageMs?: number; from?: string }
 
 /** The tiny global war state. Task history lives in the append-only event
  * logs; only this pointer state is a plain JSON file. */

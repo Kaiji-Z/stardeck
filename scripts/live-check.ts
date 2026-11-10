@@ -782,6 +782,116 @@ if (process.env.STARDECK_LIVE_STEER === '1') {
   }
 }
 
+// ---------- 可选相位：事件源进水口实弹（STARDECK_LIVE_SOURCE=1，D39） ----------
+// 真 daemon + 本地 mock GitHub 服（apiBase 指过去——零真外联确定性）：①ingest
+// 白名单建卡（origin 上板）②非白名单 observe 只记录 ③轮询器真跑两拍（首跑
+// 基线→新 issue 入账建卡）④收官回写（cancelled 终态→mock 收帖+幂等不重发）。
+if (process.env.STARDECK_LIVE_SOURCE === '1') {
+  const { appendDirectiveEvent } = await import('../src/directives.ts')
+  const { loadSourceFold } = await import('../src/sources.ts')
+  const { collectBridgeNoticeEvents } = await import('../src/bridge.ts')
+  const { createServer } = await import('node:http')
+  const PORT4 = PORT + 4
+  const base4 = `http://127.0.0.1:${PORT4}`
+  const stateDir4 = mkdtempSync(join(tmpdir(), 'stardeck-live-source-'))
+  const warRoot4 = join(stateDir4, 'tasks')
+  // mock GitHub：issues/comments 清单可变（轮询第二拍播种新 issue）；POST 收帖。
+  let mockIssues: unknown[] = []
+  const postedLive: Array<{ number: number; body: string }> = []
+  const mock = createServer((req, res) => {
+    const url = req.url ?? ''
+    if (req.method === 'GET' && url.startsWith('/repos/live/mock/issues?')) {
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(mockIssues)); return
+    }
+    if (req.method === 'GET' && url.startsWith('/repos/live/mock/issues/comments?')) {
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end('[]'); return
+    }
+    const m = /\/repos\/live\/mock\/issues\/(\d+)\/comments$/.exec(url)
+    if (req.method === 'POST' && m !== null) {
+      let body = ''
+      req.on('data', c => { body += c })
+      req.on('end', () => {
+        postedLive.push({ number: Number(m[1]), body: (JSON.parse(body) as { body: string }).body })
+        res.writeHead(201, { 'content-type': 'application/json' }); res.end(JSON.stringify({ html_url: `https://github.com/live/mock/issues/${m[1]}#c-live` }))
+      })
+      return
+    }
+    res.writeHead(404, { 'content-type': 'application/json' }); res.end('{}')
+  })
+  await new Promise<void>(r => mock.listen(0, '127.0.0.1', () => r()))
+  const mockAddr = mock.address()
+  if (mockAddr === null || typeof mockAddr === 'string') throw new Error('mock 地址异常')
+  let daemon4: ChildProcess | undefined
+  try {
+    // 配置先落盘再起 daemon（sourceTick 心跳 15s、pollSec=15——两拍共 ~35s）。
+    writeFileSync(join(stateDir4, 'config.json'), JSON.stringify({
+      sources: { github: { enabled: true, repo: 'live/mock', token: 't-live', apiBase: `http://127.0.0.1:${mockAddr.port}`, allow: ['live-captain'], admission: 'observe', writeback: true, pollSec: 15 }, ingest: { allow: ['live-captain'], admission: 'observe' } },
+    }, null, 2), 'utf8')
+    daemon4 = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
+      cwd: repoRoot,
+      env: { ...process.env, STARDECK_CONFIG: join(stateDir4, 'config.json'), STARDECK_STATE_DIR: stateDir4, STARDECK_WAR_ROOT: warRoot4, STARDECK_PORT: String(PORT4), STARDECK_STAFF: '0' },
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    })
+    daemon4.stdout?.on('data', d => process.stdout.write(d))
+    daemon4.stderr?.on('data', d => process.stderr.write(d))
+    const t4 = Date.now()
+    for (;;) {
+      try { const r = await fetch(`${base4}/warroom/api/healthz`); if (r.ok) break } catch { /* not up */ }
+      if (Date.now() - t4 > 30_000) throw new Error('source 相位 daemon 30s 未活')
+      await new Promise(r => setTimeout(r, 500))
+    }
+    const post4 = async (path: string, body: unknown): Promise<any> => {
+      const res = await fetch(`${base4}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      return await res.json() as any
+    }
+    // ① 白名单 ingest → admitted 建卡 + origin 上板。
+    const r1 = await post4('/warroom/api/sources/ingest', { source: 'github:live/mock', kind: 'issue', author: 'live-captain', text: 'live 实弹：修一下文档', threadKey: 'github:live/mock#7', externalId: 'issue:7', url: 'https://github.com/live/mock/issues/7' })
+    const board4 = await (await fetch(`${base4}/warroom/api/board`)).json() as any
+    const card4 = (board4.commands as any[]).find(c => c.commandId === r1.directiveId)
+    check('事件源 ingest：白名单建卡 + origin/issuedBy 上板', r1.ok === true && r1.disposition === 'admitted' && card4?.origin?.source === 'github' && card4?.origin?.threadKey === 'github:live/mock#7' && card4?.issuedBy === 'github:live-captain', `directiveId=${r1.directiveId} origin.source=${card4?.origin?.source ?? '缺'}`)
+    // ② 非白名单 observe → observed 不建卡（半自主中间档）。
+    const r2 = await post4('/warroom/api/sources/ingest', { source: 'github:live/mock', kind: 'issue', author: 'stranger', text: '路过', threadKey: 'github:live/mock#8', externalId: 'issue:8' })
+    check('事件源准入：名单外 observe 档只记录不建卡', r2.ok === true && r2.disposition === 'observed' && r2.directiveId === undefined, `disposition=${r2.disposition}`)
+    // 舰桥 intake 战报候选在场（syncBridgeNotices 由 staffTick 驱动——主环关大副
+    // 是防双发，此处断言收集面；入账路径测试面已覆盖）。
+    const intakeNotices = collectBridgeNoticeEvents(stateDir4).filter(e => e.type === 'bridge_system_notice' && e.noticeKind === 'intake')
+    check('舰桥机械战报：intake 建卡战报候选在场', intakeNotices.length === 1 && (intakeNotices[0] as { text: string }).text.includes('外部进件已建卡'), `candidates=${intakeNotices.length}`)
+    // ③ 轮询器两拍：首拍基线（cursor 落账）→ 播种新 issue（updated_at=now）→
+    // 第二拍 since=cursor 带回 → 幂等入账建卡（真 sourceTick 循环，零真外联）。
+    const untilFold = async (ms: number, label: string, probe: () => string | undefined): Promise<string> => {
+      const end = Date.now() + ms
+      for (;;) {
+        const hit = probe()
+        if (hit !== undefined) return hit
+        if (Date.now() > end) throw new Error(`source 相位等待超时：${label}`)
+        await new Promise(r => setTimeout(r, 3_000))
+      }
+    }
+    await untilFold(40_000, '首跑基线游标', () => loadSourceFold(stateDir4).cursors.get('github:live/mock') ?? undefined)
+    mockIssues = [{ number: 9, title: 'live 轮询建卡', body: '首跑后出现的新 issue', html_url: 'https://github.com/live/mock/issues/9', updated_at: new Date().toISOString(), state: 'open', user: { login: 'live-captain' } }]
+    const card9 = await untilFold(40_000, '轮询第二拍建卡', () => {
+      const fold = loadSourceFold(stateDir4)
+      const rec = fold.seen.get('github:live/mock::issue:9')
+      return rec !== undefined && rec.directiveId !== undefined ? rec.directiveId : undefined
+    })
+    const board9 = await (await fetch(`${base4}/warroom/api/board`)).json() as any
+    const card9b = (board9.commands as any[]).find(c => c.commandId === card9)
+    check('事件源轮询：真 sourceTick 两拍收新 issue 建卡（幂等游标）', card9b?.origin?.strength === 'explicit' && card9b?.origin?.url === 'https://github.com/live/mock/issues/9', `directiveId=${card9}`)
+    // ④ 收官回写：cancelled 终态 → sourceTick 尾段发帖 → mock 收到 + 幂等不重发。
+    appendDirectiveEvent(stateDir4, { type: 'directive_cancelled', ts: new Date().toISOString(), directiveId: card9, reason: 'live 实弹：需求验证完毕' })
+    await untilFold(40_000, '收官回写发帖', () => postedLive.length > 0 ? 'sent' : undefined)
+    check('收官回写：终态机械组稿回帖（cancelled 形带理由）', postedLive[0]?.number === 9 && postedLive[0]?.body.includes('命令已撤销') && postedLive[0]?.body.includes('live 实弹：需求验证完毕'), `posted=${postedLive.length} body 首行=${postedLive[0]?.body.split('\n')[0] ?? ''}`)
+    await new Promise(r => setTimeout(r, 17_000))
+    check('收官回写：终态指纹幂等不重发', postedLive.length === 1, `posted=${postedLive.length}`)
+    writeFileSync(join(evidenceDir, 'live-source-dispositions.json'), JSON.stringify([...loadSourceFold(stateDir4).seen.values()], null, 2), 'utf8')
+    writeFileSync(join(evidenceDir, 'live-source-writeback.json'), JSON.stringify(postedLive, null, 2), 'utf8')
+  } finally {
+    daemon4?.kill()
+    await new Promise<void>(r => mock.close(() => r()))
+    await new Promise(r => setTimeout(r, 500))
+  }
+}
+
 // ---------- 可选相位：一行接入实弹（STARDECK_LIVE_CONNECT=1） ----------
 // 真 daemon + runConnect：opencode 真写盘（隔离 XDG）、generic 配置块、
 // 红线三查（--face proxy / token 48hex env / war 面键零出现）、fleet 带 proxyLoop。

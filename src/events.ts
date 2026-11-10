@@ -104,6 +104,8 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
       case 'task_claimed':
         state.status = 'in_progress'
         state.claimedBy = event.claimedBy
+        // D39-B：新 attempt=新生命——上一轮的哨兵旗随旧 attempt 作废。
+        state.watchdog = undefined
         if (event.attemptId !== undefined && event.attempt !== undefined) {
           state.attempt = { id: event.attemptId, n: event.attempt }
           state.attempts = event.attempt
@@ -123,6 +125,8 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         break
       case 'task_submitted':
         state.status = 'reported'
+        // D39-B：交证即活性证明——清哨兵旗（误旗自愈）。
+        state.watchdog = undefined
         state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}), ...(event.testsTrail !== undefined ? { testsTrail: event.testsTrail } : {}) })
         if (event.deliverables !== undefined && event.deliverables.length > 0) {
           state.deliverables = [...state.deliverables, ...event.deliverables]
@@ -131,6 +135,8 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         break
       case 'task_attempt_failed':
         state.lastError = event.reason
+        // D39-B：结算事件清哨兵旗（旗只描述「在途疑似卡住」）。
+        state.watchdog = undefined
         settleAttempt('failed', event.ts, [undefined])
         break
       case 'task_requeued':
@@ -143,10 +149,12 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         state.claimedBy = undefined
         state.attempt = undefined
         state.lastError = event.reason
+        state.watchdog = undefined
         break
       case 'task_failed':
         state.status = 'failed'
         state.lastError = event.reason
+        state.watchdog = undefined
         break
       case 'task_scheduled':
         state.schedule = { cron: event.cron, enabled: event.enabled }
@@ -166,6 +174,8 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         break
       case 'task_commented':
         state.comments.push({ ts: event.ts, from: event.from, text: event.comment })
+        // D39-B：批注走 war_comment=执行者亲手动作——活性证明，清旗（误旗自愈）。
+        state.watchdog = undefined
         break
       case 'message_logged':
         state.messages.push({ messageId: event.messageId, ts: event.ts, from: event.from, to: event.to, text: event.text })
@@ -248,8 +258,14 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
       case 'task_closed':
         state.status = 'closed'
         state.closedVerdict = event.verdict
+        state.watchdog = undefined
         // A passing verdict upgrades the reported attempt into the winning session.
         if (isPassVerdict(event.verdict)) settleAttempt('succeeded', event.ts, ['reported', undefined])
+        break
+      // D39-B Watchdog 哨兵记旗：后写覆盖（巡检重复记旗只保最新一面）；
+      // 结算/活性事件清旗（见上各 case）。
+      case 'task_watchdog_flagged':
+        state.watchdog = { flaggedAt: event.ts, reason: event.reason }
         break
       case 'campaign_started':
         // v0.1 compat: an old log's campaign header doubles as a task header.

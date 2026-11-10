@@ -146,6 +146,47 @@ export interface WarCopy {
     fontReset: string
     fontHint: string
   }
+  /** D39 事件源进水口：设置「事件源」段 + 命令卡来源徽标 + 聚焦页外部进件段 +
+   *  任务卡哨兵徽标（四词典逐键对齐——copy-lang 锁完备性）。 */
+  sources: {
+    settingsSection: string
+    ghTitle: string
+    enabled: string
+    enabledHint: string
+    repoLabel: string
+    repoPh: string
+    tokenLabel: string
+    tokenPresent: string
+    tokenMissing: string
+    tokenClear: string
+    allowLabel: string
+    allowPh: string
+    admissionLabel: string
+    admissionOff: string
+    admissionObserve: string
+    admissionAuto: string
+    admissionHint: string
+    writeback: string
+    writebackHint: string
+    ingestTitle: string
+    ingestAllowLabel: string
+    ingestAllowPh: string
+    save: string
+    saved: string
+    saveFail: (e: string) => string
+    stats: (admitted: number, observed: number, filtered: number, fanned: number) => string
+    recentTitle: string
+    empty: string
+    originGithub: string
+    originIngest: string
+    originTitle: (author: string, strength: string) => string
+    strengthExplicit: string
+    strengthInferred: string
+    inputsTitle: string
+    inputsEmpty: string
+    inputsFrom: (author: string) => string
+    watchdogBadge: string
+  }
   /** V9.8 命令详情决策带（置顶常驻）：有事给动作，无事给安神行。 */
   commandBand: {
     title: string
@@ -815,6 +856,45 @@ export const warCopy: WarCopy = {
     fontSection: '字体大小',
     fontReset: '重置',
     fontHint: '只缩放文字（85%–135%）：栏与卡片布局不变，文字在原盒内换行适应。',
+  },
+  sources: {
+    settingsSection: '事件源',
+    ghTitle: 'GitHub 源（PAT 轮询）',
+    enabled: '监听 GitHub',
+    enabledHint: '开着才轮询 issues/PR/评论；首跑以当下为基线，只收新事件',
+    repoLabel: '仓库（owner/name）',
+    repoPh: '例如 kaiji-z/stardeck',
+    tokenLabel: '访问令牌（PAT）',
+    tokenPresent: '已配置——留空保持不变',
+    tokenMissing: '未配置',
+    tokenClear: '清除',
+    allowLabel: '允许名单（GitHub login，逗号分隔）',
+    allowPh: '名单内=显式请求，任何档位都建卡',
+    admissionLabel: '名单外档位',
+    admissionOff: '只收名单内',
+    admissionObserve: '观察',
+    admissionAuto: '自动建卡',
+    admissionHint: '观察=只记录「若自动会接」，不建卡——攒一段决策史再开自动',
+    writeback: '收官回写 issue',
+    writebackHint: '任务终态自动回帖（机械战报）。开启即视为授权该仓自动回帖，需令牌含写权限',
+    ingestTitle: '通用注入（POST /sources/ingest）',
+    ingestAllowLabel: '注入名单（作者标签，逗号分隔）',
+    ingestAllowPh: '默认 * =本地通道全显式（与命令通道同纪律）',
+    save: '保存事件源配置',
+    saved: '事件源配置已保存',
+    saveFail: (e: string) => `保存失败：${e}`,
+    stats: (admitted: number, observed: number, filtered: number, fanned: number) => `建卡 ${admitted} · 观察 ${observed} · 拒绝 ${filtered} · 扇出 ${fanned}`,
+    recentTitle: '最近进件处置',
+    empty: '还没有外部事件进来',
+    originGithub: 'GitHub 进件',
+    originIngest: '外部进件',
+    originTitle: (author: string, strength: string) => `来自 ${author} · ${strength}`,
+    strengthExplicit: '名单内显式请求',
+    strengthInferred: '推断候选',
+    inputsTitle: '外部进件',
+    inputsEmpty: '来源线程暂无新进件',
+    inputsFrom: (author: string) => `@${author}`,
+    watchdogBadge: '疑似卡住',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,
@@ -1496,6 +1576,45 @@ export const plainCopy: WarCopy = {
     fontSection: '字体大小',
     fontReset: '重置',
     fontHint: '只缩放文字（85%–135%）：栏与卡片布局不变，文字在原盒内换行适应。',
+  },
+  sources: {
+    settingsSection: '事件源',
+    ghTitle: 'GitHub 源（PAT 轮询）',
+    enabled: '监听 GitHub',
+    enabledHint: '开着才轮询 issues/PR/评论；首跑以当下为基线，只收新事件',
+    repoLabel: '仓库（owner/name）',
+    repoPh: '例如 kaiji-z/stardeck',
+    tokenLabel: '访问令牌（PAT）',
+    tokenPresent: '已配置——留空保持不变',
+    tokenMissing: '未配置',
+    tokenClear: '清除',
+    allowLabel: '允许名单（GitHub login，逗号分隔）',
+    allowPh: '名单内=显式请求，任何档位都建卡',
+    admissionLabel: '名单外档位',
+    admissionOff: '只收名单内',
+    admissionObserve: '观察',
+    admissionAuto: '自动建卡',
+    admissionHint: '观察=只记录「若自动会接」，不建卡——攒一段决策史再开自动',
+    writeback: '收官回写 issue',
+    writebackHint: '任务终态自动回帖（机械战报）。开启即视为授权该仓自动回帖，需令牌含写权限',
+    ingestTitle: '通用注入（POST /sources/ingest）',
+    ingestAllowLabel: '注入名单（作者标签，逗号分隔）',
+    ingestAllowPh: '默认 * =本地通道全显式（与命令通道同纪律）',
+    save: '保存事件源配置',
+    saved: '事件源配置已保存',
+    saveFail: (e: string) => `保存失败：${e}`,
+    stats: (admitted: number, observed: number, filtered: number, fanned: number) => `建卡 ${admitted} · 观察 ${observed} · 拒绝 ${filtered} · 扇出 ${fanned}`,
+    recentTitle: '最近进件处置',
+    empty: '还没有外部事件进来',
+    originGithub: 'GitHub 进件',
+    originIngest: '外部进件',
+    originTitle: (author: string, strength: string) => `来自 ${author} · ${strength}`,
+    strengthExplicit: '名单内显式请求',
+    strengthInferred: '推断候选',
+    inputsTitle: '外部进件',
+    inputsEmpty: '来源线程暂无新进件',
+    inputsFrom: (author: string) => `@${author}`,
+    watchdogBadge: '疑似卡住',
   },
   scheduleChip: {
     chip: time => `⏰ ${time}`,

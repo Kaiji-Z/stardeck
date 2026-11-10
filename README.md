@@ -217,6 +217,18 @@ v0.6.0 起「代理舰长」不是一个进程，是一个**席位契约**：喂
 
 外接席位三端点：`POST /warroom/api/proxy/seats`（签发 seatId+token，token 只此一面）→ `GET /warroom/api/proxy/order?token=`（当轮工作令全文+账面快照）→ `POST /warroom/api/proxy/reply {token,text}`（交终答，块自动收割入账）。块文法教学就在 order 正文里——agent 不需要预先了解 stardeck，坐下来读一遍就会。
 
+## 事件源进水口（v0.9.0，D39）
+
+活不只从舰长来，也从**环境**来。stardeck 监听 GitHub（issue/PR/评论），经**确定性准入门**（零模型）变成命令卡，进入既有全链（大副分诊→澄清→发布→征召→KillCredit 验收）：
+
+- **准入门**：允许名单内的作者=显式请求（任何档位建卡）；名单外按档位 `off`（拒）/ `observe`（只记录「若自动会接」，不建卡——攒一段决策史再开）/ `auto`（建卡）。观察记录、轮询游标、回写回执全部落第七账本 `sources.jsonl`（幂等键=sourceId+externalId，重启不重放；首跑以当下为基线，只收新事件）。
+- **配置**：设置抽屉「事件源」段（开关/仓库/令牌/名单/档位/回写），或 `~/.stardeck/config.json` 的 `sources` 段。GitHub 源走 PAT 轮询（`apiBase` 可指 GHES），默认 120s。总闸 `STARDECK_SOURCES=0` 关（ingest/sources 端点随之 404）。
+- **订阅扇出**：有活卡的 issue 线程上的新评论自动挂卡（「外部进件」——**收上下文≠收授权**，不改卡状态）；卡对应任务在途且席=pi/opencode 时 best-effort 中途投递进执行会话，余席诚实留卡。
+- **收官回写**（默认关）：任务终态自动回帖 issue（机械组稿：结论先行+交付物+KillCredit 证据，不经模型、不泄内部路径）。开启即视为授权该仓自动回帖——令牌需 comment 写权限；3 连败弃发（账本可查）。
+- **通用注入**：`POST /warroom/api/sources/ingest`（本地信任面与 /commands 同纪律）——飞书/CI/脚本等后续源的确定性注入通道；`GET /warroom/api/sources` 出源健康+统计+最近处置。
+
+另有 **Watchdog 哨兵**（D39-B）：巡检对「活着但卡住」的执行者记旗（龄期×日志静默双超窗——CLI 流式输出期间日志恒热，静默即疑卡）——账本 `task_watchdog_flagged` + 板面「疑似卡住」徽标 + 舰桥战报，活性/结算事件自动摘；升级档 `STARDECK_WATCHDOG_ENFORCE=1` 记旗后 kill 走既有失联回收（默认关）。
+
 ## 安全模型
 
 stardeck 的威胁模型是**本机互信**：
@@ -403,6 +415,18 @@ Design notes:
 - **Append-only ledger**: commands/tasks/events are JSONL appends; state is derived by pure folds — crash-safe, traceable, replayable.
 - **attemptId is the token**: field agents claim and submit with conscription tokens; tokenless submissions are rejected.
 - **Process is life**: lost executor processes are recovered by the patrol (recorded as failed + re-dispatched); a daemon restart leaves no zombie sessions.
+
+## Event sources (v0.9.0, D39)
+
+Work no longer arrives only from the captain — it also arrives from the **environment**. stardeck watches GitHub (issues/PRs/comments) and turns them into command cards through a **deterministic admission gate** (zero model calls), then hands them to the existing pipeline (first-mate triage → clarification → publish → conscription → KillCredit acceptance):
+
+- **Admission gate**: authors on the allow list are explicit requests (admitted in every mode); off-list authors follow the tier — `off` (reject) / `observe` (record "would admit" without creating cards — build a decision history before going auto) / `auto` (admit). Dispositions, poll cursors and write-back receipts all land in the seventh ledger `sources.jsonl` (idempotency key = sourceId + externalId; restart never replays; first run baselines at now).
+- **Config**: the settings drawer's "Event sources" section, or the `sources` key in `~/.stardeck/config.json`. The GitHub source polls via PAT (`apiBase` can point at GHES), default 120s. Master switch `STARDECK_SOURCES=0` (the ingest/sources endpoints 404).
+- **Subscription fan-out**: new comments on an issue thread with a live card attach as "external follow-ups" (**receiving context is not receiving authority** — card state never changes); when the card's task is in flight on pi/opencode they are best-effort delivered into the session, other seats keep them on the card.
+- **Write-back** (off by default): at task end stardeck posts a mechanical report back to the issue (conclusion first + deliverables + KillCredit evidence; no model, no internal paths). Enabling grants the repo auto-posting — the token needs comment write scope; 3 consecutive failures drop it (auditable).
+- **Generic ingest**: `POST /warroom/api/sources/ingest` (same local trust as /commands) — the deterministic injection channel for future sources (Feishu/CI/scripts); `GET /warroom/api/sources` reports health, stats and recent dispositions.
+
+Plus the **Watchdog sentinel** (D39-B): the patrol flags executors that are **alive but stuck** (age × log-silence double window — CLI streaming keeps logs warm, silence is suspect) via the `task_watchdog_flagged` ledger event, a board badge and a bridge notice; activity/settlement events clear it. The escalation tier `STARDECK_WATCHDOG_ENFORCE=1` kills the flagged executor and rides the existing lost-agent recovery (off by default).
 
 ## Security model
 

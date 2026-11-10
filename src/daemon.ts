@@ -7,7 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createWarStore } from './state.ts'
@@ -27,7 +27,10 @@ import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harves
 import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, estimateTokens, type BridgeArtifact, type BridgeMessageMeta } from './bridge.ts'
 import { boardProjection, bridgeDigest, directiveProjection, ledgerSlice } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
-import { ensureDirs, loadConfig, persistFleetBinding, type StardeckConfig } from './config.ts'
+import { ensureDirs, loadConfig, persistFleetBinding, readSourcesConfig, writeSourcesConfig, type StardeckConfig } from './config.ts'
+import { fanoutTriggerToDirective, healOrphanAdmissions, ingestSourceTrigger, loadSourceFold, appendSourceEvents, subscriptionIndex, composeWritebackBody, writebackKeyCancelled, writebackKeyClosed, writebackKeyFailed, writebackPending, type SourceTrigger } from './sources.ts'
+import { issueNumberFromThreadKey, pollGithub, postGithubComment } from './source-github.ts'
+import { watchdogVerdict, type WatchdogSessionFace } from './watchdog.ts'
 import { backfillAttachMap } from './backfill.ts'
 import { issueProxySeat, seatByToken, loadProxySeats } from './proxy-seats.ts'
 import { runProxyLoop, proxyLoopEnvOf, mergeLoopEnv, thinkingDialectSupported } from './proxy-loop.ts'
@@ -388,6 +391,13 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         },
       },
       shutdown: () => { triggerShutdown() },
+      // D39 事件源进水口：ingest 收口（写）+ 面板视图（读）。旗 OFF 面
+      // （STARDECK_SOURCES=0）deps 不注入——两端点 404（字节等价纪律同 bridge 旗）。
+      ...(config.sources ? {
+        sourceIntake: (body: Parameters<typeof daemonSourceIngest>[0]) => daemonSourceIngest(body),
+        sourcesView: () => daemonSourcesView(),
+        sourcesSave: (patch: Parameters<typeof daemonSourcesSave>[0]) => daemonSourcesSave(patch),
+      } : {}),
       // K17 计划判定回推（独立形态替位）：pi 席经 RPC 续跑投 follow_up（与板内答复
       // 同通道）；非 pi/失败 best-effort 跳过——驳回理由已入 fold，重拟工单必带。
       pushToStaff: (staffKey, text) => {
@@ -464,6 +474,36 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         void conscript(loadCampaign(stateDir, t.taskId), new AbortController().signal).catch((err: unknown) => {
           console.error('[stardeck] 征召失败（下轮巡检重试）:', err instanceof Error ? err.message : err)
         })
+      }
+      // ③ Watchdog 哨兵（D39-B）：活着但卡住——龄期×日志静默双超窗（判据纯函数
+      // watchdog.ts）。记旗零破坏；enforce 档 kill 后由下轮①的失联回收自然接管
+      // （记败+重派，零新机制）。活性信号=会话日志 mtime（spawnLogged 恒写，
+      // CLI 流式输出期间恒热；stat 失败按 0=最深静默，宁可记旗）。
+      if (config.watchdog) {
+        const liveSessions = registry.live()
+        if (liveSessions.length > 0) {
+          const faces: WatchdogSessionFace[] = liveSessions.map(s => {
+            let logMtimeMs = 0
+            try { logMtimeMs = statSync(s.logPath).mtimeMs } catch { /* 日志不可读=最深静默 */ }
+            return { taskId: s.taskId, agentId: s.agentId, logMtimeMs, startedAtMs: s.startedAt }
+          })
+          const inProgress = boardCandidates().filter(t => t.status === 'in_progress').map(t => loadCampaign(stateDir, t.taskId))
+          const flags = watchdogVerdict(inProgress, faces, Date.now(), {
+            enabled: config.watchdog, enforce: config.watchdogEnforce,
+            silenceMin: config.watchdogSilenceMin, ageMin: config.watchdogAgeMin,
+          })
+          for (const f of flags) {
+            appendEvent(stateDir, { type: 'task_watchdog_flagged', ts: new Date().toISOString(), campaignId: f.taskId, reason: f.reason, silenceMs: f.silenceMs, ageMs: f.ageMs, from: f.agentId })
+            console.warn(`[stardeck] Watchdog 记旗：任务 ${f.taskId}（${f.agentId}）——${f.reason}`)
+            if (config.watchdogEnforce) {
+              const session = registry.byAgent(f.agentId)
+              if (session !== undefined) {
+                console.warn(`[stardeck] Watchdog enforce：kill ${f.agentId}——下轮巡检按失联回收重派`)
+                try { session.child.kill() } catch { /* already gone */ }
+              }
+            }
+          }
+        }
       }
     } catch (err) {
       console.error('[stardeck] 巡检异常（跳过本轮）:', err instanceof Error ? err.message : err)
@@ -970,6 +1010,223 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   }, 15_000)
   proxyTimer.unref()
 
+  // ---------- D39 事件源进水口（sourceTick）：轮询 → 准入/扇出 → 回写 ----------
+  // 写账本单源纪律：轮询器只产 trigger，一切入账走 sources.ts 收口函数
+  // （ingestSourceTrigger/fanoutTriggerToDirective——同 applyProxyReply 家法）。
+  // 订阅=fold 派生（subscriptionIndex，不建新存储）：有活卡的 threadKey 才拉
+  // 评论；评论走扇出（directive_input，收上下文≠收授权），新 issue/PR 走准入。
+  let sourceHealth = { lastPollAt: '', lastError: '' }
+  const deliveringInputs = new Set<string>()
+  /** 扇出进件的中途投递（best-effort）：卡对应任务在途且席=pi/opencode 且有
+   *  会话映射 → 续跑原语投递（单飞守卫防风暴）；失败/余席=诚实留卡
+   *  （「已记入卡上下文」——README 降级面同口径）。 */
+  function deliverInputToTask(directiveId: string, text: string): void {
+    try {
+      const directive = loadDirectives(stateDir).find(d => d.id === directiveId)
+      if (directive === undefined || directive.taskId === undefined) return
+      const task = loadCampaign(stateDir, directive.taskId)
+      if (task.status !== 'in_progress') return
+      const entry = readAttachMap(stateDir)[directive.taskId]
+      if (entry === undefined) return
+      if (entry.executor !== 'pi' && entry.executor !== 'opencode') {
+        console.log(`[stardeck] 外部进件已留卡（${entry.executor} 席暂不支持中途投递）：${directiveId}`)
+        return
+      }
+      if (deliveringInputs.has(directiveId)) return
+      deliveringInputs.add(directiveId)
+      const message = `【外部进件】${text}`
+      const release = (): void => { deliveringInputs.delete(directiveId) }
+      // 双席同链：受理回执 → 等消化（settled，15min 上限）→ 释单飞守卫（投递
+      // 失败=诚实留卡，卡上下文已在账——下一轮收割/续跑自然可见）。
+      const deliver = entry.executor === 'pi'
+        ? deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, kind: 'follow_up' })
+        : deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, ...(activeModel !== '' ? { model: activeModel } : {}), stateDir })
+      void deliver
+        .then(out => {
+          if (!out.ok) console.warn(`[stardeck] 外部进件投递失败（已留卡）：${out.error ?? '未知'}`)
+          return out.settled
+        })
+        .catch(() => { /* best-effort */ })
+        .finally(release)
+    } catch (err) {
+      console.warn(`[stardeck] 外部进件投递异常（已留卡）：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  /** D39-D 收官回写（Channel 写侧）：任务 closed/failed、命令 cancelled 三类
+   *  终态 → 机械组稿回帖 issue（composeWritebackBody，不经模型）。幂等键=终态
+   *  实体指纹；3 连败 dropped（fold 判定不再队列）；旗 config.sources.github.
+   *  writeback 默认 OFF——开启即视为舰长授权该仓自动回帖。 */
+  async function syncSourceWritebacks(): Promise<void> {
+    const gh = readSourcesConfig().github
+    if (!gh.enabled || !gh.writeback || gh.repo === '' || gh.token === '') return
+    const fold = loadSourceFold(stateDir)
+    for (const d of loadDirectives(stateDir)) {
+      const origin = d.origin
+      if (origin === undefined || origin.source !== 'github' || origin.threadKey === undefined) continue
+      const n = issueNumberFromThreadKey(origin.threadKey)
+      if (n === undefined) continue
+      let key: string | undefined
+      let shape: 'closed' | 'failed' | 'cancelled' | undefined
+      let task: CampaignState | undefined
+      if (d.status === 'cancelled') {
+        key = writebackKeyCancelled(d.id)
+        shape = 'cancelled'
+      } else if (d.taskId !== undefined) {
+        const t = loadCampaign(stateDir, d.taskId)
+        if (t.status === 'closed') { key = writebackKeyClosed(d.taskId); shape = 'closed'; task = t }
+        else if (t.status === 'failed') { key = writebackKeyFailed(d.taskId); shape = 'failed'; task = t }
+      }
+      if (key === undefined || shape === undefined) continue
+      if (!writebackPending(fold.writebacks.get(key))) continue
+      const body = composeWritebackBody(shape, d, task)
+      const out = await postGithubComment({ apiBase: gh.apiBase, repo: gh.repo, token: gh.token, issueNumber: n, body })
+      appendSourceEvents(stateDir, [{
+        type: 'source_writeback_posted', ts: new Date().toISOString(), sourceId: `github:${gh.repo}`, dedupKey: key, directiveId: d.id,
+        ...(d.taskId !== undefined ? { taskId: d.taskId } : {}), url: out.ok ? out.url : '', ok: out.ok, ...(!out.ok && out.error !== undefined ? { error: out.error } : {}),
+      }])
+      if (out.ok) console.log(`[stardeck] 收官回写已发（${key}）：${out.url}`)
+      else console.warn(`[stardeck] 收官回写失败（${key}，3 连败弃发）：${out.error}`)
+    }
+  }
+  async function sourceTick(): Promise<void> {
+    if (!config.sources) return
+    // ① GitHub 源轮询（enabled+repo+token 三齐才转；其余静默——门开着不等于有活）。
+    // 心跳 15s 固定、源内按 pollSec 判到期（配置热改即时生效——interval 不随配置定格）。
+    try {
+      const gh = readSourcesConfig().github
+      const due = Date.now() - lastGithubPollAt >= Math.max(15, gh.pollSec) * 1000
+      if (gh.enabled && gh.repo !== '' && gh.token !== '' && due) {
+        lastGithubPollAt = Date.now()
+        const sourceId = `github:${gh.repo}`
+        const fold = loadSourceFold(stateDir)
+        const cursor = fold.cursors.get(sourceId)
+        if (cursor === undefined) {
+          // 首跑基线：以当下为界，不倒灌整个仓的历史（README 明示——superagent
+          // 「restart must not replay」同款纪律，第一次连接只收新事件）。
+          const now = new Date().toISOString()
+          appendSourceEvents(stateDir, [{ type: 'source_cursor_advanced', ts: now, sourceId, watermark: now }])
+          console.log(`[stardeck] GitHub 源首跑基线就位（${sourceId}）——自此刻起收新事件`)
+        } else {
+          const subs = subscriptionIndex(loadDirectives(stateDir))
+          const out = await pollGithub({ apiBase: gh.apiBase, repo: gh.repo, token: gh.token, watermark: cursor, subscribedThreadKeys: [...subs.keys()], timeoutMs: 15_000 })
+          sourceHealth = { lastPollAt: new Date().toISOString(), lastError: out.error ?? '' }
+          if (out.error !== undefined) console.warn(`[stardeck] GitHub 源轮询告警（下轮重试）：${out.error}`)
+          let admitted = 0
+          let fanned = 0
+          for (const t of out.triggers) {
+            const subDirective = subs.get(t.threadKey)
+            if (subDirective !== undefined && t.kind === 'comment') {
+              if (fanoutTriggerToDirective(stateDir, t, subDirective)) {
+                fanned += 1
+                deliverInputToTask(subDirective, t.text)
+              }
+            } else {
+              const r = ingestSourceTrigger(stateDir, { allow: gh.allow, mode: gh.admission }, t)
+              if (!r.duplicate && r.verdict.disposition === 'admitted') admitted += 1
+            }
+          }
+          if (out.watermark !== '' && out.watermark !== cursor) {
+            appendSourceEvents(stateDir, [{ type: 'source_cursor_advanced', ts: new Date().toISOString(), sourceId, watermark: out.watermark }])
+          }
+          if (admitted + fanned > 0) console.log(`[stardeck] GitHub 源进件：建卡 ${admitted} · 扇出 ${fanned}`)
+        }
+      }
+    } catch (err) {
+      console.warn(`[stardeck] sourceTick 轮询段异常（跳过本轮）：${err instanceof Error ? err.message : String(err)}`)
+    }
+    // ② 孤儿建卡自愈（崩溃窗：directive 已建而 seen 未落——确定性 id 使重放 no-op）。
+    try {
+      const healed = healOrphanAdmissions(stateDir)
+      if (healed > 0) console.log(`[stardeck] 源孤儿建卡自愈 ${healed} 条`)
+    } catch { /* best-effort */ }
+    // ③ 收官回写。
+    try {
+      await syncSourceWritebacks()
+    } catch (err) {
+      console.warn(`[stardeck] 收官回写异常（下轮重试）：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  let lastGithubPollAt = 0
+  const sourceTimer = setInterval(() => {
+    void sourceTick().catch(err => console.error('[stardeck] sourceTick 异常（跳过本轮）:', err instanceof Error ? err.message : err))
+  }, 15_000)
+  sourceTimer.unref()
+
+  /** ingest 端点收口（dashboard deps 注入；POST /warroom/api/sources/ingest）。 */
+  function daemonSourceIngest(body: { source?: unknown; kind?: unknown; author?: unknown; text?: unknown; url?: unknown; threadKey?: unknown; externalId?: unknown }): { ok: true; duplicate: boolean; disposition?: string; strength?: string; directiveId?: string } | { ok: false; error: string } {
+    if (!config.sources) return { ok: false, error: '事件源未开（STARDECK_SOURCES=0）——ingest 通道停用。' }
+    const source = typeof body.source === 'string' && body.source.trim() !== '' ? body.source.trim() : 'ingest'
+    const kind = body.kind === 'issue' || body.kind === 'pr' || body.kind === 'comment' ? body.kind : 'manual'
+    const author = typeof body.author === 'string' && body.author.trim() !== '' ? body.author.trim() : 'anonymous'
+    const text = typeof body.text === 'string' ? body.text : ''
+    if (text.trim() === '') return { ok: false, error: 'text 必填（事件正文）。' }
+    const cfg = readSourcesConfig()
+    const isGithubKind = source === 'github' || source.startsWith('github:')
+    const gate = isGithubKind ? { allow: cfg.github.allow, mode: cfg.github.admission } : { allow: cfg.ingest.allow, mode: cfg.ingest.admission }
+    const trigger: SourceTrigger = {
+      sourceId: source,
+      externalId: typeof body.externalId === 'string' && body.externalId.trim() !== '' ? body.externalId.trim() : `manual:${Date.now().toString(36)}`,
+      kind,
+      threadKey: typeof body.threadKey === 'string' && body.threadKey.trim() !== '' ? body.threadKey.trim() : `${source}:manual`,
+      author,
+      text,
+      ...(typeof body.url === 'string' && body.url.trim() !== '' ? { url: body.url.trim() } : {}),
+    }
+    const r = ingestSourceTrigger(stateDir, gate, trigger)
+    if (r.duplicate) return { ok: true, duplicate: true }
+    return {
+      ok: true, duplicate: false, disposition: r.verdict.disposition, strength: r.verdict.strength,
+      ...(r.directiveId !== undefined ? { directiveId: r.directiveId } : {}),
+    }
+  }
+  /** sources 面板视图（dashboard deps 注入；GET /warroom/api/sources）。token
+   *  永不出 daemon——只报 tokenPresent（D33 loop 段同纪律）。 */
+  function daemonSourcesView(): { sources: unknown[]; counts: unknown; recent: unknown[] } {
+    const cfg = readSourcesConfig()
+    const fold = loadSourceFold(stateDir)
+    return {
+      sources: [
+        {
+          id: 'github', kind: 'github', enabled: cfg.github.enabled && cfg.github.repo !== '' && cfg.github.token !== '',
+          configured: cfg.github.enabled, repo: cfg.github.repo, tokenPresent: cfg.github.token !== '',
+          admission: cfg.github.admission, allow: cfg.github.allow,
+          writeback: cfg.github.writeback, pollSec: cfg.github.pollSec,
+          cursor: fold.cursors.get(`github:${cfg.github.repo}`) ?? null,
+          lastPollAt: sourceHealth.lastPollAt === '' ? null : sourceHealth.lastPollAt,
+          lastError: sourceHealth.lastError === '' ? null : sourceHealth.lastError,
+        },
+        { id: 'ingest', kind: 'ingest', enabled: true, admission: cfg.ingest.admission, allow: cfg.ingest.allow },
+      ],
+      counts: fold.counts,
+      recent: fold.recent.slice(-20),
+    }
+  }
+  /** sources 配置写面（设置抽屉）：token 三态=undefined 保持/'' 清除非空新值。 */
+  function daemonSourcesSave(patch: { github?: Partial<{ enabled: boolean; repo: string; token: string; apiBase: string; allow: string[]; admission: string; writeback: boolean; pollSec: number }>; ingest?: Partial<{ allow: string[]; admission: string }> }): { ok: boolean; error?: string; view?: { sources: unknown[]; counts: unknown; recent: unknown[] } } {
+    const out = writeSourcesConfig({
+      ...(patch.github !== undefined ? {
+        github: {
+          ...(patch.github.enabled !== undefined ? { enabled: patch.github.enabled } : {}),
+          ...(patch.github.repo !== undefined ? { repo: patch.github.repo } : {}),
+          ...(patch.github.token !== undefined ? { token: patch.github.token } : {}),
+          ...(patch.github.apiBase !== undefined ? { apiBase: patch.github.apiBase } : {}),
+          ...(patch.github.allow !== undefined ? { allow: patch.github.allow } : {}),
+          ...(patch.github.admission !== undefined ? { admission: patch.github.admission as 'off' | 'observe' | 'auto' } : {}),
+          ...(patch.github.writeback !== undefined ? { writeback: patch.github.writeback } : {}),
+          ...(patch.github.pollSec !== undefined ? { pollSec: patch.github.pollSec } : {}),
+        },
+      } : {}),
+      ...(patch.ingest !== undefined ? {
+        ingest: {
+          ...(patch.ingest.allow !== undefined ? { allow: patch.ingest.allow } : {}),
+          ...(patch.ingest.admission !== undefined ? { admission: patch.ingest.admission as 'off' | 'observe' | 'auto' } : {}),
+        },
+      } : {}),
+    })
+    if (!out.ok) return { ok: false, error: out.error }
+    return { ok: true, view: daemonSourcesView() }
+  }
+
   // ---------- 静态板 UI（public/ + dist/client.js；dev 未构建时给指引） ----------
   const here = fileURLToPath(new URL('.', import.meta.url))
   const assetCandidates = (rel: string): string[] => [join(here, rel), join(here, '../', rel), join(here, '../../', rel)]
@@ -1239,6 +1496,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       closed = true
       clearInterval(patrol)
       clearInterval(staffTimer)
+      clearInterval(sourceTimer)
       if (staffSession !== undefined) { try { staffSession.child.kill() } catch { /* already gone */ } }
       for (const s of registry.live()) { try { s.child.kill() } catch { /* already gone */ } }
       await new Promise<void>(resolve => server.close(() => resolve()))

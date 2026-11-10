@@ -23,8 +23,9 @@ import { readJsonlCached } from './fold-cache.ts'
 import { loadDirectives, readDirectiveEvents } from './directives.ts'
 import { listCampaignIds, loadCampaign } from './events.ts'
 
-/** 机械战报六种（D26 五触发 + D28 scene：图景渲染未过对账的诚实告知）。 */
-export type BridgeNoticeKind = 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene'
+/** 机械战报八种（D26 五触发 + D28 scene + D39 intake/watchdog：外部进件建卡
+ *  与哨兵记旗——让「环境发起」的事实在频道里活着）。 */
+export type BridgeNoticeKind = 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene' | 'intake' | 'watchdog'
 
 /** 图景附件（D28 图景面）：代理舰长【图景】块经确定性渲染器产出的 HTML 图页
  * 引用——id 即 GET /warroom/api/artifact/<id> 的路径段；正文 text 仍是给舰长的
@@ -178,6 +179,10 @@ export function collectBridgeNoticeEvents(stateDir: string, now = new Date()): B
   const out: BridgeEvent[] = []
   const directives = loadDirectives(stateDir)
   for (const e of readDirectiveEvents(stateDir)) {
+    if (e.type === 'directive_created' && e.origin !== undefined) {
+      // D39 intake：外部源建卡（origin 在场=非 human 亲手）——告知进件事实。
+      out.push({ type: 'bridge_system_notice', ts, noticeKind: 'intake', dedupKey: `intake:${e.directiveId}:${e.ts}`, text: `外部进件已建卡：[${e.origin.source}] ${clip(e.text)}（@${e.origin.author ?? 'unknown'}，${e.origin.strength === 'explicit' ? '名单内显式' : '推断候选'}）——大副即将接手分诊。`, refs: { commandId: e.directiveId } })
+    }
     if (e.type === 'directive_clarification_requested') {
       out.push({ type: 'bridge_system_notice', ts, noticeKind: 'clarify', dedupKey: `clarify:${e.directiveId}:${e.ts}`, text: `经理人有问题要你定：命令「${clip(directives.find(d => d.id === e.directiveId)?.text ?? e.directiveId)}」挂起澄清——答复后他会带着答案定案。`, refs: { commandId: e.directiveId } })
     }
@@ -206,6 +211,11 @@ export function collectBridgeNoticeEvents(stateDir: string, now = new Date()): B
     }
     if (t.status === 'closed') {
       out.push({ type: 'bridge_system_notice', ts, noticeKind: 'terminal', dedupKey: `closed:${id}`, text: `收官：「${clip(title)}」${t.closedVerdict !== undefined ? `，判定：${clip(t.closedVerdict)}` : ''}。`, refs: { taskId: id } })
+    }
+    // D39 watchdog：哨兵记旗（活着但卡住）——flaggedAt 入 dedup 键，活性清旗
+    // 后再次记旗是新一轮事实，各报各的。
+    if (t.watchdog !== undefined) {
+      out.push({ type: 'bridge_system_notice', ts, noticeKind: 'watchdog', dedupKey: `watchdog:${id}:${t.watchdog.flaggedAt}`, text: `执行者疑似卡住：「${clip(title)}」——${clip(t.watchdog.reason)}。可翻阅会话日志核实，或直接驳回重派。`, refs: { taskId: id } })
     }
   }
   return out

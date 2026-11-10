@@ -48,6 +48,20 @@ export interface StardeckConfig {
    *  B3 门 flag-gated 通路）。运行态开关（POST /bridge/settings）不改本配置——
    *  重启回落默认 OFF。STARDECK_PROXY_VERDICT=1/on 开。 */
   proxyVerdict: boolean
+  /** 事件源进水口总闸（D39，默认开——门开着不等于有活：github 源还需
+   *  config.sources.github.enabled+token）。STARDECK_SOURCES=0/false/off 关
+   *  （ingest 端点 404、sourceTick 不转——矩阵 off 面）。 */
+  sources: boolean
+  /** D39-B Watchdog 记旗总闸（默认开——纯观察零破坏：账本记旗+板徽标+舰桥
+   *  战报）。STARDECK_WATCHDOG=0 关。 */
+  watchdog: boolean
+  /** D39-B enforce 升级档（默认关）：静默超窗记旗后 kill 执行者——走既有失联
+   *  回收路径（记败+重派）。STARDECK_WATCHDOG_ENFORCE=1 开。 */
+  watchdogEnforce: boolean
+  /** 日志静默窗（分钟，默认 20）——执行者 CLI 流式输出期间日志恒热，静默即疑卡。 */
+  watchdogSilenceMin: number
+  /** attempt 龄期窗（分钟，默认 45，claim 起算）。 */
+  watchdogAgeMin: number
 }
 
 export function stardeckHome(): string {
@@ -71,6 +85,11 @@ interface ConfigFilePart {
   bridge?: unknown
   proxy?: unknown
   proxyVerdict?: unknown
+  sources?: unknown
+  watchdog?: unknown
+  watchdogEnforce?: unknown
+  watchdogSilenceMin?: unknown
+  watchdogAgeMin?: unknown
 }
 
 /** 纯合并：默认值 ← 配置文件 ← 环境变量 ← 调用方显式覆盖。 */
@@ -105,6 +124,11 @@ export function loadConfig(overrides: Partial<StardeckConfig> = {}): StardeckCon
     bridge: boolPick(file.bridge, env.STARDECK_BRIDGE, true),
     proxy: boolPick(file.proxy, env.STARDECK_PROXY, true),
     proxyVerdict: boolPick(file.proxyVerdict, env.STARDECK_PROXY_VERDICT, false),
+    sources: boolPick(file.sources, env.STARDECK_SOURCES, true),
+    watchdog: boolPick(file.watchdog, env.STARDECK_WATCHDOG, true),
+    watchdogEnforce: boolPick(file.watchdogEnforce, env.STARDECK_WATCHDOG_ENFORCE, false),
+    watchdogSilenceMin: Number(env.STARDECK_WATCHDOG_SILENCE_MIN ?? file.watchdogSilenceMin ?? 20),
+    watchdogAgeMin: Number(env.STARDECK_WATCHDOG_AGE_MIN ?? file.watchdogAgeMin ?? 45),
   }
   return { ...cfg, ...overrides }
 }
@@ -252,4 +276,126 @@ export function writeLoopConfig(patch: Partial<LoopConfig>): { ok: true; loop: L
     return { ok: false, error: `loop 配置落盘失败（${err instanceof Error ? err.message : String(err)}）——运行态已生效，重启回落` }
   }
   return { ok: true, loop: next }
+}
+
+/** D39 事件源进水口（config.json 顶层 `sources` 键，照 loop 段家法）。github
+ *  源：PAT 轮询（apiBase 可指 GHES/本地 mock——测试确定性）；ingest 源：通用
+ *  注入端点的准入门（默认 '*'=本地信任全显式，与 /commands 同纪律）。 */
+export type SourceAdmissionMode = 'off' | 'observe' | 'auto'
+
+export interface GithubSourceConfig {
+  enabled: boolean
+  /** owner/name（监听范围=该仓 issues/PR/评论）。 */
+  repo: string
+  /** PAT（只读轮询=repo/public_repo 读；writeback 开启还需 issues:write）。 */
+  token: string
+  /** REST 基址（默认 https://api.github.com；GHES/本地 mock 可覆写）。 */
+  apiBase: string
+  /** 允许名单（GitHub login；名单内=显式请求任何档都建卡）。 */
+  allow: string[]
+  /** 名单外推断候选档位：off=拒 / observe=只记录 / auto=建卡。 */
+  admission: SourceAdmissionMode
+  /** 收官回写（D39-D，默认关）：开启即视为舰长授权该仓自动回帖。 */
+  writeback: boolean
+  /** 轮询间隔（秒）。 */
+  pollSec: number
+}
+
+export interface IngestSourceConfig {
+  /** 允许名单（author 标签；默认 '*'=本地信任全显式——POST /sources/ingest
+   *  与 /commands 同为本地通道）。收窄后按 admission 档位走。 */
+  allow: string[]
+  admission: SourceAdmissionMode
+}
+
+export interface SourcesConfig {
+  github: GithubSourceConfig
+  ingest: IngestSourceConfig
+}
+
+const EMPTY_SOURCES: SourcesConfig = {
+  github: { enabled: false, repo: '', token: '', apiBase: 'https://api.github.com', allow: [], admission: 'observe', writeback: false, pollSec: 120 },
+  ingest: { allow: ['*'], admission: 'observe' },
+}
+
+function admissionOf(v: unknown, d: SourceAdmissionMode): SourceAdmissionMode {
+  return v === 'off' || v === 'observe' || v === 'auto' ? v : d
+}
+
+function stringArrayOf(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  // 坏元素丢弃，好元素保留（宽容读——配置面不做全有全无）。
+  return v.filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+}
+
+export function readSourcesConfig(): SourcesConfig {
+  const path = configFilePath()
+  if (!existsSync(path)) return { github: { ...EMPTY_SOURCES.github }, ingest: { ...EMPTY_SOURCES.ingest } }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { sources?: { github?: Partial<GithubSourceConfig>; ingest?: Partial<IngestSourceConfig> } }
+    const g = parsed.sources?.github ?? {}
+    const i = parsed.sources?.ingest ?? {}
+    return {
+      github: {
+        enabled: g.enabled === true,
+        repo: typeof g.repo === 'string' ? g.repo.trim() : '',
+        token: typeof g.token === 'string' ? g.token : '',
+        apiBase: typeof g.apiBase === 'string' && g.apiBase.trim() !== '' ? g.apiBase.trim().replace(/\/+$/, '') : EMPTY_SOURCES.github.apiBase,
+        allow: stringArrayOf(g.allow) ?? [],
+        admission: admissionOf(g.admission, 'observe'),
+        writeback: g.writeback === true,
+        pollSec: typeof g.pollSec === 'number' && Number.isFinite(g.pollSec) && g.pollSec >= 15 ? Math.floor(g.pollSec) : 120,
+      },
+      ingest: {
+        allow: stringArrayOf(i.allow) ?? ['*'],
+        admission: admissionOf(i.admission, 'observe'),
+      },
+    }
+  } catch {
+    return { github: { ...EMPTY_SOURCES.github }, ingest: { ...EMPTY_SOURCES.ingest } }
+  }
+}
+
+/** sources 段写入（patch 浅合并；空串 token=清除）。同 writeLoopConfig 家法：
+ * 坏 JSON 拒绝覆盖 + tmp+rename 原子 + best-effort。 */
+export function writeSourcesConfig(patch: { github?: Partial<GithubSourceConfig>; ingest?: Partial<IngestSourceConfig> }): { ok: true; sources: SourcesConfig } | { ok: false; error: string } {
+  const path = configFilePath()
+  let base: Record<string, unknown> = {}
+  if (existsSync(path)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, error: `配置文件不是 JSON 对象（${path}）——拒绝覆盖` }
+      }
+      base = { ...(parsed as Record<string, unknown>) }
+    } catch {
+      return { ok: false, error: `配置文件损坏（${path}，JSON 解析失败）——拒绝覆盖` }
+    }
+  }
+  const prev = readSourcesConfig()
+  const next: SourcesConfig = {
+    github: {
+      enabled: patch.github?.enabled !== undefined ? patch.github.enabled : prev.github.enabled,
+      repo: patch.github?.repo !== undefined ? patch.github.repo : prev.github.repo,
+      token: patch.github?.token !== undefined ? patch.github.token : prev.github.token,
+      apiBase: patch.github?.apiBase !== undefined ? patch.github.apiBase : prev.github.apiBase,
+      allow: patch.github?.allow !== undefined ? patch.github.allow : prev.github.allow,
+      admission: patch.github?.admission !== undefined ? patch.github.admission : prev.github.admission,
+      writeback: patch.github?.writeback !== undefined ? patch.github.writeback : prev.github.writeback,
+      pollSec: patch.github?.pollSec !== undefined ? patch.github.pollSec : prev.github.pollSec,
+    },
+    ingest: {
+      allow: patch.ingest?.allow !== undefined ? patch.ingest.allow : prev.ingest.allow,
+      admission: patch.ingest?.admission !== undefined ? patch.ingest.admission : prev.ingest.admission,
+    },
+  }
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    const tmp = `${path}.tmp-${Date.now().toString(36)}`
+    writeFileSync(tmp, `${JSON.stringify({ ...base, sources: next }, null, 2)}\n`, 'utf8')
+    renameSync(tmp, path)
+  } catch (err) {
+    return { ok: false, error: `sources 配置落盘失败（${err instanceof Error ? err.message : String(err)}）——运行态已生效，重启回落` }
+  }
+  return { ok: true, sources: next }
 }

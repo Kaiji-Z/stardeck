@@ -338,3 +338,19 @@
 **理由**：对话是高频主路径，常驻整屏浪费；悬浮球+贴球浮窗让聊天成为「随手唤起」的轻件，看板回归指挥台本位。设置双面（迷你弹层+板抽屉）是 D29 以来最大的信号冲突源，一个面说尽一切。
 
 **坑录（实弹）**：daemon 静态资源吃 dist 构建产物——改源码不重 build 就跑 UI 目检=验证旧 bundle（PAGEERROR createElement is not defined 即此）；澄清问干双重编号（模型问句自带「1. 」前缀 + `<ol>` 再画一层）双处同修（bridge.tsx/bridge focus 页）+CSS list-style:none；管线指路 toast 的堆叠上下文压得过 z80 背板——行为层一刀（`body:has(.war-settings-backdrop) .war-map-hint{display:none}`）比继续追层级赢；球/浮窗挂 .war-root 须反制基类布局属性（chrome 竖排 P0 同源复发点）。
+
+## D39 进水口与哨兵：对齐 dsh-superagent 的上游差距（2026-11-10，舰长四拍板，v0.9.0）
+
+**背景**：对标 DeepSeek 开源的 [dsh-superagent](https://github.com/deepseek-ai/dsh-superagent-prototype)（DSH 同宿主血统；Source/Trigger→Eval→Ticket/Mandate→Executor 域模型）诊断出四处差距：①无事件进水口（活只能从舰长/cron 来）；②巡检只判进程死亡（无「活着但卡住」）；③外部后续事件无通道回卡（订阅扇出）；④闭环缺写侧（终态不回写来源会话）。同时确认趋同面（Router/Workers=大副/执行者、per-ticket 目录=工作区物化、板哲学=读投影）与代差面（KillCredit 对其自由文本报告——**交账层仍是独占护城河，本刀只补上游不动验收宪法**）。
+
+**拍板（舰长 2026-11-10）**：三刀全做+回写=四刀一个里程碑；GitHub PAT 轮询+通用 ingest 双轨；回写本轮就做（旗默认 OFF）；Watchdog 记旗默认开/kill 默认关。
+
+**定案**：
+1. **Source 进水口=第七账本+确定性准入门**：`sources.jsonl` 承载处置记录（admitted/observed/filtered/fanned）/轮询游标/回写回执，幂等键=sourceId::externalId，**建卡走确定性命令号**（`cmd-src-<hash10>`——崩溃窗重放 fold 天然 no-op，与 seen 去重双保险）；准入门零模型（allow 名单→explicit；名单外 off/observe/auto 档——superagent accept 阶梯的机械版）；**observe=半自主中间档**（记录「若自动会接」不建卡，信任斜坡的中间踏板）。**不入 SSE revision**（轮询不刷板；观察记录走 GET /sources）。首跑基线=当下（不倒灌仓史）。
+2. **写账本单源纪律**：轮询器只产 SourceTrigger，一切入账走 `ingestSourceTrigger`/`fanoutTriggerToDirective` 收口（applyProxyReply 家法）；建卡的 origin（source/kind/url/author/threadKey/strength/observedAt）随 `directive_created` 冻结=**Mandate-lite**（不可变授权审计，v1 不做规则引擎与复验机）。
+3. **订阅扇出：收上下文≠收授权**：订阅表=fold 派生（非终态卡的 origin.threadKey，不建新存储）；源线程新评论→`directive_input`（context-only，环形 20，不改 status 不扩权——终态守卫双防线）；pi/opencode 席 best-effort 中途投递（单飞守卫防风暴），余席诚实留卡。
+4. **Watchdog=活性信号判据（不用模型判进展）**：龄期（claim 起算默认 45min）×日志静默（mtime 默认 20min——spawnLogged 恒写、流式期间恒热）双超窗记旗 `task_watchdog_flagged`（fold：claim/submit/comment/结算事件清旗=误旗自愈）；enforce=kill 走**既有失联回收路径**（零新机制）。
+5. **回写=机械组稿的安全设计**：三类终态（closed/failed/cancelled）→结论先行+交付物+KillCredit 证据，**不经模型、内部路径消毒**（workspacePath 替换）；幂等键=终态实体指纹、3 连败 dropped；旗 `sources.github.writeback` 默认 OFF——「开启即授权」的对外发布确认纪律。
+6. **API 面**：`POST /sources/ingest`（通用注入契约——superagent Cookbook「adding a Source」对应物，本地信任同 /commands）+ `GET/POST /sources`（视图+配置写，token 三态永不出 daemon）；大副/提示词零改动（**无快照门 churn**——issue 模糊文本天然喂 D23 澄清协议）。
+
+**验证面**：tests +21（准入矩阵/幂等/游标/回写 dropped/inputs fold/老账本零迁移/watchdog 判据与清旗/mock GitHub 轮询与回帖/daemon 链路 404 面）+ needle 五文件 + 矩阵增 `STARDECK_SOURCES=0`/`STARDECK_WATCHDOG_ENFORCE=1` 面 + live 相位 `STARDECK_LIVE_SOURCE=1`（mock GitHub 四断言：白名单建卡/observe 只记录/轮询两拍建卡/回写幂等）。

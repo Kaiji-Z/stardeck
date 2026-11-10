@@ -318,6 +318,8 @@ body[data-ds-dark-theme] .war-root{
 /* V24.1 舰长定：聚焦态压暗卡无悬停高亮——压暗=退场，光标路过不抬升不描边。 */
 .war-card.war-rel-dim.clickable:hover{border-color:var(--war-border);transform:none;box-shadow:none}
 .war-chip.war-seat-chip{color:var(--war-text-3);border-style:dashed} /* V24.1 席别徽标：最弱信息层（虚线框次级 chip） */
+.war-chip.origin-chip{color:var(--war-run);border-style:solid} /* D39 事件源进件徽标：来源可见（实线框、run 色系——外部事实非内部状态） */
+.war-chip.war-watchdog-chip{color:var(--war-fail);border-style:solid;font-weight:600} /* D39-B 哨兵徽标：疑似卡住（fail 色系——活性/结算事件自动摘） */
 /* V24.1 大副会话投影过滤：本命令块高亮、他命令块可藏、无主叙述弱化 */
 .war-hist-self{display:block;background:color-mix(in srgb, var(--war-run-border) 10%, transparent);box-shadow:inset 2px 0 0 var(--war-run-border);border-radius:2px;padding-left:6px}
 .war-hist-neutral{opacity:.5}

@@ -26,15 +26,42 @@ export type ContinuationMode = 'deepen' | 'retry' | 'pivot'
  *  类型保留 'L2' 仅为老账本 fold 兼容，分诊正典与改档 UI 不再产出。 */
 export type DirectiveGrade = 'L0' | 'L1' | 'L2'
 
-/** Sovereign override markers baked into the command text (SPEC §0 档位覆写)：
- * `!!直接做` forces L0, `??先看方案` forces L1（D24 两档制：先看方案=签任务书
- * 档——舰长要亲自定稿再放行，原 L2 语义由 L1 签发流吸收）——they outrank the
- * staff's suggestion, host-side enforced (never trust the model to honor them). */
+/** Sovereign override markers baked into the command text (SPEC §0 档位覆写):
+ *  `!!直接做` forces L0, `??先看方案` forces L1（D24 两档制：先看方案=签任务书
+ *  档——舰长要亲自定稿再放行，原 L2 语义由 L1 签发流吸收）——they outrank the
+ *  staff's suggestion, host-side enforced (never trust the model to honor them). */
 export function overrideMarkerOf(text: string): { grade: DirectiveGrade; marker: '!!' | '??' } | undefined {
   if (text.includes('??先看方案')) return { grade: 'L1', marker: '??' }
   if (text.includes('!!直接做')) return { grade: 'L0', marker: '!!' }
   return undefined
 }
+
+/** D39 事件源进水口：命令卡的外部来源（Mandate-lite——不可变授权审计，随
+ *  created 事件冻结）。strength=准入门判定（explicit=允许名单内的显式请求；
+ *  inferred=observe/auto 档放行的推断候选）。threadKey=源线程键（如
+ *  `github:owner/repo#12`）——订阅扇出（D39-C）的关联锚。旧日志无此字段=
+ *  human 亲手，零迁移。 */
+export interface DirectiveOrigin {
+  readonly source: 'github' | 'ingest'
+  readonly kind: 'issue' | 'pr' | 'comment' | 'manual'
+  readonly url?: string
+  readonly author?: string
+  readonly threadKey?: string
+  readonly strength: 'explicit' | 'inferred'
+  readonly observedAt: string
+}
+
+/** D39-C 订阅扇出：外部源线程上的后续进件（context-only——不改 status、不扩权，
+ *  superagent「收上下文≠收授权」红线）。终态守卫前置：approved/cancelled 卡不吃新件。 */
+export interface DirectiveInput {
+  readonly ts: string
+  readonly text: string
+  readonly author?: string
+  readonly url?: string
+}
+
+/** 进件环形上限：卡上下文是「最近发生了什么」，不是全文档案——长线程截尾。 */
+export const DIRECTIVE_INPUTS_CAP = 20
 
 /** One sovereign command, folded from the directive log. */
 export interface Directive {
@@ -93,13 +120,18 @@ export interface Directive {
   /** V17 归档（舰长手动，仅链全终局可入）：宿主会话已 archiveSession 的账面痕迹。
    *  不改 status——archived 叠在终局之上的第二维度；会话清单随事件冻结。 */
   archived?: { at: string; sessions: string[] }
+  /** D39 事件源进水口：卡的外部来源审计（随 created 冻结，Mandate-lite）。 */
+  readonly origin?: Readonly<DirectiveOrigin>
+  /** D39-C 订阅扇出：外部源线程后续进件（环形 ≤{@link DIRECTIVE_INPUTS_CAP}，
+   *  context-only 不改状态）。 */
+  inputs?: Array<DirectiveInput>
 }
 
 /** The directive log's entry union (one JSON line each). */
 export type DirectiveEvent =
   | { type: 'directive_created'; ts: string; directiveId: string; text: string; cron?: string;
       /** V10 战线续接：可选嫁接指针 + 冻结模式（旧日志无此字段照常 fold=初代）。 */
-      continuesFrom?: string; continuationMode?: ContinuationMode; /** V15 战线命名（可选，不填=命令原文当战线名）。 */ name?: string; /** D27 下令来源（缺省=human 语义）。 */ issuedBy?: string }
+      continuesFrom?: string; continuationMode?: ContinuationMode; /** V15 战线命名（可选，不填=命令原文当战线名）。 */ name?: string; /** D27 下令来源（缺省=human 语义）。 */ issuedBy?: string; /** D39 事件源进水口：外部来源审计（缺省=human 亲手）。 */ origin?: DirectiveOrigin }
   | { type: 'directive_dispatched'; ts: string; directiveId: string }
   | { type: 'directive_session_opened'; ts: string; directiveId: string; staffSessionId: string }
   | { type: 'directive_received'; ts: string; directiveId: string; staffSessionId: string }
@@ -140,6 +172,10 @@ export type DirectiveEvent =
   // V17 归档：链全终局后舰长手动入档——宿主会话批量 archiveSession 后的账面
   // 落痕（sessions=实际归档成功的清单；部分失败如实缺席，不假装全成）。
   | { type: 'directive_archived'; ts: string; directiveId: string; sessions: string[] }
+  // D39-C 订阅扇出：外部源线程的后续进件（context-only——不改 status、不扩权；
+  // daemon 收口侧前置过滤终态卡，fold 终态守卫再兜一道）。author/url=源侧身份
+  // 与反链（聚焦页「外部进件」段数据源）。
+  | { type: 'directive_input'; ts: string; directiveId: string; text: string; author?: string; url?: string }
 
 /** Terminal statuses — later transitions are ignored (a published command
  * cannot be re-approved, a cancelled one cannot resurrect). */
@@ -184,6 +220,7 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
         ...(event.cron !== undefined ? { schedule: { cron: event.cron } } : {}),
         ...(event.name !== undefined ? { name: event.name } : {}),
         ...(event.issuedBy !== undefined ? { issuedBy: event.issuedBy } : {}),
+        ...(event.origin !== undefined ? { origin: event.origin } : {}),
         ...(event.continuesFrom !== undefined
           ? {
               continuesFrom: event.continuesFrom,
@@ -318,6 +355,14 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
           current.schedule.dispatchedAt = event.ts
         }
         break
+      // D39-C 订阅扇出：外部源线程后续进件——context-only（不改 status、不
+      // 扩权），环形截尾保最近 {@link DIRECTIVE_INPUTS_CAP} 条；终态卡不吃
+      // 新件（收口侧已过滤，这里是第二道守卫——重放/乱序防御）。
+      case 'directive_input': {
+        const inputs = [...(current.inputs ?? []), { ts: event.ts, text: event.text, ...(event.author !== undefined ? { author: event.author } : {}), ...(event.url !== undefined ? { url: event.url } : {}) }]
+        current.inputs = inputs.length > DIRECTIVE_INPUTS_CAP ? inputs.slice(inputs.length - DIRECTIVE_INPUTS_CAP) : inputs
+        break
+      }
     }
   }
   return [...byId.values()]

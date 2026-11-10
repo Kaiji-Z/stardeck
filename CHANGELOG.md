@@ -3,6 +3,18 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
 
 
+## [Unreleased]
+
+### Added（D39 进水口与哨兵：对齐 dsh-superagent 的上游差距）
+
+对标 DeepSeek 开源 dsh-superagent（DSH 同宿主血统）诊断四处差距全补——**只补上游不动验收宪法**（KillCredit 交账层对 superagent 自由文本报告仍是代差护城河）：
+
+- **Source 进水口（D39-A）**：GitHub PAT 轮询源（issues/PR/订阅评论，apiBase 可指 GHES/mock）+ 通用注入端点 `POST /sources/ingest`；**确定性准入门**（零模型：allow 名单=显式建卡；名单外 off/observe/auto 档——observe=半自主中间档，记录「若自动会接」不建卡）；第七账本 `sources.jsonl`（处置/游标/回写回执；幂等键 sourceId::externalId；建卡走确定性命令号 cmd-src-<hash10> 崩溃窗自愈）；命令卡 origin 审计（Mandate-lite）+舰桥 intake 机械战报+板面来源 chip；首跑基线=当下不倒灌仓史。设置抽屉「事件源」段（token 三态永不出 daemon）；总闸 STARDECK_SOURCES=0（端点 404 字节等价）。
+- **Watchdog 哨兵（D39-B）**：巡检③段对「活着但卡住」记旗（龄期 45min×日志静默 20min 双超窗——CLI 流式输出日志恒热，静默即疑卡）；账本 task_watchdog_flagged+板面「疑似卡住」徽标+舰桥 watchdog 战报；活性/结算事件自动清旗（误旗自愈）；enforce 升级档（STARDECK_WATCHDOG_ENFORCE，默认关）kill 后走既有失联回收零新机制。
+- **订阅扇出（D39-C）**：有活卡的源线程新评论自动挂卡（directive_input，context-only 环形 20——**收上下文≠收授权**，终态守卫双防线）；pi/opencode 席 best-effort 中途投递（单飞守卫），余席诚实留卡；聚焦页「外部进件」段+卡面 +N 计数。
+- **收官回写（D39-D，默认关）**：任务 closed/failed/命令 cancelled 三类终态自动回帖 issue——机械组稿（结论先行+交付物+KillCredit 证据；不经模型、内部路径消毒）；幂等键=终态实体指纹、3 连败 dropped；旗 sources.github.writeback 开启即视为授权该仓自动回帖。
+- **验证面**：tests +21（四新测试文件：准入矩阵/幂等/游标/回写 dropped/inputs fold/老账本零迁移/watchdog 判据与清旗/mock GitHub/daemon 链路 404 面）；verify needle 五文件增补；矩阵增 STARDECK_SOURCES=0 + STARDECK_WATCHDOG_ENFORCE=1 面；live 新相位 STARDECK_LIVE_SOURCE=1（mock GitHub 零真外联四断言）；copy 四词典 sources 段（copy-lang 锁）。
+
 ## [0.8.7] - 2026-10-25
 
 ### Added（D38.4 按钮语言统一：聊天窗五方言归一——四类角色一种语法）

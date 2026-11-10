@@ -13,7 +13,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
-import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, markTalking, regradeCommand, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice } from './data.ts'
+import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, fetchSourcesView, markTalking, regradeCommand, saveSourcesPatch, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice, type SourcesView } from './data.ts'
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
 import { PROVIDER_PRESETS, presetByBaseUrl } from './provider-presets.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
@@ -544,6 +544,17 @@ export function CommandCard(cmd: BoardCommand, hqSessionId: string | null, servi
     // D27 下令来源徽标：代理舰长席拟令的命令卡挂「代理舰长令」（人类直下不带）。
     cmd.issuedBy !== undefined && cmd.issuedBy !== null && cmd.issuedBy.startsWith('proxy-')
       ? createElement('span', { className: 'war-chip proxy-issued', title: cmd.issuedBy }, activeCopy().commandCard.proxyBadge)
+      : null,
+    // D39 事件源进件徽标：外部来源建卡挂来源 chip（Mandate-lite 可见——title
+    // 带作者+强度；url 在聚焦页）。有扇出进件时 chip 带 +N 计数。
+    cmd.origin !== undefined && cmd.origin !== null
+      ? createElement('span', {
+          className: 'war-chip origin-chip',
+          title: activeCopy().sources.originTitle(
+            cmd.origin.author ?? '?',
+            cmd.origin.strength === 'explicit' ? activeCopy().sources.strengthExplicit : activeCopy().sources.strengthInferred),
+        },
+        `${cmd.origin.source === 'github' ? activeCopy().sources.originGithub : activeCopy().sources.originIngest}${cmd.inputs !== undefined && cmd.inputs !== null && cmd.inputs.length > 0 ? ` +${cmd.inputs.length}` : ''}`)
       : null,
     pips,
     cmd.schedule !== null && cmd.schedule.dispatchedAt === null
@@ -1965,6 +1976,24 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
         // D23 第四刀（2026-09-08）会议室段：介于「你说了什么」与「变成了什么」
         // 之间——命令与任务之间的对话发生地。澄清收敛全程在此同屏。
         meetingRoom('stage-meeting'),
+        // D39-C 外部进件段（订阅扇出展示）：来源线程上的后续评论——外部在这张
+        // 卡上说了什么（事实与反链同屏；context-only 不改状态，聚焦页只读）。
+        // 无进件不出段（与会议室「无事不占位」同纪律）。
+        cmd.inputs !== undefined && cmd.inputs !== null && cmd.inputs.length > 0
+          ? createElement('section', { className: 'war-cd-stage', 'data-stage': 'inputs' },
+              createElement('div', { className: 'war-cd-stage-head' },
+                createElement('span', { className: 'war-cd-stage-name' }, activeCopy().sources.inputsTitle),
+                createElement('span', { className: 'war-cd-stage-conc' },
+                  cmd.origin !== null && cmd.origin.url !== null
+                    ? createElement('a', { href: cmd.origin.url, target: '_blank', rel: 'noopener noreferer' }, cmd.origin.url)
+                    : '')),
+              ...cmd.inputs.map(inp => createElement('div', { key: inp.ts, className: 'war-sub-row' },
+                createElement('span', { className: 'war-sub-label' },
+                  `${inp.author !== null ? activeCopy().sources.inputsFrom(inp.author) : ''} · ${relTime(inp.ts)}`,
+                  inp.url !== null ? createElement('a', { href: inp.url, target: '_blank', rel: 'noopener noreferer' }, ' ↗') : null),
+                createElement('div', { className: 'war-sub-value' }, inp.text),
+              )))
+          : null,
         // ② 任务 · 变成了什么：链上全部任务卡按序拉进来，点任一张卡下展开
         // 「最终计划+该环任务书+验收标准」（reported/failed 环带处理动作）；空链
         // 按状态机给 ghost 卡（计划/等你答问/起草中——任务成形的车间入口）或
@@ -2328,6 +2357,11 @@ function SessionCard(task: BoardTask, attempt: BoardAttempt, onDetail: (task: Bo
     // V24.1 席别徽标：spawn 时 task_conscripted 上账——哪支舰队干的卡面可辨。
     task.executorSeat != null && task.executorSeat !== ''
       ? createElement('span', { className: 'war-chip war-seat-chip', title: activeCopy().session.seatTitle(task.executorSeat) }, task.executorSeat)
+      : null,
+    // D39-B 哨兵徽标：活着但卡住（龄期×日志静默双超窗）——title 带判据全文，
+    // 活性/结算事件自动摘（fold 侧清旗）。
+    task.watchdog !== undefined && task.watchdog !== null && outcomeKey === 'live'
+      ? createElement('span', { className: 'war-chip war-watchdog-chip', title: task.watchdog.reason }, activeCopy().sources.watchdogBadge)
       : null,
   ),
   // V9.11 R2 实时活动行：live attempt 上宿主动词单点计算的 label（思考中/探索中/
@@ -3169,6 +3203,8 @@ function SettingsDrawer(props: {
           createElement('button', { key: 'font-reset', type: 'button', className: 'war-btn', onClick: () => { onFontScale(1) } }, copy.fontReset)),
         createElement('div', { className: 'war-settings-note' }, copy.fontHint),
         narrowActive ? createElement('div', { className: 'war-settings-note' }, copy.narrowNote) : null,
+        // D39 事件源段（GET /sources 不可达=旗 OFF/宿主面——组件自隐藏，不占抽屉）。
+        createElement(SourcesSettingsSection),
         // 定夺授权段（独立形态+代理舰长在役才出）：舰长显式授予/收回代定夺。
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-settings-section', 'data-bridge-auth': '1' }, bcopy.authSection) : null,
         standaloneChrome && !proxyAway ? createElement('div', { className: 'war-skin-row' },
@@ -3188,6 +3224,116 @@ function SettingsDrawer(props: {
     ),
     // D34：模型设置弹窗与抽屉平级渲染（不受抽屉 overflow 裁剪；Esc 栈=后开先关）。
     loopDlgOpen ? createElement(ModelSettingsDialog, { onClose: () => { setLoopDlgOpen(false) } }) : null,
+  )
+}
+
+/** D39 事件源段（设置抽屉）：GitHub 源表单（开关/仓/令牌/名单/档位/回写）+
+ *  通用注入名单 + 统计/最近处置。GET /sources 不可达（旗 OFF/宿主面）=段隐藏
+ *  （诚实降级，不占抽屉）。令牌三态：留空=保持已存，填新=覆盖——永不出 daemon。 */
+function SourcesSettingsSection(): ReactNode {
+  const sc = activeCopy().sources
+  const [view, setView] = useState<SourcesView | null>(null)
+  const [enabled, setEnabled] = useState(false)
+  const [repo, setRepo] = useState('')
+  const [token, setToken] = useState('')
+  const [allow, setAllow] = useState('')
+  const [admission, setAdmission] = useState<'off' | 'observe' | 'auto'>('observe')
+  const [writeback, setWriteback] = useState(false)
+  const [ingestAllow, setIngestAllow] = useState('*')
+  const [note, setNote] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void fetchSourcesView().then(v => {
+      if (v === null) return
+      setView(v)
+      const gh = v.sources.find(s => s.id === 'github')
+      if (gh !== undefined) {
+        setEnabled(gh.configured === true)
+        setRepo(gh.repo ?? '')
+        setAdmission(gh.admission)
+        setWriteback(gh.writeback === true)
+        setAllow(gh.allow.join(','))
+      }
+      const ing = v.sources.find(s => s.id === 'ingest')
+      if (ing !== undefined) setIngestAllow(ing.allow.join(','))
+    })
+  }, [])
+  if (view === null) return null
+  const ghView = view.sources.find(s => s.id === 'github')
+  const field = (label: string, node: ReactNode, hint?: string): ReactNode =>
+    createElement('div', { className: 'war-loopcfg-field' },
+      createElement('span', { className: 'war-hist-neutral' }, label),
+      node,
+      hint !== undefined ? createElement('span', { className: 'war-settings-note' }, hint) : null)
+  const pill = (key: 'off' | 'observe' | 'auto', label: string): ReactNode =>
+    createElement('button', {
+      key, type: 'button', className: `war-skin-opt${admission === key ? ' on' : ''}`,
+      'aria-pressed': admission === key, 'data-source-admission': key,
+      onClick: () => { setAdmission(key) },
+    }, label)
+  const switchRow = (label: string, hint: string, value: boolean, onChange: (v: boolean) => void, mark?: string): ReactNode =>
+    createElement('div', { className: 'war-set-toggle' },
+      createElement('div', { className: 'war-set-toggle-text' },
+        createElement('span', { className: 'war-set-toggle-label' }, label),
+        createElement('span', { className: 'war-set-toggle-hint' }, hint)),
+      createElement('button', {
+        type: 'button', className: `war-switch${value ? ' on' : ''}`, role: 'switch',
+        'aria-checked': value, 'aria-label': label, ...(mark !== undefined ? { 'data-source-toggle': mark } : {}),
+        onClick: () => { onChange(!value) },
+      }, createElement('span', { className: 'war-switch-knob' })))
+  const save = (): void => {
+    if (busy) return
+    setBusy(true)
+    setNote(null)
+    void saveSourcesPatch({
+      github: {
+        enabled, repo: repo.trim(),
+        ...(token.trim() !== '' ? { token: token.trim() } : {}),
+        allow: allow.split(',').map(s => s.trim()).filter(s => s !== ''),
+        admission, writeback,
+      },
+      ingest: { allow: ingestAllow.split(',').map(s => s.trim()).filter(s => s !== '') },
+    }).then(out => {
+      setBusy(false)
+      if (out.ok && out.view !== undefined) {
+        setView(out.view)
+        setToken('')
+        setNote(sc.saved)
+      } else {
+        setNote(sc.saveFail(out.error ?? 'unknown'))
+      }
+    })
+  }
+  return createElement('div', { className: 'war-sources-settings', 'data-sources-settings': '1' },
+    createElement('div', { className: 'war-settings-section' }, sc.settingsSection),
+    createElement('div', { className: 'war-settings-note' }, sc.stats(view.counts.admitted, view.counts.observed, view.counts.filtered, view.counts.fanned)),
+    switchRow(sc.enabled, sc.enabledHint, enabled, setEnabled, 'github'),
+    field(sc.repoLabel, createElement('input', { type: 'text', className: 'war-bcard-input', value: repo, 'data-source-repo': '1', placeholder: sc.repoPh, onChange: e => { setRepo(String(e.target.value ?? '')) } })),
+    field(sc.tokenLabel, createElement('div', { className: 'war-loopcfg' },
+      createElement('input', {
+        type: 'password', className: 'war-bcard-input', value: token, 'data-source-token': '1',
+        placeholder: ghView?.tokenPresent === true ? sc.tokenPresent : sc.tokenMissing,
+        onChange: e => { setToken(String(e.target.value ?? '')) },
+      }),
+      ghView?.tokenPresent === true
+        ? createElement('button', { type: 'button', className: 'war-btn', onClick: () => { if (busy) return; setBusy(true); void saveSourcesPatch({ github: { token: '' } }).then(out => { setBusy(false); if (out.ok && out.view !== undefined) { setView(out.view); setToken('') } }) } }, sc.tokenClear)
+        : null)),
+    field(sc.allowLabel, createElement('input', { type: 'text', className: 'war-bcard-input', value: allow, 'data-source-allow': '1', placeholder: sc.allowPh, onChange: e => { setAllow(String(e.target.value ?? '')) } })),
+    field(sc.admissionLabel,
+      createElement('div', { className: 'war-skin-row' }, pill('off', sc.admissionOff), pill('observe', sc.admissionObserve), pill('auto', sc.admissionAuto)),
+      sc.admissionHint),
+    switchRow(sc.writeback, sc.writebackHint, writeback, setWriteback, 'writeback'),
+    createElement('div', { className: 'war-settings-section' }, sc.ingestTitle),
+    field(sc.ingestAllowLabel, createElement('input', { type: 'text', className: 'war-bcard-input', value: ingestAllow, 'data-source-ingest-allow': '1', placeholder: sc.ingestAllowPh, onChange: e => { setIngestAllow(String(e.target.value ?? '')) } })),
+    createElement('div', { className: 'war-skin-row' },
+      createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-source-save': '1', onClick: save }, sc.save)),
+    note !== null ? createElement('div', { className: 'war-settings-note', role: 'status', 'data-source-note': '1' }, note) : null,
+    view.recent.length > 0
+      ? createElement('div', { className: 'war-loopcfg-field' },
+          createElement('span', { className: 'war-hist-neutral' }, sc.recentTitle),
+          ...view.recent.slice(-5).reverse().map((r, i) => createElement('div', { key: `${r.ts}:${i}`, className: 'war-settings-note' },
+            `${relTime(r.ts)} · @${r.author} · ${r.disposition} · ${r.excerpt.slice(0, 60)}`)))
+      : createElement('div', { className: 'war-settings-note' }, sc.empty),
   )
 }
 

@@ -24,7 +24,11 @@ if (b.status !== 0) fail('build 失败')
 // ③ needles
 const read = rel => readFileSync(join(root, rel), 'utf8')
 const needles = [
-  ['src/daemon.ts', ['registerDashboard', 'warTools', 'ExecutorRegistry', 'patrolTick', '巡检回收', 'staffTick', 'dueScheduledDirectives', 'directive_received', 'staffRetryAfter', 'activeExecutor', '/warroom/api/fleet']],
+  ['src/daemon.ts', ['registerDashboard', 'warTools', 'ExecutorRegistry', 'patrolTick', '巡检回收', 'staffTick', 'dueScheduledDirectives', 'directive_received', 'staffRetryAfter', 'activeExecutor', '/warroom/api/fleet', 'sourceTick', 'watchdogVerdict', 'syncSourceWritebacks']],
+  ['src/sources.ts', ['admitTrigger', 'ingestSourceTrigger', 'foldSources', 'deterministicDirectiveId', 'subscriptionIndex', 'composeWritebackBody', 'WRITEBACK_MAX_ATTEMPTS']],
+  ['src/source-github.ts', ['pollGithub', 'postGithubComment', 'issueNumberFromThreadKey']],
+  ['src/watchdog.ts', ['watchdogVerdict', 'silenceMin', 'ageMin']],
+  ['src/dashboard.ts', ['sources/ingest', 'sourcesSave', 'directiveProjection', 'watchdog']],
   ['src/executor.ts', ['commanderOrderFor', 'opencode', 'mcp-bridge', 'war_claim', 'war_submit', 'injectOpencodeMcp', 'spawnHeadlessOpencode', 'codexAdapter', 'piAdapter', 'injectCodexMcp', 'injectPiExtension', 'codexExecArgs', 'piPrintArgs']],
   ['src/staff.ts', ['staffWorklist', 'staffOrderFor', 'staffPersonaText', 'relayPromptFor', 'war_publish', '没有 war_claim/war_submit']],
   ['src/fleet.ts', ['probeFleet', 'detectOpencodeBin', 'FleetSeatInfo', 'fleetSeatIds']],
@@ -67,6 +71,13 @@ if (process.env.STARDECK_VERIFY_MATRIX === '1') {
     { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, STARDECK_BRIDGE: '0', STARDECK_PROXY: '0', STARDECK_PROXY_VERDICT: '1' } })
   if (bridgeFace.status !== 0) fail('旗面双跑矩阵：舰桥/代理舰长 OFF 面（STARDECK_BRIDGE=0 STARDECK_PROXY=0 STARDECK_PROXY_VERDICT=1）未全绿')
   console.log('旗面双跑矩阵 PASS（舰桥/代理 OFF 面：STARDECK_BRIDGE=0 STARDECK_PROXY=0 STARDECK_PROXY_VERDICT=1）')
+  // D39 事件源/哨兵旗面：SOURCES=0（ingest/sources 端点 404、sourceTick 不转）
+  // 与 WATCHDOG_ENFORCE=1（哨兵升级档）两面也须全绿——off-face 测试显式回置
+  // 环境旗（tests/source-intake.test.ts boot()），套件对此面不敏感即过。
+  const sourcesFace = spawnSync('node', ['--import', 'tsx', '--test', ...readdirSync(join(root, 'tests')).filter(f => f.endsWith('.test.ts')).map(f => join('tests', f))],
+    { cwd: root, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, STARDECK_SOURCES: '0', STARDECK_WATCHDOG_ENFORCE: '1' } })
+  if (sourcesFace.status !== 0) fail('旗面双跑矩阵：事件源 OFF 面（STARDECK_SOURCES=0 STARDECK_WATCHDOG_ENFORCE=1）未全绿')
+  console.log('旗面双跑矩阵 PASS（事件源 OFF 面：STARDECK_SOURCES=0 STARDECK_WATCHDOG_ENFORCE=1）')
 }
 
 // 负针脚：零宿主引用（独立形态完整性铁证——import 层不许有 dsh 痕迹）。

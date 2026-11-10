@@ -85,6 +85,10 @@ export interface BoardCommand {
   awaitingSign?: boolean | null
   /** D27 下令来源（旧命令 null=舰长亲手语义；proxy-…=代理舰长席拟令——卡面徽标）。 */
   issuedBy?: string | null
+  /** D39 事件源进水口：外部来源审计（Mandate-lite；null=舰长亲手）。 */
+  origin?: { source: string; kind: string; url: string | null; author: string | null; threadKey: string | null; strength: 'explicit' | 'inferred'; observedAt: string } | null
+  /** D39-C 订阅扇出：外部源线程后续进件（context-only；null=无进件）。 */
+  inputs?: Array<{ ts: string; text: string; author: string | null; url: string | null }> | null
 }
 
 export interface BoardTask {
@@ -118,6 +122,8 @@ export interface BoardTask {
   reports: BoardReport[]
   comments: BoardComment[]
   closedVerdict: string | null
+  /** D39-B Watchdog 哨兵旗（null=无）：当前 attempt 疑似卡住——卡面徽标数据源。 */
+  watchdog?: { flaggedAt: string; reason: string } | null
 }
 
 /** One externally-attached thread (v3 挂载 — the battlefield's「外部」cards). */
@@ -289,7 +295,7 @@ export interface BridgeChatMessage {
   /** 舰长撤回标记（append-only 墓碑 fold——板上显「已撤回」）。 */
   recalled?: boolean
   commandRefs?: string[]
-  noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene'
+  noticeKind?: 'reported' | 'clarify' | 'retry' | 'terminal' | 'scheduled' | 'scene' | 'intake' | 'watchdog'
   refs?: Record<string, string>
   /** D28 图景附件：沙箱 iframe 渲染的已对账图页（GET /warroom/api/artifact/<id>）。 */
   artifact?: { id: string; title: string }
@@ -316,6 +322,53 @@ export async function fetchLoopView(): Promise<LoopView | null> {
     const d = await res.json() as { ok?: boolean } & LoopView
     return d.ok === true ? d : null
   } catch { return null }
+}
+
+/** D39 事件源视图（GET /sources：源配置/健康/统计+最近处置）。 */
+export interface SourcesView {
+  sources: Array<{
+    id: string
+    kind: string
+    enabled: boolean
+    configured?: boolean
+    repo?: string
+    tokenPresent?: boolean
+    admission: 'off' | 'observe' | 'auto'
+    allow: string[]
+    writeback?: boolean
+    pollSec?: number
+    cursor?: string | null
+    lastPollAt?: string | null
+    lastError?: string | null
+  }>
+  counts: { admitted: number; observed: number; filtered: number; fanned: number }
+  recent: Array<{ ts: string; sourceId: string; kind: string; author: string; excerpt: string; disposition: string; url?: string; directiveId?: string }>
+}
+
+/** D39 拉取事件源视图（旗 OFF/daemon 缺席/形状不对=诚实 null——设置段隐藏）。 */
+export async function fetchSourcesView(): Promise<SourcesView | null> {
+  try {
+    const res = await fetch('/warroom/api/sources')
+    if (!res.ok) return null
+    const d = await res.json() as { ok?: boolean } & Partial<SourcesView>
+    return d.ok === true && Array.isArray(d.sources) && d.counts !== undefined && Array.isArray(d.recent) ? d as SourcesView : null
+  } catch { return null }
+}
+
+/** D39 保存事件源配置（POST /sources 局部补丁——token 留空=保持不变）。 */
+export async function saveSourcesPatch(patch: { github?: Partial<{ enabled: boolean; repo: string; token: string; allow: string[]; admission: 'off' | 'observe' | 'auto'; writeback: boolean }>; ingest?: Partial<{ allow: string[]; admission: 'off' | 'observe' | 'auto' }> }): Promise<{ ok: boolean; error?: string; view?: SourcesView }> {
+  try {
+    const res = await fetch('/warroom/api/sources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    const d = await res.json() as { ok?: boolean; error?: string } & Partial<SourcesView>
+    const viewOk = d.ok === true && Array.isArray(d.sources) && d.counts !== undefined && Array.isArray(d.recent)
+    return { ok: viewOk, ...(viewOk ? { view: d as SourcesView } : {}), ...(!viewOk && d.error !== undefined ? { error: d.error } : {}) }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** D37 保存思考强度档位（POST loop-config 局部补丁——即时生效）。 */

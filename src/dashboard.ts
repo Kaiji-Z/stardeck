@@ -268,6 +268,13 @@ export interface DashboardDeps {
   /** D37 停止钮：掐在途内置 loop 轮。回执=是否确有在途轮被停（false=无在途，
    *  浮窗据此不弹「已停止」假战报）。缺席 → /loop-abort 501（纯路由测试可省略）。 */
   loopAbort?: () => boolean
+  /** D39 事件源进水口：ingest 收口（POST /sources/ingest 的实现）与面板只读
+   *  视图（GET /sources）。缺席 → 两端点 404（纯路由测试可省略）。 */
+  sourceIntake?: (body: { source?: unknown; kind?: unknown; author?: unknown; text?: unknown; url?: unknown; threadKey?: unknown; externalId?: unknown }) => { ok: true; duplicate: boolean; disposition?: string; strength?: string; directiveId?: string } | { ok: false; error: string }
+  sourcesView?: () => { sources: unknown[]; counts: unknown; recent: unknown[] }
+  /** D39 事件源配置写面（设置抽屉）：token 三态=undefined 保持/'' 清除非空新值
+   *  （同 loop 段家法）。缺席 → POST /sources 501。 */
+  sourcesSave?: (patch: { github?: Partial<{ enabled: boolean; repo: string; token: string; apiBase: string; allow: string[]; admission: string; writeback: boolean; pollSec: number }>; ingest?: Partial<{ allow: string[]; admission: string }> }) => { ok: boolean; error?: string; view?: { sources: unknown[]; counts: unknown; recent: unknown[] } }
   /** V18 HQ 工作区注册弹窗：宿主 workspace.list（只读；缺席如实报 null）。 */
   listWorkspaces?: () => Promise<Array<{ workspaceId: string; path: string; title: string; sessionCount: number }> | null>
   /** V18 注册时把真实目录幂等收编进宿主 registry（best-effort，失败不阻塞）。 */
@@ -369,6 +376,9 @@ export function boardProjection(stateDir: string, activityOf?: (sessionId: strin
         reports: task.reports.map(r => ({ ts: r.ts, from: r.from, text: r.text, evidence: r.evidence ?? null, testsTrail: r.testsTrail ?? null })),
         comments: task.comments.map(c => ({ ts: c.ts, from: c.from, text: c.text })),
         closedVerdict: task.closedVerdict ?? null,
+        // D39-B Watchdog 哨兵旗（只读投影）：当前 attempt 疑似卡住——板面
+        // 「疑似卡住」徽标数据源；活性/结算事件清旗（fold 侧）。
+        watchdog: task.watchdog === undefined ? null : { flaggedAt: task.watchdog.flaggedAt, reason: task.watchdog.reason },
       }
     })
 }
@@ -430,6 +440,14 @@ export function directiveProjection(stateDir: string): Record<string, unknown>[]
       status: d.status,
       // D27 下令来源（旧命令 null=舰长亲手语义；proxy-…=代理舰长席拟令）。
       issuedBy: d.issuedBy ?? null,
+      // D39 事件源进水口：外部来源审计（Mandate-lite；human 亲手为 null）。
+      origin: d.origin === undefined ? null : {
+        source: d.origin.source, kind: d.origin.kind,
+        url: d.origin.url ?? null, author: d.origin.author ?? null, threadKey: d.origin.threadKey ?? null,
+        strength: d.origin.strength, observedAt: d.origin.observedAt,
+      },
+      // D39-C 订阅扇出：外部源线程后续进件（context-only，聚焦页「外部进件」段）。
+      inputs: d.inputs === undefined ? null : d.inputs.map(i => ({ ts: i.ts, text: i.text, author: i.author ?? null, url: i.url ?? null })),
       staffSessionId: d.staffSessionId ?? null,
       taskId: d.taskId ?? null,
       cancelledReason: d.cancelledReason ?? null,
@@ -683,6 +701,47 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         if (typeof raw.baseUrl === 'string') overrides.baseUrl = raw.baseUrl
         if (typeof raw.apiKey === 'string') overrides.apiKey = raw.apiKey
         send(200, { ok: true, probe: await deps.loopConfig.test(overrides) })
+        return
+      } else if (r.method === 'POST' && pathname === '/warroom/api/sources/ingest' && deps.sourceIntake !== undefined) {
+        // D39 事件源通用注入契约端点（本地信任面与 /commands 同纪律）：同一
+        // 准入门（allow 名单×off/observe/auto 档）→ admitted 建卡/observed 记录。
+        // 测试/飞书/CI 等后续源的确定性注入通道（superagent Cookbook 对应物）。
+        const body = await readJsonBody(r) as { source?: unknown; kind?: unknown; author?: unknown; text?: unknown; url?: unknown; threadKey?: unknown; externalId?: unknown }
+        const out = deps.sourceIntake(body)
+        if (!out.ok) { send(400, { ok: false, error: out.error }); return }
+        send(200, out)
+        return
+      } else if (r.method === 'GET' && pathname === '/warroom/api/sources' && deps.sourcesView !== undefined) {
+        // D39 事件源面板视图（只读）：源健康/档位/统计 + 最近处置记录。
+        send(200, { ok: true, ...deps.sourcesView() })
+        return
+      } else if (r.method === 'POST' && pathname === '/warroom/api/sources' && deps.sourcesSave !== undefined && deps.sourcesView !== undefined) {
+        // D39 事件源配置写面（设置抽屉「事件源」段）：save 后随回执带最新视图。
+        const raw = await readJsonBody(r) as { github?: Record<string, unknown>; ingest?: Record<string, unknown> }
+        const patch: Parameters<NonNullable<typeof deps.sourcesSave>>[0] = {}
+        const g = raw.github
+        if (g !== null && typeof g === 'object') {
+          const out: Record<string, unknown> = {}
+          if (typeof g.enabled === 'boolean') out.enabled = g.enabled
+          if (typeof g.repo === 'string') out.repo = g.repo.trim()
+          if (typeof g.token === 'string') out.token = g.token.trim()
+          if (typeof g.apiBase === 'string') out.apiBase = g.apiBase.trim()
+          if (Array.isArray(g.allow)) out.allow = g.allow.filter((x): x is string => typeof x === 'string')
+          if (g.admission === 'off' || g.admission === 'observe' || g.admission === 'auto') out.admission = g.admission
+          if (typeof g.writeback === 'boolean') out.writeback = g.writeback
+          if (typeof g.pollSec === 'number' && Number.isFinite(g.pollSec)) out.pollSec = Math.max(15, Math.trunc(g.pollSec))
+          if (Object.keys(out).length > 0) patch.github = out as { enabled?: boolean; repo?: string; token?: string; apiBase?: string; allow?: string[]; admission?: string; writeback?: boolean; pollSec?: number }
+        }
+        const i = raw.ingest
+        if (i !== null && typeof i === 'object') {
+          const out: Record<string, unknown> = {}
+          if (Array.isArray(i.allow)) out.allow = i.allow.filter((x): x is string => typeof x === 'string')
+          if (i.admission === 'off' || i.admission === 'observe' || i.admission === 'auto') out.admission = i.admission
+          if (Object.keys(out).length > 0) patch.ingest = out as { allow?: string[]; admission?: string }
+        }
+        const saved = deps.sourcesSave(patch)
+        if (!saved.ok) { send(400, { ok: false, error: saved.error ?? '保存失败' }); return }
+        send(200, { ok: true, ...(saved.view ?? deps.sourcesView()) })
         return
       } else if (r.method === 'GET' && pathname === '/warroom/api/board') {
         send(200, {
