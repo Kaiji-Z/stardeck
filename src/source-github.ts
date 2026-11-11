@@ -7,8 +7,10 @@
  * - **重启不重放**：游标=已见事件的 max(updated_at)，随 sources.jsonl 走；
  *   首跑无游标=以当下为基线（不倒灌整个仓的历史——第一次连接只收新事件）；
  * - **零新依赖**：node 全局 fetch；apiBase 可指 GHES/本地 mock（测试确定性）；
- * - **限页防洪水**：每轮至多 2 页 issues + 2 页评论（100/页）——积压让游标
- *   逐步消化，不在一轮里爆管。
+ * - **限页防洪水**：每轮至多 2 页 issues（50/页）+ 2 页评论（100/页），升序
+ *   消化——游标只推进到本轮实际读到的最旧一端之后，积压下轮接着啃，不在一
+ *   轮里爆管也不丢事件（desc+封顶会让第 3 页以后的旧事件 updated_at 恒小于
+ *   游标而被 since 永久排除——洪峰静默丢失）。
  * @module stardeck/source-github
  */
 
@@ -91,9 +93,11 @@ export async function pollGithub(args: GithubPollArgs): Promise<GithubPollResult
   const triggers: SourceTrigger[] = []
   let cursor = args.watermark ?? ''
 
-  // ① issues+PR（每轮至多 2 页——增量轮询的常态是 0-1 页）。
+  // ① issues+PR（每轮至多 2 页——增量轮询的常态是 0-1 页）。升序=从 since 起
+  // 由旧到新：封顶时游标停在末页末项，未读的新积压 updated_at > 游标，下轮
+  // 接着收（desc 会把没读到的旧事件永久关在 since 门外）。
   for (let page = 1; page <= 2; page++) {
-    const q = new URLSearchParams({ state: 'open', sort: 'updated', direction: 'desc', per_page: '50', ...(page > 1 ? { page: String(page) } : {}), ...(since !== '' ? { since } : {}) })
+    const q = new URLSearchParams({ state: 'open', sort: 'updated', direction: 'asc', per_page: '50', ...(page > 1 ? { page: String(page) } : {}), ...(since !== '' ? { since } : {}) })
     const out = await ghFetch(fetchImpl, `${base}/repos/${args.repo}/issues?${q.toString()}`, args.token, timeoutMs)
     if (!out.ok) return { triggers: [], watermark: cursor, error: `issues 轮询失败：${out.error}` }
     const items = Array.isArray(out.json) ? out.json as GhIssue[] : []
@@ -120,7 +124,7 @@ export async function pollGithub(args: GithubPollArgs): Promise<GithubPollResult
   // ② 订阅线程的评论（D39-C：只拉有活卡线程——无订阅跳过省配额）。
   const subscribed = args.subscribedThreadKeys ?? []
   if (subscribed.length > 0) {
-    const q = new URLSearchParams({ per_page: '100', ...(since !== '' ? { since } : {}) })
+    const q = new URLSearchParams({ sort: 'updated', direction: 'asc', per_page: '100', ...(since !== '' ? { since } : {}) })
     for (let page = 1; page <= 2; page++) {
       const pq = new URLSearchParams(q)
       if (page > 1) pq.set('page', String(page))

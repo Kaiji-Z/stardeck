@@ -70,7 +70,7 @@ function isolated(): { base: string; stateDir: string; home: string; paths: Reco
   // config 污染坑防疫：进程级 STARDECK_CONFIG 指到隔离目录（POST /fleet 写不进用户全局）。
   process.env.STARDECK_CONFIG = join(stateDir, 'config.json')
   process.env.STARDECK_STAFF = '0'
-  const handle = startDaemon({ port: 41710 + (process.pid % 50), stateDir })
+  const handle = startDaemon({ port: 41810 + (process.pid % 50), stateDir })
   const base = handle.base
   return {
     base, stateDir, home,
@@ -157,7 +157,7 @@ test('runConnect：daemon 缺席——无拉起器诚实报错；已在则拉起
   const home = mkdtempSync(join(tmpdir(), 'sd-conn-uph-'))
   process.env.STARDECK_CONFIG = join(stateDir, 'config.json')
   process.env.STARDECK_STAFF = '0'
-  const handle = startDaemon({ port: 41900 + (process.pid % 50), stateDir })
+  const handle = startDaemon({ port: 41870 + (process.pid % 50), stateDir })
   const paths = { home, xdgConfig: join(home, '.config-x'), codexHome: join(home, '.codex-x'), zcodeHome: join(home, '.zcode-x') }
   try {
     const down = await runConnect('generic', { base: 'http://127.0.0.1:41990', paths })

@@ -68,7 +68,7 @@ test('真 daemon：loop-config 三端点 + /fleet 回读 + key 永不出线', { 
   const gatePort = (gate.address() as { port: number }).port
 
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-loopd-'))
-  const port = 41290 + (process.pid % 50)
+  const port = 41330 + (process.pid % 50)
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3-flash' },
@@ -198,9 +198,10 @@ test('端点缺席面：deps.loopConfig 未注入 → loop-config 路由 404（�
 
 test('端点细节甲：未配 key 的 loop-test 诚实报错 + /fleet 初相（env 模型/none 来源）+ baseUrl 尾斜杠剥除', { timeout: 90_000 }, async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-loopd2-'))
-  // 底数全仓独占（41310 被 mcp-proxy-face/proxy-kick 占用——全量并行下双 daemon
-  // 共听串话，loop-test 打到别家 daemon 拿到 HTTP 404 而非「未配 key」）。
-  const port = 41410 + (process.pid % 50)
+  // 底数全仓独占（旧 41290 与 mcp-proxy-face 41310 间距 20——pid 错位时双 daemon
+  // 共听串话，loop-test 打到别家 daemon 拿到 HTTP 404 而非「未配 key」；全仓
+  // 测试底数已统一 60 网格两两不相交）。
+  const port = 41510 + (process.pid % 50)
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0', STARDECK_PROXY_LOOP_MODEL: 'glm-5.3-air' },
@@ -230,7 +231,7 @@ test('端点细节甲：未配 key 的 loop-test 诚实报错 + /fleet 初相（
 
 test('端点细节乙：apiKey trim 入盘 + 清除（空串）后来源回 none', { timeout: 90_000 }, async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-loopd3-'))
-  const port = 41430 + (process.pid % 50) // 底数独占（41330 与 cli-commands 共用会串话）
+  const port = 41570 + (process.pid % 50) // 底数 60 网格独占（旧 41430 与 loop-config#2 41410 间距 20 会串话）
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_CONFIG: join(stateDir, 'config.json'), STARDECK_STAFF: '0' },

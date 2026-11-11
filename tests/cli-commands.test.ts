@@ -68,7 +68,7 @@ test('CLI：/shutdown 端点优雅停服——daemon 进程限时内真退', { t
 
 test('CLI：status 子命令对真 daemon 输出形状', { timeout: 90_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-cli-status-'))
-  const port = 41330 + (process.pid % 50)
+  const port = 41390 + (process.pid % 50)
   const daemon = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,
     env: { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: join(dir, 'state'), STARDECK_STAFF: '0' },

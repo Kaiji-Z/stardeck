@@ -68,7 +68,7 @@ test('真 daemon：签席→order→reply 收割入账；伪造 token 403；伪�
   mkdirSync(join(stateDir, 'campaigns'), { recursive: true })
   writeFileSync(join(stateDir, 'campaigns', '20261021-seed-forge.jsonl'), JSON.stringify({ type: 'task_created', ts: '2026-10-21T10:00:03.000Z', campaignId: '20261021-seed-forge', title: '种子任务', brief: '身份门考题', acceptance: '伪造收官必须被拒', priority: 'normal' }) + '\n', 'utf8')
 
-  const port = 41110 + (process.pid % 50)
+  const port = 40730 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_BRIDGE: '1', STARDECK_PROXY: '1' }
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })
@@ -142,9 +142,9 @@ test('真 daemon：代理/舰桥旗 OFF——外接席三端点 404（默认面�
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-proxyseat-off-'))
   const stateDir = join(dir, 'state')
   mkdirSync(stateDir, { recursive: true })
-  // 底数独占（41510 全仓唯一）：与 plan-reject 同用 41210 时 pid 同余即同港——
-  // win32 双 daemon 共听串话，旗 OFF 面拿到旗 ON 的 200（并行偶发实证）。
-  const port = 41510 + (process.pid % 50)
+  // 底数 60 网格独占：与别家底数 pid 同余即同港——win32 双 daemon 共听串话，
+  // 旗 OFF 面拿到旗 ON 的 200（并行偶发实证）。
+  const port = 41690 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_BRIDGE: '0', STARDECK_PROXY: '0' }
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })

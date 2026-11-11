@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { injectOpencodeMcp, injectCodexMcp, injectPiExtension, codexExecArgs, piPrintArgs, ADAPTERS, spawnHeadlessOpencode, executorBrief } from '../src/executor.ts'
+import { injectOpencodeMcp, injectPiExtension, codexExecArgs, piPrintArgs, ADAPTERS, spawnHeadlessOpencode, executorBrief } from '../src/executor.ts'
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'stardeck-exec-'))
@@ -73,31 +73,6 @@ test('injectOpencodeMcp：坏 JSON 拒绝覆盖（stardeck 不毁用户配置）
     writeFileSync(join(dir, 'opencode.json'), '{ 不是 json', 'utf8')
     assert.throws(() => injectOpencodeMcp(dir, injectArgs), /拒绝覆盖/)
     assert.equal(readFileSync(join(dir, 'opencode.json'), 'utf8'), '{ 不是 json') // 原样未动
-  } finally { rmSync(dir, { recursive: true, force: true }) }
-})
-
-test('codex 注入（源码实证契约）：.codex/config.toml 写 [mcp_servers.stardeck]，用户 TOML 字节不动 + 首动备份 + 幂等整表替换', () => {
-  const dir = tmpDir()
-  try {
-    const proj = join(dir, 'bound')
-    mkdirSync(join(proj, '.codex'), { recursive: true })
-    const userToml = '# 用户配置\nmodel = "gpt-5"\n[mcp_servers.mine]\ncommand = "keep"\n'
-    writeFileSync(join(proj, '.codex', 'config.toml'), userToml, 'utf8')
-    injectCodexMcp(proj, { http: 'http://h1', agentId: 'oc-a' })
-    let toml = readFileSync(join(proj, '.codex', 'config.toml'), 'utf8')
-    assert.ok(toml.includes('model = "gpt-5"'))
-    assert.ok(toml.includes('[mcp_servers.mine]'))
-    assert.ok(toml.includes('[mcp_servers.stardeck]'))
-    assert.ok(toml.includes('STARDECK_AGENT = "oc-a"'))
-    assert.equal(readFileSync(join(proj, '.stardeck', 'config.toml.pre-stardeck'), 'utf8'), userToml)
-    // 二次征召换身份：stardeck 表整块替换（不叠表），mine 仍在，备份不二次覆盖。
-    injectCodexMcp(proj, { http: 'http://h2', agentId: 'oc-b' })
-    toml = readFileSync(join(proj, '.codex', 'config.toml'), 'utf8')
-    assert.equal(toml.match(/\[mcp_servers\.stardeck\]/g)?.length, 1)
-    assert.ok(toml.includes('STARDECK_AGENT = "oc-b"'))
-    assert.ok(!toml.includes('STARDECK_AGENT = "oc-a"'))
-    assert.ok(toml.includes('[mcp_servers.mine]'))
-    assert.equal(readFileSync(join(proj, '.stardeck', 'config.toml.pre-stardeck'), 'utf8'), userToml)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

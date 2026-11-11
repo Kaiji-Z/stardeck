@@ -15,8 +15,8 @@ import { warTools } from '../src/tools.ts'
 import { appendEvent, loadCampaign } from '../src/events.ts'
 import { appendDirectiveEvent } from "../src/directives.ts"
 import { readFeatureFlags, type FeatureFlags } from '../src/flags.ts'
-import type { Roster } from '../src/roster.ts'
-import type { SubagentsServiceFace } from '../src/subagents.ts'
+import type { Roster } from '../src/units.ts'
+import type { SubagentsServiceFace } from '../src/tools.ts'
 
 const FLAG_OFF: FeatureFlags = readFeatureFlags({})
 

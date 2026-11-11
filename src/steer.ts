@@ -88,6 +88,9 @@ export function startPiRpc(args: { bin: string; argv: string[]; cwd: string; env
   const eventCbs: Array<(line: RpcLine) => void> = []
   let settledResolvers: Array<(v: boolean) => void> = []
   let settled = false
+  // spawn 失败/早退标记：error 事件先于 awaitResponse 注册到达时（坏 bin 时
+  // error 在 t≈0 就 emit），后来的等待者凭此立即判负，不吃满回执超时。
+  let dead = false
   let buf = ''
   child.stdout?.on('data', (chunk: Buffer) => {
     const { lines, rest } = splitRpcFrames(buf + chunk.toString('utf8'))
@@ -116,6 +119,7 @@ export function startPiRpc(args: { bin: string; argv: string[]; cwd: string; env
   })
   child.stderr?.on('data', () => { /* pi 诊断面——不进协议流 */ })
   const kill = (): void => {
+    dead = true
     for (const [, p] of pending) { clearTimeout(p.timer); p.resolve({ ok: false, error: 'RPC 进程已退出' }) }
     pending.clear()
     for (const r of settledResolvers) r(false)
@@ -123,12 +127,19 @@ export function startPiRpc(args: { bin: string; argv: string[]; cwd: string; env
     if (child.exitCode === null) child.kill()
   }
   child.on('exit', kill)
+  // spawn 失败（ENOENT：pi 缺席/坏 executorBin）在 child 上 emit 'error'——
+  // 无监听即 uncaught exception 崩整个 daemon（调用方 try/catch 挡不住异步
+  // 事件）；挂上走 kill() 清 pending。stdin 管道错（spawn 失败后 write/对端
+  // 早断）同法吞掉——投递面按回执判负，不靠流错误。
+  child.on('error', () => { kill() })
+  child.stdin?.on('error', () => { /* spawn 失败/管道早断——kill() 已兜底 */ })
   return {
     child,
     send(frame: RpcFrame): void {
       child.stdin?.write(`${JSON.stringify(frame)}\n`)
     },
     awaitResponse(id: string, timeoutMs: number): Promise<{ ok: boolean; error?: string }> {
+      if (dead) return Promise.resolve({ ok: false, error: 'RPC 进程已退出（spawn 失败或早退）' })
       return new Promise(resolve => {
         const timer = setTimeout(() => {
           pending.delete(id)
@@ -139,6 +150,7 @@ export function startPiRpc(args: { bin: string; argv: string[]; cwd: string; env
     },
     awaitSettled(timeoutMs: number): Promise<boolean> {
       if (settled) return Promise.resolve(true)
+      if (dead) return Promise.resolve(false)
       return new Promise(resolve => {
         const timer = setTimeout(() => {
           settledResolvers = settledResolvers.filter(r => r !== resolve)
@@ -167,7 +179,8 @@ export async function deliverViaRpc(args: {
 }): Promise<{ ok: boolean; error?: string; settled: Promise<boolean> }> {
   const handle = startPiRpc({ bin: args.bin, argv: piRpcArgv({ sessionId: args.sessionId, model: args.model }), cwd: args.cwd, env: args.env })
   const id = `stardeck-${Date.now().toString(36)}`
-  // 给进程一口起跑时间再投帧（stdin 立即可写，但慢启动下首帧可能被吞——重试一次）。
+  // 给进程一口起跑时间再投帧（stdin 立即可写；慢启动吞帧由回执超时判负——
+  // 调用方罚时降级兜底，本层不做自动重发）。
   await new Promise(r => setTimeout(r, 400))
   const frame = args.kind === 'prompt' ? promptFrame(id, args.message) : followUpFrame(id, args.message)
   handle.send(frame)

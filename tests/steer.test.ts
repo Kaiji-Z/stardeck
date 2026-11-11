@@ -288,3 +288,22 @@ test('steer：deliverViaOpencode——观察窗三态（即退 0=速答成立 / 
     rm(dir)
   }
 })
+
+test('steer：坏 bin 的 startPiRpc/deliverViaRpc——error 事件不炸进程、等待者速判负（spawn ENOENT 防崩钉）', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'stardeck-steer-badbin-'))
+  try {
+    // 无监听的 error 事件=uncaught exception 崩测试进程——本测试能走完即证
+    // 监听在位；等待者凭 dead 标记速判负（不吃满 30s 回执超时）。
+    const handle = startPiRpc({ bin: 'stardeck-missing-bin-xyz', argv: [], cwd: dir })
+    const t0 = Date.now()
+    const out = await handle.awaitResponse('probe-1', 10_000)
+    assert.equal(out.ok, false)
+    assert.ok(Date.now() - t0 < 5_000, `坏 bin 速判负：${Date.now() - t0}ms`)
+    handle.kill()
+    const via = await deliverViaRpc({ bin: 'stardeck-missing-bin-xyz', cwd: dir, message: 'm', kind: 'prompt', responseTimeoutMs: 10_000 })
+    assert.equal(via.ok, false)
+    assert.equal(await via.settled, false)
+  } finally {
+    rm(dir)
+  }
+})

@@ -1,5 +1,5 @@
 /**
- * D39 事件源进水口·真 daemon 链路测试（端口底数 **41560** 全仓独占——win32
+ * D39 事件源进水口·真 daemon 链路测试（端口底数 60 网格全仓独占——win32
  * 并行串话坑纪律）：ingest 端点（准入×档位/幂等）、/board 投影 origin、
  * GET /sources 视图、订阅扇出 directive_input 上板、舰桥 intake 机械战报
  * （collectBridgeNoticeEvents 单元面）、收官回写 e2e（mock GitHub 服收帖+
@@ -19,7 +19,7 @@ const { appendDirectiveEvent, readDirectiveEvents } = await import('../src/direc
 const { fanoutTriggerToDirective } = await import('../src/sources.ts')
 const { collectBridgeNoticeEvents, bridgeNoticeKeys, foldBridge } = await import('../src/bridge.ts')
 
-const PORT = 41560 + (process.pid % 50)
+const PORT = 41750 + (process.pid % 50)
 
 function boot(over: Record<string, string | undefined> = {}): { base: string; stateDir: string; close: () => Promise<void> } {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-srcintake-'))

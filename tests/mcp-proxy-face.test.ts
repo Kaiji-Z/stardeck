@@ -71,7 +71,7 @@ test('真 stdio e2e：proxy 脸五件座席工具全链；缺 token -32002；错
   const dir = mkdtempSync(join(tmpdir(), 'stardeck-mcpface-'))
   const stateDir = join(dir, 'state')
   mkdirSync(stateDir, { recursive: true })
-  const port = 41310 + (process.pid % 50)
+  const port = 41450 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const env = { ...process.env, STARDECK_PORT: String(port), STARDECK_STATE_DIR: stateDir, STARDECK_STAFF: '0', STARDECK_BRIDGE: '1', STARDECK_PROXY: '1' }
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], { cwd: repoRoot, env, stdio: 'ignore' })

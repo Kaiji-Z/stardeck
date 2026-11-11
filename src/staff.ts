@@ -742,7 +742,7 @@ export async function spawnStaffAgent(args: StaffSpawnArgs): Promise<ExecutorSes
     http: args.http,
     agentId: args.agentId,
     stateDir: args.stateDir,
-    role: (proxy ? 'proxy' : 'staff') as 'staff' | 'executor' | 'proxy',
+    role: proxy ? 'proxy' : 'staff',
     attachTaskId: args.agentId,
     prompt: proxy ? PROXY_PROMPT : STAFF_PROMPT,
   }

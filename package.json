@@ -19,7 +19,6 @@
   "files": [
     "bin",
     "dist",
-    "src/mcp-bridge.mjs",
     "public",
     "README.md",
     "LICENSE"
@@ -44,7 +43,6 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "three": "^0.180.0",
-    "tsdown": "^0.12.4",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2"
   },

@@ -8,7 +8,7 @@
  */
 import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import http from 'node:http'
@@ -16,9 +16,24 @@ import http from 'node:http'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
 const DIST_DIR = isDev ? join(__dirname, '..', '..', 'dist') : join(process.resourcesPath, 'stardeck', 'dist')
-const ASSETS_DIR = isDev ? join(__dirname, '..', 'assets') : join(process.resourcesPath, 'app', 'assets')
+// getAppPath()：dev=desktop/ 项目根、打包=resources/app.asar——两态一式，且
+// nativeImage/BrowserWindow icon 都认 asar 内路径。旧写法 join(resourcesPath,
+// 'app', …) 在 asar 打包下指向不存在的目录（实体是 app.asar），托盘图标
+// 静默空白——「关窗进托盘」的壳等于失去唯一可见出口。
+const ASSETS_DIR = join(app.getAppPath(), 'assets')
 const CLI = join(DIST_DIR, 'cli.mjs')
-const PORT = Number(process.env.STARDECK_PORT ?? 3970)
+// 端口解析与 daemon loadConfig 同序：env > ~/.stardeck/config.json 的 port >
+// 3970——纯 config 文件改口的用户不再被壳探活 30s 假死（daemon 其实在另一口
+// 正常起服）。STARDECK_CONFIG 指到别处时同样尊重。
+const configFilePort = () => {
+  try {
+    const p = process.env.STARDECK_CONFIG ?? join(app.getPath('home'), '.stardeck', 'config.json')
+    const cfg = JSON.parse(readFileSync(p, 'utf8'))
+    if (typeof cfg?.port === 'number' && cfg.port > 0) return cfg.port
+  } catch { /* 缺省/坏 JSON → 默认口 */ }
+  return undefined
+}
+const PORT = Number(process.env.STARDECK_PORT ?? configFilePort() ?? 3970)
 const BASE = `http://127.0.0.1:${PORT}`
 
 // D30 实弹：本机 AppData 整条是 C:→D: junction——Chromium ProcessSingleton 对
@@ -52,7 +67,7 @@ const showWindow = () => {
     title: 'stardeck · 星舰甲板',
     icon: join(ASSETS_DIR, 'icon.png'),
     autoHideMenuBar: true,
-    backgroundColor: '#f4f1ea',
+    backgroundColor: '#0d0d0f', // D38 深色默认——载入瞬间不闪浅底（与星域画布同阶近黑）
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
   win.setMenu(null)

@@ -1,7 +1,9 @@
 # Changelog
 
-本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（本仓尚无 npm 发布管线，落版本头同时推进 package.json）。
+本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（tag→.github/workflows/publish.yml OIDC trusted publishing 直发 npm，落版本头同时推进 package.json）。
 
+
+## [Unreleased]
 
 ## [0.9.0] - 2026-11-11
 
@@ -146,8 +148,6 @@
 ### 边界（本轮明确不做）
 
 - 分级授权档（经理人自决例行运营）——未来另案拍板；zcode/claude/dsh/codex 四席进程级续跑留在候选清单（携史兜底保功能完整）；npm 发版等舰长令。
-
-## [Unreleased]
 
 ## [0.6.0] - 2026-10-21
 

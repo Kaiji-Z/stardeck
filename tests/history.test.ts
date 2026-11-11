@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
-import { sqliteHistory, readSqliteHistory, piHistoryFromLines, readPiHistory, codexHistoryFromLines, claudeHistoryFromLines, readClaudeHistory } from '../src/history.ts'
+import { sqliteHistory, readSqliteHistory, piHistoryFromLines, readPiHistory, codexHistoryFromLines, claudeHistoryFromLines, readClaudeHistory, readCodexHistory } from '../src/history.ts'
 import { piSessionDirFor } from '../src/executor.ts'
 
 test('sqliteHistory（纯）：text/reasoning/tool 入流、step-start 等杂件跳过、按消息归组', () => {
@@ -140,4 +140,23 @@ test('readClaudeHistory：projects 树递归扫 <会话号>.jsonl（驱动器大
   assert.equal(out.messages.length, 2)
   assert.equal(out.messages[1]!.parts[0]!.text, 'OK')
   assert.throws(() => readClaudeHistory('no-such-id', root), /存档不在/)
+})
+
+test('readCodexHistory：工作区隔离 CODEX_HOME 根优先（V19.13 读取侧对齐）——命中即读，双根皆缺如实报错', t => {
+  const ws = mkdtempSync(join(tmpdir(), 'stardeck-cxws-'))
+  t.after(() => { rmSync(ws, { recursive: true, force: true, maxRetries: 3 }) })
+  const sessions = join(ws, '.stardeck', 'codex-home', 'sessions', '2026', '11', '12')
+  mkdirSync(sessions, { recursive: true })
+  const sid = 'aaaabbbb-cccc-dddd-eeee-ffff00001111'
+  writeFileSync(join(sessions, `rollout-2026-11-12T00-00-00-000Z-${sid}.jsonl`), [
+    JSON.stringify({ timestamp: '2026-11-12T00:00:01.000Z', type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '修 README' }] } }),
+    JSON.stringify({ timestamp: '2026-11-12T00:00:02.000Z', type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '干完了' }] } }),
+  ].join('\n') + '\n', 'utf8')
+  // 旧读取器固定扫 ~/.codex/sessions——隔离树下的 rollout 永远找不到（收割链路断）。
+  const hist = readCodexHistory(sid, ws)
+  assert.equal(hist.executor, 'codex')
+  assert.equal(hist.messages.length, 2)
+  assert.equal(hist.messages[1]!.parts[0]!.text, '干完了')
+  // 双根皆缺：错误文案如实列出两个根（不静默指错目录）。
+  assert.throws(() => readCodexHistory('00000000-1111-2222-3333-444444444444', ws), /存档不在（找了：/)
 })

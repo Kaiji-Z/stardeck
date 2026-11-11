@@ -198,10 +198,10 @@ A feature is done if and only if ALL hold:
 - Command/API to fetch a trace: `GET /warroom/api/trace?commandId=<命令号>`（src/dashboard.ts:720 路由、:315 入参校验）；SSE 事件流 `GET /warroom/api/events`（:731）；板投影 `GET /warroom/api/board`（:367）；原始账本 `loadCampaign`（src/events.ts:29）——跑完后 JSONL 持久可查
 
 ### 8.2 Test infra [auto-fill] — 已填（2026-09-01 执行者轮增补）
-- Regression run command: `pnpm test`（46 文件 **284 测**，含 executor-face 注入器/argv/spawn 纪律 10 测）；回归门 `pnpm verify` 三段式 + **opt-in 旗面双跑矩阵** `STARDECK_VERIFY_MATRIX=1`；实弹门 `pnpm live`（10 断言）+ **opt-in 大副相位** `STARDECK_LIVE_STAFF=1`（+6）+ **opt-in 执行者相位** `STARDECK_LIVE_EXECUTOR=pi`（+5，已证 PASS 15/15；codex 相位受阻于 codex-cli 自身，见 README）；监督门 `pnpm verify:eval`（三维门）
+- Regression run command: `pnpm test`（计数以实跑为准——2026-11 审计轮 617 测；含 executor-face 注入器/argv/spawn 纪律等）；回归门 `pnpm verify` 三段式 + **opt-in 旗面双跑矩阵** `STARDECK_VERIFY_MATRIX=1`；实弹门 `pnpm live`（10 断言）+ **opt-in 大副相位** `STARDECK_LIVE_STAFF=1`（+6）+ **opt-in 执行者相位** `STARDECK_LIVE_EXECUTOR=pi`（+5，已证 PASS 15/15；codex 相位受阻于 codex-cli 自身，见 README）；监督门 `pnpm verify:eval`（三维门）
 - Regression run command: `pnpm test`（package.json:25，`node --import tsx --test tests/*.test.ts`）；回归门 `pnpm verify` 三段式（scripts/verify.mjs:16-57：tests + build + needle 正负针脚）；实弹门 `pnpm live`（package.json:27，scripts/live-check.ts check() 断言台账 :28-31，证据落 `.goal/evidence/live/`）
-- Regression set directory: `tests/`（44 文件，与内核一一对应）+ `tests/prompts-snapshots/`（提示词快照 fixtures）；happy-path 冻结件=tests/e2e-regression.test.ts（上游实例 §8.5 的产物，:12 注释点名）
-- Assertion framework: node:test + node:assert/strict（grep 实测 44/44 文件）——§3.1 确定性层落此
+- Regression set directory: `tests/`（89 文件，与内核一一对应——计数以 `pnpm test` 实跑为准）+ `tests/prompts-snapshots/`（提示词快照 fixtures）；happy-path 冻结件=tests/e2e-regression.test.ts（上游实例 §8.5 的产物，:12 注释点名）
+- Assertion framework: node:test + node:assert/strict——§3.1 确定性层落此
 
 ### 8.3 Flag mechanism [auto-fill] — 已填
 - 定义与读取：`src/flags.ts`——环境变量 `WARROOM_FEATURES`（:20，逗号分隔；`!name` 显式关）→ `readFeatureFlags`（:28，纯显式语义，单测用）/ `runtimeFlags`（:71，DEFAULT_ON_FLAGS :56 为底 + env/extra 覆盖，装配层用）/ `featureEnabled`（:39 判旗）。开发期政策（:44-54）：已交付特性旗默认 ON；**例外 `staff-auto-close` 默认 OFF**（定案 2026-09-01 强制人工验收）。机制本身即上游 VERIFICATION.md §8.3 P0-3 修复的产物（flags.ts:2 注释），已随内核 1:1 迁入本仓——机制在，实例本次重建。
@@ -214,7 +214,7 @@ A feature is done if and only if ALL hold:
 
 ### 8.5 Acceptance criteria [must-ask] — **已答**（8.5.1/8.5.3 继承上游原答；8.5.2 判据本仓化——上游指 .goal/SPEC.md，本仓对位物=自家三门）
 1. Happy path（八步，本仓形态）：下命令（板 UI 指挥中心 / POST commands）→ 大副接令（外聘进程自动分诊 war_triage）→ 澄清/计划呈批（命令卡，L1/L2 走 war_plan）→ 批准（war_publish 携 commandId，L0 直发免批）→ 任务落栏+自动物化工作区+征召外勤 → 外勤作战（war_claim 令牌，in_progress）→ 交证待翻阅（war_submit，KillCredit 机械复核+强制人工验收 reported）→ 舰长收官（war_close_task，closed 归档/释放/接力征召）。
-2. 验收判据 = 本仓三门全绿：`pnpm verify` 三段式（460 测+零宿主负针脚）、`pnpm live` 实弹门（10+6 断言 + attach 面，2026-09-23 回流轮实测 17/17）、八步链路回归 `tests/e2e-regression.test.ts`；涉及 LLM 行为的特性另过 `pnpm verify:eval`（§8.4 三维门）。
+2. 验收判据 = 本仓三门全绿：`pnpm verify` 三段式（617 测+零宿主负针脚）、`pnpm live` 实弹门（10+6 断言起的多相位，计数以实跑为准；2026-09-23 回流轮实测 17/17）、八步链路回归 `tests/e2e-regression.test.ts`；涉及 LLM 行为的特性另过 `pnpm verify:eval`（§8.4 三维门）。
 3. 反验收（MUST NEVER，上游原答继承）：浏览器端出现板投影之外的写操作；测试或脚本伪造事件冒充真实 LLM 行为；降低 verify 断言强度或改判据凑达标。
 
 ### 8.6 Fill status (maintained by the agent)
@@ -274,4 +274,4 @@ Output that violates a red line in VERIFICATION.md §7 is void.
 | P2 | 模糊输入集未建 | 未动——从 live/实弹记录沉淀野输入语料（取材地 `.goal/evidence/live/`） |
 | P2 | live 门外置于 verify（前提=本机 opencode+模型，设计使然） | 记录不改；opt-in 大副相位 `STARDECK_LIVE_STAFF=1` 已接 |
 
-**验证体系现状**：确定性断言（460 测，2026-09-23 回流批后）→ 回归门（三段式+opt-in 旗面矩阵）→ 实弹端到端（10+6 断言）→ 监督层（promptfoo 三维门）——四层齐装。剩余迭代：模糊输入语料、监督用例扩容（每道新特性一正一负）。
+**验证体系现状**：确定性断言（617 测，2026-11 审计轮后——以 `pnpm test` 实跑为准）→ 回归门（三段式+opt-in 旗面矩阵：全旗 OFF 面 + D39 SOURCES=0/WATCHDOG_ENFORCE=1 面）→ 实弹端到端（多相位）→ 监督层（promptfoo 三维门）——四层齐装。剩余迭代：模糊输入语料、监督用例扩容（每道新特性一正一负）。

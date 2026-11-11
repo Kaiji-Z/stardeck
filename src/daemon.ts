@@ -1386,8 +1386,10 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           let entry = readAttachMap(stateDir)[taskId]
           const campaign = loadCampaign(stateDir, taskId)
           if (entry === undefined && campaign.campaignId !== '' && campaign.startedAt !== '' && campaign.workspacePath !== undefined && campaign.workspacePath !== '') {
-            // pi 惰性捕获（会话文件名即号）。
-            const sessionId = piLatestSessionId(piSessionDirFor(campaign.workspacePath))
+            // pi 惰性捕获（会话文件名即号）。下限=任务起跑时刻（对齐 staff/proxy
+            // 惰扫家法）——无下限会把同工作区上一任务的 pi 会话钉死进 attach-map
+            //（工作区复用是正典路径，错映射持久落盘）。
+            const sessionId = piLatestSessionId(piSessionDirFor(campaign.workspacePath), Date.parse(campaign.startedAt) - 5_000)
             if (sessionId !== null) {
               entry = { executor: 'pi', sessionId, workspacePath: campaign.workspacePath, capturedAt: new Date().toISOString() }
               writeAttachMapEntry(stateDir, taskId, entry)
@@ -1497,7 +1499,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       clearInterval(patrol)
       clearInterval(staffTimer)
       clearInterval(sourceTimer)
+      clearInterval(proxyTimer)
       if (staffSession !== undefined) { try { staffSession.child.kill() } catch { /* already gone */ } }
+      if (proxySession !== undefined) { try { proxySession.child.kill() } catch { /* already gone */ } }
       for (const s of registry.live()) { try { s.child.kill() } catch { /* already gone */ } }
       await new Promise<void>(resolve => server.close(() => resolve()))
     },

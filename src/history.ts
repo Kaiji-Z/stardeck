@@ -176,21 +176,29 @@ export function codexHistoryFromLines(lines: ReadonlyArray<string>): HistoryMess
   return out
 }
 
-/** 读 codex 会话存档（rollout-<ts>-<会话号>.jsonl；sessions 树递归找）。 */
-export function readCodexHistory(sessionId: string): SessionHistory {
-  const root = join(homedir(), '.codex', 'sessions')
-  let files: string[] = []
-  try {
-    files = readdirSync(root, { recursive: true }).map(String)
-  } catch {
-    throw new Error(`codex 会话目录不存在：${root}（本机没跑过 codex）`)
+/** 读 codex 会话存档（rollout-<ts>-<会话号>.jsonl；sessions 树递归找）。
+ *  根解析双路（V19.13 隔离 CODEX_HOME 的读取侧对齐——旧读取器固定扫
+ *  ~/.codex/sessions 而 spawn 侧全走隔离 home，历史弹窗/退场收割全断）：
+ *  工作区在场时优先 <工作区>/.stardeck/codex-home/sessions（executor.ts
+ *  codexHomeFor 同路径，读侧不 mkdir）；未命中回退 ~/.codex/sessions
+ *  （历史会话/用户自跑的 codex）。 */
+export function readCodexHistory(sessionId: string, workspacePath?: string): SessionHistory {
+  const roots: string[] = []
+  if (workspacePath !== undefined && workspacePath !== '') roots.push(join(workspacePath, '.stardeck', 'codex-home', 'sessions'))
+  roots.push(join(homedir(), '.codex', 'sessions'))
+  for (const root of roots) {
+    let files: string[]
+    try {
+      files = readdirSync(root, { recursive: true }).map(String)
+    } catch { continue /* 此根不存在——试下一根 */ }
+    const file = files.find(f => f.includes(sessionId) && f.endsWith('.jsonl'))
+    if (file === undefined) continue
+    const lines = readFileSync(join(root, file), 'utf8').split('\n')
+    const messages = codexHistoryFromLines(lines)
+    if (messages.length === 0) throw new Error(`codex 会话 ${sessionId} 存档里没有消息记录`)
+    return { executor: 'codex', sessionId, messages }
   }
-  const file = files.find(f => f.includes(sessionId) && f.endsWith('.jsonl'))
-  if (file === undefined) throw new Error(`codex 会话 ${sessionId} 的存档不在 ${root}`)
-  const lines = readFileSync(join(root, file), 'utf8').split('\n')
-  const messages = codexHistoryFromLines(lines)
-  if (messages.length === 0) throw new Error(`codex 会话 ${sessionId} 存档里没有消息记录`)
-  return { executor: 'codex', sessionId, messages }
+  throw new Error(`codex 会话 ${sessionId} 的存档不在（找了：${roots.join('；')}）`)
 }
 
 /** opencode 会话库候选路径（按序探测；P2-9 平台探测 2026-09-02）：
@@ -352,7 +360,7 @@ export function readDshHistory(sessionId: string, workspacePath: string, root = 
 export function readSessionHistory(executor: string, sessionId: string, workspacePath: string): SessionHistory {
   if (executor === 'zcode') return readSqliteHistory(zcodeDbPath(), 'zcode', sessionId)
   if (executor === 'pi') return readPiHistory(workspacePath, sessionId)
-  if (executor === 'codex') return readCodexHistory(sessionId)
+  if (executor === 'codex') return readCodexHistory(sessionId, workspacePath)
   if (executor === 'claude') return readClaudeHistory(sessionId)
   if (executor === 'dsh') return readDshHistory(sessionId, workspacePath)
   return readSqliteHistory(opencodeDbPath(), 'opencode', sessionId)

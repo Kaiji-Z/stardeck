@@ -95,11 +95,14 @@ export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extensi
   ].join('\n')
 }
 
-/** 按平台常见安装位探测 opencode 二进制（可被 config.executorBin 覆盖）。 */
+/** 按平台常见安装位探测 opencode 二进制（可被 config.executorBin 覆盖）。
+ *  win32 缺省位缺席时回退 PATH 裸名（与 codex/pi/zcode/claude 探测器同法）
+ *  ——scoop/bun/自定义 PATH 装机不再被误判「不可绑」。 */
 export function detectOpencodeBin(configured: string): string {
   if (configured !== '') return configured
   if (process.platform === 'win32') {
-    return join(homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe')
+    const exe = join(homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe')
+    if (existsSync(exe)) return exe
   }
   return 'opencode'
 }
@@ -176,49 +179,12 @@ export function injectOpencodeMcp(workspacePath: string, args: { http: string; a
 }
 
 /** TOML 基本串：JSON 转义与 TOML 双引号串兼容（含 Windows 反斜杠路径）。 */
-function tomlString(value: string): string {
-  return JSON.stringify(value)
-}
-
 /**
- * 项目级 codex 配置注入：.codex/config.toml 写 [mcp_servers.stardeck]
- * （字段实证：codex-rs/config/src/mcp_types.rs——command/args/env；项目层
- * 实证：config_loader_tests.rs:2903）。合并语义：只动 stardeck 一张表——
- * 已有同名表先整块摘除（表头行到下一顶格 [ 段头/EOF）再追加新表，其余
- * 用户内容字节不动；首动备份 .stardeck/config.toml.pre-stardeck。文本级
- * 操作不解析 TOML：用户文件若本身坏 TOML，codex 自会报错——诚实。
+ * codex 席项目级 .codex/config.toml 注 MCP 桥——已退役（V19.13 定案：项目级
+ * config.toml 的 mcp_servers 表在 exec 形态不进模型工具面，注入面改 `-c` 五旗
+ * + http 面正典，见 codexExecArgs）。文本级「摘旧表再追加」同法实现现由
+ * connect.ts 的 writeCodexToml 承担（宿主接入面）。
  */
-export function injectCodexMcp(workspacePath: string, args: { http: string; agentId: string }): void {
-  const cfgPath = join(workspacePath, '.codex', 'config.toml')
-  mkdirSync(join(workspacePath, '.stardeck'), { recursive: true })
-  mkdirSync(join(workspacePath, '.codex'), { recursive: true })
-  const table = [
-    '',
-    '# stardeck 注入（征召时自动重写本表；工具面经 mcp-bridge 回连舰桥）',
-    '[mcp_servers.stardeck]',
-    `command = ${tomlString(process.execPath)}`,
-    `args = [${tomlString(mcpBridgePath())}]`,
-    `env = { STARDECK_HTTP = ${tomlString(args.http)}, STARDECK_AGENT = ${tomlString(args.agentId)} }`,
-    '',
-  ].join('\n')
-  let existing = ''
-  if (existsSync(cfgPath)) {
-    existing = readFileSync(cfgPath, 'utf8')
-    const backup = join(workspacePath, '.stardeck', 'config.toml.pre-stardeck')
-    if (!existsSync(backup)) writeFileSync(backup, existing, 'utf8')
-    // 摘除既有 [mcp_servers.stardeck] 整表（幂等重注入）。
-    const lines = existing.split('\n')
-    const kept: string[] = []
-    let inStardeck = false
-    for (const line of lines) {
-      if (/^\[mcp_servers\.stardeck\]/.test(line.trim())) { inStardeck = true; continue }
-      if (inStardeck && /^\[/.test(line)) inStardeck = false
-      if (!inStardeck) kept.push(line)
-    }
-    existing = kept.join('\n').replace(/\n*$/, '\n')
-  }
-  writeFileSync(cfgPath, `${existing}${table}`, 'utf8')
-}
 
 /**
  * 项目级 pi 扩展注入：.pi/extensions/stardeck-tools.ts 注册
@@ -422,8 +388,8 @@ export interface HeadlessAgentArgs {
   model: string
   executorBin: string
   stateDir: string
-  /** 日志前缀角色（executor-…/staff-…）。 */
-  role: 'executor' | 'staff'
+  /** 日志前缀角色（executor-…/staff-…/proxy-…）。 */
+  role: 'executor' | 'staff' | 'proxy'
   /** 首轮指令（缺省=读简报执行的正典 PROMPT）。 */
   prompt?: string
   /** 附着面：给执行者进程挂原生会话号捕获（写 attach-map.json）。大副不挂。 */
@@ -434,7 +400,7 @@ export interface HeadlessAgentArgs {
 
 /** spawn 后接管日志/退场记账的共用段（三适配器与大副共用）。
  * onStdoutLine=附着面的行钩（opencode 事件流捕原生会话号用，逐行喂给回调）。 */
-function spawnLogged(bin: string, argv: string[], opts: { cwd: string; stateDir: string; role: 'executor' | 'staff'; agentId: string; taskId: string; env?: NodeJS.ProcessEnv; onStdoutLine?: (line: string) => void }): ExecutorSession {
+function spawnLogged(bin: string, argv: string[], opts: { cwd: string; stateDir: string; role: 'executor' | 'staff' | 'proxy'; agentId: string; taskId: string; env?: NodeJS.ProcessEnv; onStdoutLine?: (line: string) => void }): ExecutorSession {
   const logDir = join(opts.stateDir, 'logs')
   mkdirSync(logDir, { recursive: true })
   const logPath = join(logDir, `${opts.role}-${opts.agentId}.log`)

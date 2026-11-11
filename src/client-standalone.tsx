@@ -123,9 +123,14 @@ function App(): ReturnType<typeof createElement> {
     ro.observe(el)
     return () => { ro.disconnect(); if (panelSizeTimer.current !== null) clearTimeout(panelSizeTimer.current) }
   }, [chatOpen, bridgeOn])
-  // 窗口 resize 时重钳球位+刷新窗位（浮窗 style 由视口尺寸推导）。
+  // 窗口 resize 时重钳球位+刷新窗位（浮窗 style 由视口尺寸推导）；浮窗尺寸
+  // 同步重钳——style.width/height 固定时窗口缩小不触发面板的 ResizeObserver，
+  // 旧窗口的钳制值会让 panelStyle 算出负 right/bottom（面板溢出视口遮球不可关）。
   useEffect(() => {
-    const onResize = (): void => { setBallPos(p => clampPos(p)) }
+    const onResize = (): void => {
+      setBallPos(p => clampPos(p))
+      setPanelSize(p => clampPanelSize(p))
+    }
     window.addEventListener('resize', onResize)
     return () => { window.removeEventListener('resize', onResize) }
   }, [])

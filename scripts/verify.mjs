@@ -3,7 +3,8 @@
  *   ① tests 全量（node:test + tsx）
  *   ② build（esbuild 三产物）
  *   ③ needle 断言——正针脚（产品面在场）+ 负针脚（**零宿主引用**：独立形态
- *      的完整性铁证，import 层面不许出现任何 @deepseek-ai/cordis/dsh 字样）
+ *      的完整性铁证，import 层面不许出现任何 @deepseek-ai/cordis 包引用；
+ *      裸 dsh 字样不进正则——dsh 是第七舰队执行者席，仓内合法高频词）
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -29,7 +30,7 @@ const needles = [
   ['src/source-github.ts', ['pollGithub', 'postGithubComment', 'issueNumberFromThreadKey']],
   ['src/watchdog.ts', ['watchdogVerdict', 'silenceMin', 'ageMin']],
   ['src/dashboard.ts', ['sources/ingest', 'sourcesSave', 'directiveProjection', 'watchdog']],
-  ['src/executor.ts', ['commanderOrderFor', 'opencode', 'mcp-bridge', 'war_claim', 'war_submit', 'injectOpencodeMcp', 'spawnHeadlessOpencode', 'codexAdapter', 'piAdapter', 'injectCodexMcp', 'injectPiExtension', 'codexExecArgs', 'piPrintArgs']],
+  ['src/executor.ts', ['commanderOrderFor', 'opencode', 'mcp-bridge', 'war_claim', 'war_submit', 'injectOpencodeMcp', 'spawnHeadlessOpencode', 'codexAdapter', 'piAdapter', 'injectPiExtension', 'codexExecArgs', 'piPrintArgs']],
   ['src/staff.ts', ['staffWorklist', 'staffOrderFor', 'staffPersonaText', 'relayPromptFor', 'war_publish', '没有 war_claim/war_submit']],
   ['src/fleet.ts', ['probeFleet', 'detectOpencodeBin', 'FleetSeatInfo', 'fleetSeatIds']],
   ['src/client/fleet-gate.tsx', ['选择舰队', '开始调度', 'seatStatusOf', 'war-root', '受限 · 实验性']],
@@ -51,8 +52,8 @@ for (const [file, keys] of needles) {
 // ④ 旗面双跑矩阵（VERIFICATION.md §4/P1——opt-in：STARDECK_VERIFY_MATRIX=1）：
 // 同一套回归在「默认旗面」与「全特性旗显式关」下都必须绿。当前套件对
 // process.env 旗面不敏感（单测显式传旗），此段是闭环 SOP 的执法轨——新特性
-// 若开始读环境旗面，这里立即产生信号。旗清单从 src/flags.ts 单一源取（经
-// tsx 动态 import，不手抄清单防漂移）。
+// 若开始读环境旗面，这里立即产生信号。旗清单从 src/flags.ts 单一源取（正则
+// 读数组字面量——不动态 import 是为让本门零依赖可跑，不手抄清单防漂移）。
 if (process.env.STARDECK_VERIFY_MATRIX === '1') {
   // 旗清单从 src/flags.ts 单一源提取（正则读数组字面量，不手抄防漂移）。
   const flagsSrc = read('src/flags.ts')

@@ -10,7 +10,7 @@
  *              setting.json——文件在则双写并补 features.mcp 闸）
  *   opencode → ~/.config/opencode/opencode.json 的 mcp（type:local command 数组）
  *   codex    → CODEX_HOME(~/.codex)/config.toml 的 [mcp_servers.stardeck-proxy]
- *              （文本级摘旧表再追加——injectCodexMcp 同法）
+ *              （文本级摘旧表再追加）
  *   通用/未知 → 打印 {"mcpServers": …} 配置块自拷
  * 写盘纪律承注入家族：首动备份 <file>.pre-stardeck、幂等只刷本键、坏 JSON
  * 拒绝覆盖。红线：配置只含 --face proxy + STARDECK_PROXY_TOKEN——执行者
@@ -100,7 +100,7 @@ function mergeJsonConfig(
   }
 }
 
-/** TOML 文本级注入（injectCodexMcp 同法）：摘旧 [mcp_servers.stardeck-proxy] 整表再追加。 */
+/** TOML 文本级注入：摘旧 [mcp_servers.stardeck-proxy] 整表再追加。 */
 function writeCodexToml(path: string, table: string): { ok: true; path: string } | { ok: false; error: string } {
   try {
     mkdirSync(dirname(path), { recursive: true })

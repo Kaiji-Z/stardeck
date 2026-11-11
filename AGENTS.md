@@ -1,6 +1,6 @@
 # AGENTS.md · stardeck 迭代指引
 
-本仓库是 **stardeck（星舰甲板）——agent 舰队的作战看板与守护进程**，v0.1.0（2026-09-01 交付）。血统：[dsh-plugin-warroom](https://github.com/Kaiji-Z/dsh-plugin-warroom)（DeepSeek Harness 插件「舰桥」）的独立纪元——同一套账本/状态机/KillCredit 内核 1:1 迁移（27 模块原样、tools.ts 仅换 defineTool），脱离宿主、agent 无关。**两仓关系：本仓=主战场；插件仓=守护态（只收 bug 修复）**。新会话在此迭代前先读本文件，再按需读 `HANDOFF.md`（交付快照）与 `DESIGN.md`（决策录）。
+本仓库是 **stardeck（星舰甲板）——agent 舰队的作战看板与守护进程**（v0.1.0 于 2026-09-01 交付；当前 **0.9.0**，npm latest 同步）。血统：[dsh-plugin-warroom](https://github.com/Kaiji-Z/dsh-plugin-warroom)（DeepSeek Harness 插件「舰桥」）的独立纪元——同一套账本/状态机/KillCredit 内核 1:1 迁移（27 模块原样、tools.ts 仅换 defineTool），脱离宿主、agent 无关。**两仓关系：本仓=主战场；插件仓=守护态（只收 bug 修复）**。新会话在此迭代前先读本文件，再按需读 `HANDOFF.md`（交付快照）与 `DESIGN.md`（决策录）。
 
 ## 开局必读
 
@@ -19,9 +19,9 @@
 |---|---|
 | `cli.ts` | **bin 入口**（daemon.ts 是库模块不自动起服——spawn/直跑 daemon.ts 会静默退出，入口永远是 cli.ts）。**D30 开箱面**：start 就绪自动开浏览器（--no-open 关）+ 首跑自动建快捷方式（--no-app 关；`app` 子命令恒建——win32 开始菜单 .lnk 经 PowerShell COM/darwin .command/linux .desktop，dev 态诚实拒绝）+ `connect [host]` 一行接入 |
 | `connect.ts` | **一行接入代理舰长外接席**（D30）：daemon 缺席自拉起（detached spawn node 直跑 bin/stardeck.mjs，dev 态诚实报「先 start」）→ 签席 → 四宿主**声明式文件写**（claude=~/.claude.json mcpServers / zcode=~/.zcode/cli/config.json mcp.servers（CLI setting.json 在则双写+features.mcp）/ opencode=opencode.json mcp 键 / codex=CODEX_HOME config.toml 文本级摘旧表再追加）+ generic 打印块。注入家族纪律（首动备份 *.pre-stardeck/原子/幂等/坏 JSON 拒绝）；红线：注册面只含 --face proxy + STARDECK_PROXY_TOKEN（测试三查钉死） |
-| `daemon.ts` | 装配层（原插件 index.ts 的对位物）：dashboard 鸭子直挂 + war_* 注册表 + MCP/工具调用端点 + 巡检 + 板 UI 静态服务 + 优雅关停 |
-| `executor.ts` | 执行者适配层：ExecutorAdapter **六席**（opencode/pi/zcode/claude 已验证；codex 契约+Windows 阻碍、gemini 契约+本机无 key=实验性）+ ExecutorRegistry（进程即生命）+ executorBrief（mcp/pi-extension 双面措辞）+ spawnHeadlessOpencode/Pi/Zcode/Claude（无头框定法，大副随舰队共用；win32 .cmd 垫片禁裸 spawn，JS 入口经 node；claude 无头必带 `--dangerously-skip-permissions`——默认权限模式拒一切工具，实测确认）+ 五家注入器（bound 逐键/整表合并+首动备份） |
-| `history.ts` | 会话历史只读读取器（零 token 板内弹窗）：zcode/opencode=sqlite 双表（同构 schema，node:sqlite readOnly）、pi/codex/claude=JSONL 各自解析；db 位 env 可覆盖 |
+| `daemon.ts` | 装配层（原插件 index.ts 的对位物）：dashboard 鸭子直挂 + war_* 注册表 + MCP/工具调用端点 + 巡检（patrolTick/staffTick/sourceTick 三节拍）+ Watchdog 记旗 + 板 UI 静态服务 + 优雅关停 |
+| `executor.ts` | 执行者适配层：ExecutorAdapter **八席**（opencode/pi/zcode/claude/codex/dsh 六席稳定可绑；gemini/qwen 契约实装但双席不全、降不可选）+ ExecutorRegistry（进程即生命）+ executorBrief（mcp/pi-extension/http 双面措辞）+ spawnHeadlessOpencode/Pi/Zcode/Claude（无头框定法，大副随舰队共用；win32 .cmd 垫片禁裸 spawn，JS 入口经 node；claude 无头必带 `--dangerously-skip-permissions`——默认权限模式拒一切工具，实测确认）+ 注入器（bound 逐键/整表合并+首动备份；codex 注面已退役改 `-c` 五旗+http 面） |
+| `history.ts` | 会话历史只读读取器（零 token 板内弹窗）：zcode/opencode=sqlite 双表（同构 schema，node:sqlite readOnly）、pi/codex/claude=JSONL 各自解析（codex 双根：工作区隔离 CODEX_HOME 优先、~/.codex 回退）；db 位 env 可覆盖 |
 | `mcp-bridge.mjs` | stdio JSON-RPC 桥（外部 agent 的 MCP server；转发 tools/call 给 daemon HTTP；stdout 只走协议帧）。**D29 双脸**：--face war（缺省=全套 war_* 执行者面，字节不变）/ --face proxy（座席面：get_order/submit_reply/read_board/read_digest/read_ledger 恰五件，STARDECK_PROXY_TOKEN 必填，war_* 一件不出——快照锁在 tests/mcp-proxy-face.test.ts） |
 | `proxy-seats.ts` | **D29 外接代理舰长席**：座席签发/校验（seatId `proxyx-<ts36>` + token 48hex 只现签发响应，落盘 sha256；proxy-seats.json tmp+rename 原子写）。身份门=在册∧**在途祝福**（daemon.proxyGateBless——仅 applyProxyReply 放行的 callTool 过门，伪造 agentId 直打 /tools/call 被拒；攻击负向测试在 tests/proxy-external-seat.test.ts）。契约端点 proxy/seats、order、reply 在 daemon.ts 路由段 |
 | `proxy-loop.ts` | **D29 内置代理舰长 loop**：ai SDK streamText+tool+stepCountIs(6)（参考 lookatstudy agent-engine；@ai-sdk/openai-compatible 钉 1.0.58=spec v2 配 ai 5——v3 是 spec v4 不兼容，实测 UnsupportedModelVersionError）。tools=只读三件（进程内闭包读投影），终答交 applyProxyReply 共用收割；STARDECK_PROXY_LOOP 旗默认 OFF，失手诚实降级舰队席+战报交代；看门狗 AbortSignal.timeout。**D36 流式详情**：onReasoningDelta 思考流（GLM reasoning_content→reasoning-delta part，1.0.58 实测通）+onToolStep 第三参 detail=入参/出参摘要（summarizeStepDetail 压平截断）；**发话即应答**：dashboard POST /bridge/messages 入账成功回调 deps.bridgeKick（daemon 注入 proxyTick）——15s 哨位降兜底，实测 kick→开跑 ~1s（旧口径平均 7.5s+）；loop 收官若还有未答新话 400ms 续跑一轮。**对抗审查 B 定案（回合水位）**：pending 判定=user.ts>proxyWatermark（推进点=入账成功；失手/收割败水位不动→罚时+重试语义保留；冷启对齐旧「末条=agent」语义）——bridgeUnanswered 的时间轴语义治不了「轮中后到的话被末条 agent 顺带判答=静默吞话」（50ms/600ms 连发实弹抓到两连坑：同步抢跑组包→第二句包外；锚续跑又被入口 pending 检查挡回）；bridgeKick 另带 250ms 防抖吸收连发进同轮。回归钉 tests/proxy-kick.test.ts（B1 防抖单轮双话/B2 锚续跑补轮）。**D37 三件**：思考强度 bodyPatch（THINKING_DIALECTS 方言表——GLM 家族 baseUrl+模型串双源嗅探（自建代理端点也认），effort=fast 打 thinking:disabled+reasoning_effort:low、deep 打 enabled，''/缺省零干预；withBodyPatch fetch 包装浅并请求体）+usage 计量（includeUsage 开 stream_options，usage 帧解析**spec v2 面名 inputTokens/outputTokens**——按 v3 的 promptTokens 读=全 undefined 静默，1.0.58 实测）+手动停止（deps.abortSignal 与看门狗 AbortSignal.any 组合；elapsedMs/usage 随回执） |
@@ -33,7 +33,7 @@
 | `dashboard.ts` | /warroom/api/* 全路由（板投影/board SSE/commands/trace/archive…单 prefix、handler 内自分发） |
 | `events.ts`/`directives.ts`/`threads.ts`/`planets.ts` | append-only JSONL 账本 + fold（与插件仓 1:1；directives 侧 V20.1 增澄清协议三事件——requested 挂起/answered 翻 pending/brief_ready 任务书一等事件，fold 向后兼容老账本；V23 增 clarificationRounds 只读派生（每轮问答史——会议室时间轴数据面））。**2026-09-23 回流批**：四路 append 统一走 `jsonl.ts`（尾字节检测治崩断粘连+批量单写原子）；events 增 `isPassVerdict`（词头+句读边界——`includes('通过')` 子串误判退役）；dueScheduledDirectives 只认 draft；directive ID 后缀 8hex |
 | `jsonl.ts` | **JSONL 追加唯一入口**（2026-09-23 对抗审查回流新模块）：appendJsonl 追加前查尾字节非换行先补 \n（崩断半行不再吞后续事件）+ appendJsonlBatch 多事件单次 write（war_publish 的 created+published[+scheduled] 写级原子） |
-| `bridge.ts` | **舰桥频道账本（D26 建、D27 承运层正名）**：bridge.jsonl 三态消息（user/agent 终答全文/system 机械战报）+ fold + bridgeUnanswered 未答判定（**代理舰长**回合出勤依据）+ bridgeHistoryWindow 携史兜底（全席逻辑常驻）+ collectBridgeNoticeEvents/syncBridgeNotices 机械战报五触发（reported/clarify/retry/terminal/scheduled，dedupKey=源事件指纹幂等）；D28 增 agent 话轮 artifact 附件字段（图景引用，条件 spread 旧消息零迁移）+第六种战报 scene（图景对账失败诚实告知）。**D37**：agent 消息 meta 字段（BridgeMessageMeta=模型/思考档/耗时/tokens，随 loop 终答条件 spread——回合事实审计，旧消息零迁移）+estimateTokens 纯函数（CJK 1.1 token/字启发式，占用表底座）+bridgeHistoryWindow 第三参 token 预算闸（窗口 60%，从新往旧装超即停，至少保最新一条——24 条闸之外的第二道闸）。入 revision 六账本——SSE rev 变化即聊天窗/板双刷 |
+| `bridge.ts` | **舰桥频道账本（D26 建、D27 承运层正名）**：bridge.jsonl 三态消息（user/agent 终答全文/system 机械战报）+ fold + bridgeUnanswered 未答判定（**代理舰长**回合出勤依据）+ bridgeHistoryWindow 携史兜底（全席逻辑常驻）+ collectBridgeNoticeEvents/syncBridgeNotices 机械战报五触发（reported/clarify/retry/terminal/scheduled，dedupKey=源事件指纹幂等）；D28 增 agent 话轮 artifact 附件字段（图景引用，条件 spread 旧消息零迁移）+第六种战报 scene（图景对账失败诚实告知）。**D37**：agent 消息 meta 字段（BridgeMessageMeta=模型/思考档/耗时/tokens，随 loop 终答条件 spread——回合事实审计，旧消息零迁移）+estimateTokens 纯函数（CJK 1.1 token/字启发式，占用表底座）+bridgeHistoryWindow 第三参 token 预算闸（窗口 60%，从新往旧装超即停，至少保最新一条——24 条闸之外的第二道闸）。入 revision 七账本（+D39 sources.jsonl）——SSE rev 变化即聊天窗/板双刷 |
 | `scene.ts` | **D28 图景确定性渲染器**（纯函数）：parseSceneDraft（标题+摘要+timeline/stats/cards 围栏，强调包裹容忍）+ renderScene（模型只写草稿、布局/配色/转义全由代码算；零 `<script>` 单文件+内联 CSS；**cards 编号逐一对账 SceneContext，未知即整页拒收**——数字可溯源）。daemon 收割侧落盘 artifacts/scene-<ts36>.html 并经 /warroom/api/artifact/<id> 出线（CSP default-src 'none'） |
 | `rules.ts`/`workspace.ts`/`schedule.ts`/`state.ts`/`fold-cache.ts` | 征召计划/工作区物化与释放/cron/全局态/装载缓存（1:1）。**2026-09-23 回流批**：conscriptPlan 滤 deps（statusOf 给出时跳过 dep-locked）；normalizeFront 大小写折叠（win32/darwin）+ normalizeWorkspaceKey realpath 归一（junction 别名）；workspace 增 isAutoWorkspace 双根守卫；schedule 严格解析+assertCronUsable+horizon 封顶；state 原子写（tmp+rename）；fold-cache 返回 Object.freeze |
 | `prompts.ts`/`persona.ts`/`skill.ts`/`chain-note.ts` | 提示词资产单一源（快照门管辖；1:1） |
@@ -45,8 +45,12 @@
 | `steer.ts` | **pi RPC 客户端**（P0-1）：JSONL 手切帧（禁 readline——U+2028/29）+ prompt/steer/follow_up 帧 + response 按 id 关联 + agent_settled 收割；deliverViaRpc=续跑投递（板内答复/批注转达共用）；deliverViaOpencode=opencode 席 `run -s` 续跑（观察窗三态，D20） |
 | `codex-shim.ts` | **Responses→chat 垫片**（V19.13）：GLM 直驱 codex 的翻译面（SSE created→output_item.done→completed）+ 回环服（`stardeck codex-shim` 启动，仅绑 127.0.0.1，key 不入 codex 配置）；codexShimProviderArgs=适配器 `-c` 五旗 |
 | `backfill.ts` | **attach-map 补齐**（P1-6）：自家日志反查老会话（ses_/sess_/uuid 三席判型），daemon 启动时补缺失键、不覆盖既有 |
+| `sources.ts` | **D39 事件源进水口域层**：foldSources（第七账本 sources.jsonl：seen 幂等键 sourceId::externalId/游标/源配置/回写指纹）+ ingestSourceTrigger 确定性准入门（off/observe/auto——observe=半自主中间档：过门不建卡、板面待批）+ deterministicDirectiveId（cmd-src-<hash10> 崩溃窗自愈）+ subscriptionIndex 订阅扇出（非终态卡 threadKey；directive_input 收上下文≠收授权）+ composeWritebackBody/syncSourceWritebacks 收官回写（机械组稿+路径消毒+终态指纹幂等，3 连败 dropped）+ healOrphanAdmissions 孤儿建卡自愈 |
+| `source-github.ts` | **D39 第一个内建源**：GitHub PAT 轮询（issues+PR+订阅线程评论；since=游标、**升序消化**——desc+页封顶会把第 3 页后的旧事件永久关在 since 门外，2026-11-12 修正）+ postGithubComment 回帖 + issueNumberFromThreadKey；只产 SourceTrigger 不写账本 |
+| `watchdog.ts` | **D39 哨兵判据（纯函数）**：龄期 45min×日志静默 20min 双超窗纯机械判定 task_watchdog_flagged（活性/结算事件清旗、误旗自愈；enforce 旗 kill 走既有失联回收零新机制） |
+| `agent-prompt.ts` | **外接 agent 提示词单一源**（零依赖纯模块，connect --panel 与 fleet-gate 共用；connect 侧载 node 内建故不可进 client bundle） |
 
-tests/ 与内核一一对应（68 文件 460 测，含 2026-09-23 对抗审查回流批 +29 测：war_fail 重派/B3 身份门×5/B4 failed>0/B5 cron 门/B6 发布原子/B9 守卫/B11 定时停用/A1-A8/C1-C8 等）+ `prompts-snapshots/` 快照 fixtures + `staff-snapshots/`；`scripts/verify.mjs` 三段式验收门（+opt-in 旗面双跑矩阵）、`scripts/build.mjs` esbuild 构建、`scripts/live-check.ts` 实弹门（+opt-in 大副相位）。
+tests/ 与内核一一对应（**89 文件 617 测**，1 条环境性跳过（symlink 无特权）；含 2026-09-23 对抗审查回流批/D26-D39 各刀配套——计数以 pnpm test 实跑为准）+ `prompts-snapshots/` 快照 fixtures + `staff-snapshots/`；`scripts/verify.mjs` 三段式验收门（+opt-in 旗面双跑矩阵）、`scripts/build.mjs` esbuild 构建、`scripts/live-check.ts` 实弹门（+opt-in 大副相位）。
 
 ## 架构铁律（改代码前默诵）
 
@@ -76,13 +80,13 @@ cd desktop && npm run dist               # 出 win NSIS 安装器（release/）
 
 - 实弹门外置前提：本机全局 opencode 已装且配好模型（`~/.config/opencode/opencode.json` 的 provider zai-coding-plan/glm-5.3——2026-10-20 z.ai 撤 glm-5.2 换 5.3 家族，配置已追加 `options.baseURL` 钉正端点+glm-5.3 条目，见环境坑）；可用 `STARDECK_MODEL` 覆盖（**D30 舰长令：测试实弹一律 glm-5.3-flash 省 token**）。
 - 实弹门用隔离 stateDir（mkdtemp），跑完自清；PASS 10/10 才算交付。
-- 端口惯例：daemon 默认 3970；live 门 3971；UI 目检脚本用过 3973；connect 测试 41710/41900；desktop 烟测 3992/3993。
+- 端口惯例：daemon 默认 3970；live 门 3971；UI 目检脚本用过 3973；测试端口底数=40730 起全仓 60 网格两两不相交（connect=41810/41870、proxy-external-seat=40730/41690、source-intake=41750）；desktop 烟测 3992/3993。
 
 ## 验证体系（stop-manual-testing 纪律，继承 warroom）
 
 | 层 | 内容 | 命令 |
 |---|---|---|
-| 确定性断言 | node:test + assert/strict，68 文件 460 测（fold/规则/工具链/路由/SSE/快照/大副工单/对抗审查回流批） | `pnpm test` |
+| 确定性断言 | node:test + assert/strict，89 文件 617 测（fold/规则/工具链/路由/SSE/快照/大副工单/对抗审查回流批/D39 进水口四件） | `pnpm test` |
 | 回归门 | 三段式：tests + build + needle（正针脚产品面在场 + **负针脚零宿主引用**）；opt-in 旗面双跑矩阵（VERIFICATION.md §4） | `pnpm verify`（矩阵加 `STARDECK_VERIFY_MATRIX=1`） |
 | 实弹端到端 | 真 opencode/GLM 外勤全链 10 断言 + opt-in 大副相位 5 断言（证据 `.goal/evidence/live/`，gitignored） | `pnpm live`（大副相位加 `STARDECK_LIVE_STAFF=1`） |
 | 监督层 | **已接**（2026-09-01 自 dsh 插件版 1:1 移植 promptfoo 体系）：三维评分（achieve/evidence/boundary ≥7 + 越界一票否决），裁判=glm-5.2+隔离提示词；无网关 env 显式 SKIP 绝不放行；接线/坑录见 `eval/README.md` | `pnpm verify:eval`（env：OPENAI_BASE_URL/OPENAI_API_KEY，本机=LookatStudy/.env 的 Z_AI_* 映射） |
@@ -109,7 +113,7 @@ cd desktop && npm run dist               # 出 win NSIS 安装器（release/）
 - **esbuild 对非法类型语法静默回退**（2026-09-06 实弹确认）：`new Promise<{kind:'x' as const}>` 的类型实参里写 as 表达式（=表达式语法进类型位置，非法 TS）——esbuild 不报错、把 `<...>` 回退解析成**比较表达式** `new Promise() < {...} > (...)`，运行时才炸「Promise resolver undefined is not a function」且行号误导；类型实参保持纯类型（字面量直接写 `'timeout'`），`as const` 只用在表达式侧。tsx 不做类型检查，tsc 门口也拦不住看不见的转换——这类坑靠「同形最小复现二分」定位。
 - **codex 0.153 四坑（V19.13 实弹，DESIGN D21/D22）**：①**win32 新沙箱（restricted token）拦一切 exec_command**——workspace-write 下内联/写脚本/stdin 三连拒，适配器已平台分野（win32=danger-full-access）；②**exec 一次性形态 MCP 工具不进模型工具面**（deferred/tool_search 新架构；我们的桥与标准探测服、`-c` 与 config.toml、fallback 与目录 slug 全不露）——codex 席工具通道走 **http 面正典**（zcode 同款，简报教 STARDECK_HTTP 直连）；③**GLM 直驱靠垫片**：`stardeck codex-shim`（Z_AI_* env）+ `STARDECK_CODEX_SHIM_BASE=http://127.0.0.1:3975/v1` 起 daemon——适配器自动注入 provider 五旗；要完整模型元数据可 slug 骗面（`-m gpt-5.2-codex`，垫片改写真模型）；④**CODEX_HOME 必须隔离**（用户 ~/.codex 里 0.44 时代 chat-wire provider 会让 0.153 启动即硬拒）——codex spawn 一律 `codexHomeFor(workspacePath)` 工作区内自足空 home，不读也不写用户 ~/.codex。0.153.4 隔离前缀在 `clones/codex-0153`（全局 0.44 钉版不动；live 门 codex 相位按席 bin 走 STARDECK_LIVE_CODEX_BIN，别动全局 STARDECK_EXECUTOR_BIN——会误伤主环 opencode）。
 - pnpm v10 默认拦构建脚本——本仓 package.json 已带 `pnpm.onlyBuiltDependencies: ["esbuild"]`，新装依赖若含 postinstall 需补白名单。
-- **verify 全量并行下真 daemon 链路测试偶发快败**（D29 实录：外接席/矩阵 ECONNRESET、任务未物化等，单跑恒绿）——spawn daemon 的测试端口底数必须全仓独占（`41xxx+pid%50` 同底数在 win32 双 daemon 共听串话，已改 proxy-external-seat 旗 OFF 面=41510）；遇败先单跑+复跑再判真回归，别急着改产品代码。
+- **verify 全量并行下真 daemon 链路测试偶发快败**（D29 实录：外接席/矩阵 ECONNRESET、任务未物化等，单跑恒绿）——spawn daemon 的测试端口底数必须全仓独占且两两间距 ≥60（`4xxxx+pid%50` 的 50 宽窗口互不相交——2026-11-12 已全仓重排成 60 网格，旧 desc 间距 20 的对撞是历史串话根源）；遇败先单跑+复跑再判真回归，别急着改产品代码。
 - **happy-dom 渲染 harness 缺 ResizeObserver**（D29）——板坞测量件一挂即渲染崩（测试假白屏）；client-render.test.ts 已补桩，新组件用新浏览器全局时先查 harness。
 - **electron 二进制下载慢→先翻本地缓存**（D30）：`%LOCALAPPDATA%/electron/Cache` 里常已有 win32-x64 zip（本机 44.3.0 命中）——desktop/package.json 直接钉缓存版本，install.js 秒过；CN 网络备选 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`。
 - **Electron chromium 级开关须放 app 路径前面**（D30）：`electron.exe --remote-debugging-port=9224 .` 才生效，放后面成了应用自有 argv（CDP attach 拿不到页面）。
@@ -126,7 +130,7 @@ cd desktop && npm run dist               # 出 win NSIS 安装器（release/）
 
 候选（按建议顺序）：
 1. **中途投递余下席**：板上答复/批注转达扩到 zcode（`--resume --prompt` 视察汇报模式可复用）/claude（`--resume <id> -p`）/dsh（tui resume 通道）——契约已在，逐席实弹取证。
-2. GitHub 仓 + npm 发布（发版需定案——**2026-09-01 项目主已示「先不发版」**；npm 首发前在 npmjs 预登记 pending publisher——参照 warroom 的 release.mjs/OIDC 惯例可整体移植）。
+2. ~~GitHub 仓 + npm 发布~~（**已办**：npm latest=0.9.0、GitHub Release 挂桌面安装器；0.2.3 起 rituals 全自动——release.mjs 一键仪式 + tag→publish.yml OIDC Trusted Publisher 直发 npm）。
 3. 板 UI critique 轮（impeccable 双子代理，warroom 的 35/40 口径）。
 4. codex 席收尾：MCP 工具面待上游 exec 路径（deferred/tool_search 架构不露工具，DESIGN D21 双证）；`codex exec resume <uuid> <prompt>` 中途投递接线（契约已实弹在档）。
 5. 模糊输入集与监督用例扩容（VERIFICATION.md P2）：从 `.goal/evidence/live/` 实弹轨迹沉淀野输入语料；每道新特性补一正一负监督用例。

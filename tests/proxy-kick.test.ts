@@ -48,7 +48,7 @@ function slowGate(streamMs: number): { server: Server; ready: Promise<number>; b
 
 async function withDaemon(gatePort: number, fn: (base: string, stateDir: string) => Promise<void>): Promise<void> {
   const stateDir = mkdtempSync(join(tmpdir(), 'sd-kick-'))
-  const port = 41310 + (process.pid % 50)
+  const port = 41630 + (process.pid % 50)
   const base = `http://127.0.0.1:${port}`
   const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', join(repoRoot, 'src', 'cli.ts'), 'start', '--no-open'], {
     cwd: repoRoot,

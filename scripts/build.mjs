@@ -1,9 +1,9 @@
 /**
- * stardeck 构建（esbuild，无框架）：
- *   dist/cli.mjs + dist/daemon.mjs —— node 侧全量 bundle（运行零依赖）
- *   dist/client.js                —— 板 UI 整页 bundle（react+three 打进去，IIFE）
- *   dist/mcp-bridge.mjs           —— MCP 桥原样拷贝（node 直跑）
- *   dist/public/index.html        —— 静态壳
+ * stardeck 构建（esbuild，无框架）——四产物：
+ *   dist/cli.mjs             —— node 侧全量 bundle（daemon 是库模块打进 cli，运行零依赖）
+ *   dist/client.js           —— 板 UI 整页 bundle（react+three 打进去，IIFE）
+ *   dist/mcp-bridge.mjs      —— MCP 桥原样拷贝（node 直跑）
+ *   dist/public/index.html   —— 静态壳
  */
 import { build } from 'esbuild'
 import { copyFileSync, mkdirSync } from 'node:fs'
