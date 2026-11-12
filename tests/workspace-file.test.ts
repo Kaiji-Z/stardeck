@@ -112,6 +112,34 @@ test('GET /warroom/api/workspace/file：正例 200 + 各越界面 403/404', asyn
   }
 })
 
+test('D41 GET workspace/file：图片扩展名走 base64 data URL（截图板内直渲染）；守卫同一套', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'wsshot-'))
+  try {
+    const ws = join(root, 'tasks', 't1')
+    mkdirSync(join(ws, '.stardeck', 'evidence', 'shots'), { recursive: true })
+    // 最小合法 PNG 头（8 字节签名）——端点只看扩展名不 sniff 内容，这里验的是
+    // 二进制安全通道而非格式校验。
+    writeFileSync(join(ws, '.stardeck', 'evidence', 'shots', 'before.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
+    const handler = makeHandler(root)
+    const enc = (s: string): string => encodeURIComponent(s)
+    const img = await call(handler, getReq(`/warroom/api/workspace/file?ws=${enc(ws)}&name=${enc('.stardeck/evidence/shots/before.png')}`))
+    assert.equal(img.body.ok, true, '图片正例放行')
+    assert.equal(img.body.binary, true, '仍标二进制（旧客户端面不破）')
+    assert.match(String(img.body.dataUrl), /^data:image\/png;base64,/, 'data URL 带 mime 前缀')
+    assert.equal(String(img.body.content), '', '文本通道不出内容')
+    // 大小封顶对图片同样生效（512KB）。
+    const big = Buffer.alloc(512 * 1024 + 1, 7)
+    writeFileSync(join(ws, '.stardeck', 'evidence', 'shots', 'huge.png'), big)
+    const capped = await call(handler, getReq(`/warroom/api/workspace/file?ws=${enc(ws)}&name=${enc('.stardeck/evidence/shots/huge.png')}`))
+    assert.equal(capped.body.ok, false, '超 512KB 图片同守 413 面')
+    assert.match(String(capped.body.error), /512KB/)
+    const trav = await call(handler, getReq(`/warroom/api/workspace/file?ws=${enc(ws)}&name=${enc('../escape.png')}`))
+    assert.equal(trav.body.ok, false, '图片路径穿越同守卫拒绝')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('POST /warroom/api/workspace/reveal：越界拒绝面（放行不测——会真开资源管理器）', async () => {
   const root = mkdtempSync(join(tmpdir(), 'wsrev-'))
   try {

@@ -13,7 +13,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
-import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, fetchSourcesView, markTalking, regradeCommand, saveSourcesPatch, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice, type SourcesView } from './data.ts'
+import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, fetchSourcesView, markTalking, regradeCommand, saveSourcesPatch, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardEvidence, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice, type SourcesView } from './data.ts'
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
 import { PROVIDER_PRESETS, presetByBaseUrl } from './provider-presets.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
@@ -1211,14 +1211,15 @@ function ArtifactPreviewModal(props: { ws: string; name: string; onClose: () => 
   const fp = activeCopy().focusPage
   const title = fp.previewTitle(name)
   const layer = useModalLayer(onClose, title)
-  const [state, setState] = useState<{ phase: 'busy' } | { phase: 'err'; msg: string } | { phase: 'binary' } | { phase: 'empty' } | { phase: 'ok'; content: string }>({ phase: 'busy' })
+  const [state, setState] = useState<{ phase: 'busy' } | { phase: 'err'; msg: string } | { phase: 'binary' } | { phase: 'empty' } | { phase: 'ok'; content: string } | { phase: 'img'; dataUrl: string }>({ phase: 'busy' })
   const [revealNote, setRevealNote] = useState('')
   useEffect(() => {
     setState({ phase: 'busy' })
     fetch(`/warroom/api/workspace/file?ws=${encodeURIComponent(ws)}&name=${encodeURIComponent(name)}`)
-      .then(async r => (await r.json()) as { ok?: boolean; error?: string; binary?: boolean; content?: string })
+      .then(async r => (await r.json()) as { ok?: boolean; error?: string; binary?: boolean; content?: string; dataUrl?: string })
       .then(out => {
         if (out.ok !== true) setState({ phase: 'err', msg: out.error ?? 'unknown' })
+        else if (typeof out.dataUrl === 'string' && out.dataUrl !== '') setState({ phase: 'img', dataUrl: out.dataUrl })
         else if (out.binary === true) setState({ phase: 'binary' })
         else if ((out.content ?? '') === '') setState({ phase: 'empty' })
         else setState({ phase: 'ok', content: out.content! })
@@ -1242,6 +1243,7 @@ function ArtifactPreviewModal(props: { ws: string; name: string; onClose: () => 
       createElement('div', { className: 'war-session-body war-preview-body', 'data-war-preview': name },
         state.phase === 'busy' ? createElement('p', { className: 'war-hq-picker-hint' }, '…')
         : state.phase === 'err' ? createElement('p', { className: 'war-hq-picker-err' }, `${fp.previewFail}${state.msg}`)
+        : state.phase === 'img' ? createElement('img', { className: 'war-preview-img', src: state.dataUrl, alt: name })
         : state.phase === 'binary' ? createElement('p', { className: 'war-hq-picker-hint' }, fp.previewBinary)
         : state.phase === 'empty' ? createElement('p', { className: 'war-hq-picker-hint' }, fp.previewEmpty)
         : /\.(md|markdown)$/i.test(name) ? reportBody(state.content)
@@ -2219,6 +2221,44 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
 // 打回=附言必填（空理由的打回让外勤拿着悬空冒号重做同样的错）。批处理=每行
 // 独立定夺快扫——不设「全部通过」：一握一思是验收宪法的意思，UI 只加速不加橡皮图章。
 
+// D41 前后对比截图条：逐对缩略并排（改前/改后），点击进预览弹窗（data URL 直渲）。
+// 缩略图拉取走只读 workspace/file 端点；缺席（工作区已释放/文件被清）时给文件名
+// 占位——不隐瞒也不炸行。
+function BossShots(props: { ws: string; shots: NonNullable<BoardEvidence['shots']>; onOpen: (name: string) => void }): ReactNode {
+  const { ws, shots, onOpen } = props
+  const br = activeCopy().bossReview
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let alive = true
+    const paths = [...new Set(shots.flatMap(s => [s.before, s.after]))]
+    void Promise.all(paths.map(async p => {
+      try {
+        const r = await fetch(`/warroom/api/workspace/file?ws=${encodeURIComponent(ws)}&name=${encodeURIComponent(p)}`)
+        const out = await r.json() as { ok?: boolean; dataUrl?: string }
+        return [p, out.ok === true && typeof out.dataUrl === 'string' ? out.dataUrl : ''] as const
+      } catch { return [p, ''] as const }
+    })).then(pairs => { if (alive) setUrls(Object.fromEntries(pairs)) }).catch(() => {})
+    return () => { alive = false }
+  }, [ws, shots])
+  const cell = (path: string, label: string): ReactNode =>
+    createElement('button', {
+      key: `${label}-${path}`, type: 'button', className: 'war-boss-shot', title: path,
+      onClick: () => { onOpen(path) },
+    },
+      createElement('span', { className: 'war-boss-shot-label' }, label),
+      urls[path] !== undefined && urls[path] !== ''
+        ? createElement('img', { src: urls[path], alt: `${label} ${path}`, loading: 'lazy' })
+        : createElement('span', { className: 'war-boss-shot-miss' }, path.split(/[\\/]/).pop() ?? path),
+    )
+  return createElement('div', { className: 'war-boss-shots' },
+    ...shots.flatMap((s, i) => [
+      cell(s.before, br.shotBefore),
+      cell(s.after, br.shotAfter),
+      s.caption !== undefined && s.caption !== '' ? createElement('span', { key: `cap-${i}`, className: 'war-boss-shot-cap' }, s.caption) : null,
+    ]),
+  )
+}
+
 function BossReviewRow(props: { task: BoardTask; lineageTitle: string }): ReactNode {
   const { task, lineageTitle } = props
   const br = activeCopy().bossReview
@@ -2230,6 +2270,8 @@ function BossReviewRow(props: { task: BoardTask; lineageTitle: string }): ReactN
   const tests = ev?.tests ?? null
   const testsOk = tests !== null && tests.exitCode === 0 && tests.failed === 0
   const trailOk = last?.testsTrail !== null && last?.testsTrail !== undefined
+  const shots = ev?.shots ?? []
+  const shotsMissing = shots.length === 0 && last?.shotsNote != null
   const files = ev?.files ?? []
   const ws = task.workspacePath ?? ''
   const [expanded, setExpanded] = useState(false)
@@ -2273,6 +2315,14 @@ function BossReviewRow(props: { task: BoardTask; lineageTitle: string }): ReactN
   }
   const conclusion = (last?.text ?? '').split('\n').map(l => l.trim()).find(l => l !== '') ?? ''
   const conclusionClip = conclusion.length > 160 ? `${conclusion.slice(0, 160)}…` : conclusion
+  // D41 耗时行：reported 尝试的领→交时长（末次汇报 ts − 尝试 startedAt）——
+  // 不用 attempt.endedAt（task_closed 会改写它，探查定案）。
+  const reportedAttempt = [...task.attemptLog].reverse().find(a => a.outcome === 'reported') ?? null
+  let durationMs: number | null = null
+  if (reportedAttempt !== null && last !== null) {
+    const start = Date.parse(reportedAttempt.startedAt), end = Date.parse(last.ts)
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) durationMs = end - start
+  }
   return createElement('article', {
     key: `boss-${task.taskId}`,
     className: 'war-boss-row',
@@ -2287,11 +2337,17 @@ function BossReviewRow(props: { task: BoardTask; lineageTitle: string }): ReactN
       ? createElement('p', { className: 'war-boss-conc' }, conclusionClip)
       : null,
     createElement('div', { className: 'war-boss-chips' },
-      checks.length > 0 ? createElement('span', { className: `war-chip ${checksOk ? 'boss-ok' : 'boss-fail'}` }, br.checks(checksPassed, checks.length)) : null,
-      tests !== null ? createElement('span', { className: `war-chip ${testsOk ? 'boss-ok' : 'boss-fail'}` }, br.tests(tests.passed, tests.failed, tests.exitCode)) : createElement('span', { className: 'war-chip boss-warn' }, br.testsNone),
+      checks.length > 0 ? createElement('span', { className: `war-chip boss-self ${checksOk ? '' : 'boss-fail'}`, title: br.selfHint }, `${br.checks(checksPassed, checks.length)} · ${br.bossSelf}`) : null,
+      tests !== null ? createElement('span', { className: `war-chip ${testsOk ? (trailOk ? 'boss-ok' : 'boss-warn boss-self') : 'boss-fail'}`, title: trailOk ? undefined : br.selfHint }, trailOk ? br.tests(tests.passed, tests.failed, tests.exitCode) : `${br.tests(tests.passed, tests.failed, tests.exitCode)} · ${br.bossSelf}`) : createElement('span', { className: 'war-chip boss-warn' }, br.testsNone),
       createElement('span', { className: `war-chip ${trailOk ? 'boss-ok' : 'boss-warn'}` }, trailOk ? br.trailOk : br.trailNone),
+      shots.length > 0 ? createElement('span', { className: 'war-chip boss-ok' }, br.shots(shots.length)) : null,
+      shotsMissing ? createElement('span', { className: 'war-chip boss-warn' }, br.shotsNone) : null,
+      durationMs !== null ? createElement('span', { className: 'war-chip boss-dur' }, `⏱ ${br.fmtDuration(durationMs)}`) : null,
       files.length > 0 ? createElement('span', { className: 'war-chip boss-ok' }, br.files(files.length)) : null,
     ),
+    shots.length > 0 && ws !== ''
+      ? createElement(BossShots, { ws, shots, onOpen: (n): void => { setPreview({ ws, name: n }) } })
+      : null,
     files.length > 0 && ws !== ''
       ? createElement('div', { className: 'war-boss-files' },
           ...files.map(f => createElement('button', {

@@ -127,7 +127,7 @@ export function foldCampaign(campaignId: string, events: ReadonlyArray<WarEvent>
         state.status = 'reported'
         // D39-B：交证即活性证明——清哨兵旗（误旗自愈）。
         state.watchdog = undefined
-        state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}), ...(event.testsTrail !== undefined ? { testsTrail: event.testsTrail } : {}) })
+        state.reports.push({ ts: event.ts, from: event.from, text: event.report, ...(event.evidence !== undefined ? { evidence: event.evidence } : {}), ...(event.testsTrail !== undefined ? { testsTrail: event.testsTrail } : {}), ...(event.shotsNote !== undefined ? { shotsNote: event.shotsNote } : {}) })
         if (event.deliverables !== undefined && event.deliverables.length > 0) {
           state.deliverables = [...state.deliverables, ...event.deliverables]
         }

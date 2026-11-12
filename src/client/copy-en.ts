@@ -619,6 +619,18 @@ export const enWarCopy: WarCopy = {
     knockSend: 'Send back (follow-up order)',
     knockPlaceholder: 'Reason (required) — the agent redoes with it',
     fail: 'Failed: ',
+    bossSelf: 'Self-claimed',
+    selfHint: 'Self-claimed by the agent — not machine-verified; the captain reads the substance',
+    shots: n => `Before/after ${n} pair${n > 1 ? 's' : ''} ✓`,
+    shotsNone: 'No before/after shots',
+    fmtDuration: (ms) => {
+      const s = Math.max(0, Math.round(ms / 1000))
+      if (s < 60) return `${s}s`
+      if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
+      return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+    },
+    shotBefore: 'Before',
+    shotAfter: 'After',
   },
   bridge: {
     title: 'Bridge Channel',
@@ -1343,6 +1355,18 @@ export const enPlainCopy: WarCopy = {
     knockSend: 'Send back (follow-up order)',
     knockPlaceholder: 'Reason (required) — the agent redoes with it',
     fail: 'Failed: ',
+    bossSelf: 'Self-claimed',
+    selfHint: 'Self-claimed by the agent — not machine-verified; the captain reads the substance',
+    shots: n => `Before/after ${n} pair${n > 1 ? 's' : ''} ✓`,
+    shotsNone: 'No before/after shots',
+    fmtDuration: (ms) => {
+      const s = Math.max(0, Math.round(ms / 1000))
+      if (s < 60) return `${s}s`
+      if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
+      return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+    },
+    shotBefore: 'Before',
+    shotAfter: 'After',
   },
   bridge: {
     title: 'Chat Channel',

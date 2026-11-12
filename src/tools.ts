@@ -392,6 +392,52 @@ export function testsTrailVerdict(input: {
   return { ok: true, note: `（取证轨迹已核对：${trailPath} 尾部退出码 ${exit}）` }
 }
 
+/** D41 UI 任务嗅探词表（保守集）：命中 title/acceptance/report 任一即视为 UI
+ * 交付。误命中（如「写 UI 文案」）后果只是多一条注记，无害——宁可多注不可漏注。 */
+const UI_MARKERS = ['UI', 'ui', '界面', '页面', '样式', '前端', '配色', '布局', '组件', '交互']
+
+export function looksLikeUiTask(...texts: Array<string | undefined>): boolean {
+  return UI_MARKERS.some(m => texts.some(t => (t ?? '').includes(m)))
+}
+
+/**
+ * D41 前后对比截图判据（诚实交付：UI 改动无前后对比 ≠ ready——super-agent
+ * 同款先例）：报了 shots 就逐对锚定工作区核存在性，越界/不存在直接打回
+ * （与取证轨迹同权——报了假路径比不报更糟）；全部在场则账本注记核对对数。
+ * UI 任务没报 shots 不硬拒（判据不进 killCreditAllGreen，验收宪法不动），
+ * 账本注记「无前后对比截图」，舰长验收时一眼可见。非 UI 任务零干预。
+ */
+export const NO_SHOTS_NOTE = '（UI 交付无前后对比截图——舰长验收时重点核）'
+
+export function shotsVerdict(input: {
+  shots: ReadonlyArray<{ before: string; after: string; caption?: string }> | undefined
+  workspacePath: string | undefined
+  uiTask: boolean
+}): TrailVerdict {
+  const { shots, workspacePath, uiTask } = input
+  if (shots === undefined || shots.length === 0) {
+    return uiTask ? { ok: true, note: NO_SHOTS_NOTE } : { ok: true, note: '' }
+  }
+  if (workspacePath === undefined) {
+    return { ok: false, reason: '任务未绑定工作区，无法核对前后截图——请去掉 shots 重交，或先让舰长补绑工作区。' }
+  }
+  const wsRoot = resolve(workspacePath)
+  for (const pair of shots) {
+    for (const label of ['before', 'after'] as const) {
+      const p = pair[label]
+      const abs = isAbsolute(p) ? resolve(p) : resolve(wsRoot, p)
+      const rel = relative(wsRoot, abs)
+      if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+        return { ok: false, reason: `前后截图 ${p} 在任务工作区外：截图必须落在工作区内（如 .stardeck/evidence/shots/），越界路径不收。` }
+      }
+      if (!existsSync(abs)) {
+        return { ok: false, reason: `前后截图 ${p} 不存在：UI 改动请真截前后对比图落盘工作区（如 .stardeck/evidence/shots/before.png 与 after.png），evidence 的 shots 数组如实引用——没截图就去掉 shots 重交（账本会标注「无前后对比截图」）。` }
+      }
+    }
+  }
+  return { ok: true, note: `（前后对比截图已核对 ${shots.length} 对）` }
+}
+
 /** Shared close path (V5-R2 抽取)：落 task_closed + 归档 + goal 结算 + 同工作区接力征召。
  * 导出供回归测试直驱（B11 定时停用判定的机检面）。 */
 export async function closeTaskInternal(deps: WarToolsDeps, taskId: string, verdict: string, signal: AbortSignal): Promise<string | undefined> {
@@ -772,7 +818,7 @@ export function warTools(deps: WarToolsDeps) {
       attempt_id: { type: 'string', required: true, description: '领取任务时发的令牌（war_claim 返回的 attemptId）。' },
       report: { type: 'string', required: true, description: '汇报正文（摘要式）。' },
       tests_evidence: { type: 'string', description: 'tests 命令的取证日志相对路径（如 .stardeck/evidence/tests.log）：真实运行的重定向输出，尾部含退出码。缺省时提交仍受理，账本标注「无取证轨迹」——舰长翻阅时一眼可见。' },
-      evidence: { type: 'string', required: true, description: '验收证据的 JSON 文本（必须是字符串，内容为 JSON）：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"npm test","exit_code":0,"passed":8,"failed":0},"diffstat":"3 files changed","files":["a.js"]}——checks 逐项核对验收标准且全部 passed；tests 是真实跑过的命令（exit_code 必须为 0），并配套 tests_evidence 轨迹日志。' },
+      evidence: { type: 'string', required: true, description: '验收证据的 JSON 文本（必须是字符串，内容为 JSON）：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"npm test","exit_code":0,"passed":8,"failed":0},"diffstat":"3 files changed","files":["a.js"],"shots":[{"before":".stardeck/evidence/shots/before.png","after":".stardeck/evidence/shots/after.png"}]}——checks 逐项核对验收标准且全部 passed；tests 是真实跑过的命令（exit_code 必须为 0），并配套 tests_evidence 轨迹日志；UI 改动必须附 shots 前后对比截图（真实截屏落盘工作区并引用路径，舰桥核对存在性——漏报账本会标注「无前后对比截图」）。' },
       deliverables: { type: 'string', description: '任务产出清单的 JSON 文本（字符串）：[{"kind":"files|tests|diffstat|note","summary":"一句话"}]——显示在任务卡上，舰长不进会话记录也能看到交付了什么。' },
     },
     output: {
@@ -804,11 +850,20 @@ export function warTools(deps: WarToolsDeps) {
         claimedAt: task.attemptLog.find(a => a.id === task.attempt?.id)?.startedAt,
       })
       if (!trail.ok) throw new Error(trail.reason)
+      // D41 前后对比截图（诚实交付判据）：报了 shots 逐对核存在性（越界/不存
+      // 在打回）；UI 任务没报则账本注记。不进 killCreditAllGreen——验收宪法不动。
+      const shotsV = shotsVerdict({
+        shots: verdict.evidence.shots,
+        workspacePath: task.workspacePath,
+        uiTask: looksLikeUiTask(task.title, task.acceptance, args.report),
+      })
+      if (!shotsV.ok) throw new Error(shotsV.reason)
       const deliverables = parseDeliverables(args.deliverables, verdict.evidence, new Date().toISOString())
       appendEvent(deps.stateDir, {
         type: 'task_submitted', ts: new Date().toISOString(), campaignId: args.task_id, report: args.report, from: commander.id,
         evidence: verdict.evidence, ...(deliverables.length > 0 ? { deliverables } : {}),
         ...(trail.note !== '' ? { testsTrail: trail.note } : {}),
+        ...(shotsV.note !== '' ? { shotsNote: shotsV.note } : {}),
       })
       const e = verdict.evidence
       const parts = [`验收 ${e.checks.length} 项全过`]
@@ -1942,11 +1997,27 @@ export function parseEvidence(raw: unknown): EvidenceVerdict {
     }
     tests = { command: t.command, exitCode: t.exit_code, passed: t.passed, failed: t.failed }
   }
+  let shots: SubmissionEvidence['shots'] | undefined
+  if (rec.shots !== undefined) {
+    if (!Array.isArray(rec.shots) || rec.shots.length === 0) {
+      return { ok: false, reason: 'shots 格式不对：必须是 [{ before, after, caption? }] 数组（工作区内的截图路径），至少一对；没截图就去掉 shots 字段。' }
+    }
+    for (const s of rec.shots) {
+      if (typeof s !== 'object' || s === null || typeof (s as Record<string, unknown>).before !== 'string' || typeof (s as Record<string, unknown>).after !== 'string') {
+        return { ok: false, reason: 'shots 项格式不对：每项必须是 { before: 路径, after: 路径, caption?: 说明 }——before/after 是工作区内的截图文件路径。' }
+      }
+    }
+    shots = rec.shots.map(s => {
+      const r = s as { before: string; after: string; caption?: unknown }
+      return { before: r.before, after: r.after, ...(typeof r.caption === 'string' ? { caption: r.caption } : {}) }
+    })
+  }
   const evidence: SubmissionEvidence = {
     checks,
     ...(tests !== undefined ? { tests } : {}),
     ...(typeof rec.diffstat === 'string' ? { diffstat: rec.diffstat } : {}),
     ...(Array.isArray(rec.files) && rec.files.every(f => typeof f === 'string') ? { files: rec.files as string[] } : {}),
+    ...(shots !== undefined ? { shots } : {}),
   }
   return { ok: true, evidence }
 }

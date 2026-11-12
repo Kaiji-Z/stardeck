@@ -91,6 +91,7 @@ export function executorBrief(args: ExecutorSpawnArgs, face: 'mcp' | 'pi-extensi
     '- 先 war_claim({task_id}) 领取任务，回执里的 attempt_id 是本次尝试令牌（完整保留，提交时原样携带、不要截断）；',
     '- 完成后 war_submit({task_id, attempt_id, report, evidence}) 交证。report 是给舰长的最终答复，不是过程日志（战报纪律）：①首句直接回答任务的问题（结论先行）；②关键发现/数据列点；③产物逐一给相对路径（如 `report.md`，只指路、不复述文件内容）；④有自然下一步就给一句；⑤不复述执行过程。evidence 必须是 JSON 字符串：{"checks":[{"item":"验收项","passed":true}],"tests":{"command":"你真实跑过的验证命令","exit_code":0,"passed":N,"failed":0},"files":["本次产出文件的相对路径"]}——checks 逐项核对验收标准；tests 命令必须真实跑过且退出码为 0；',
     '- 取证纪律（tests 必须有轨迹）：跑 tests 命令时把输出落到 .stardeck/evidence/tests.log（如 node script.js > .stardeck/evidence/tests.log 2>&1; echo $? >> .stardeck/evidence/tests.log——末尾追加一行退出码），war_submit 多带一个参数 tests_evidence=".stardeck/evidence/tests.log"——舰桥核对轨迹文件存在、mtime 晚于领取时刻且尾部退出码与自报一致。没有轨迹的 tests 声明不算验证（账本会标注，舰长重点盯）；轨迹相悖直接打回；',
+    '- UI 截图纪律（UI 改动必须有前后对比）：改动界面/样式/前端交付时，真实截屏改动前与改动后的界面（存 .stardeck/evidence/shots/before.png 与 after.png），evidence JSON 带 "shots":[{"before":".stardeck/evidence/shots/before.png","after":".stardeck/evidence/shots/after.png"}]——舰桥逐对核对截图存在，报了不存在的路径直接打回；漏报的 UI 交付账本会标注「无前后对比截图」，舰长验收时重点核。',
     '- 修不动就 war_fail({task_id, attempt_id, reason}) 上报失败。舰桥核对的是证据的格式、边界与取证轨迹；内容真实性由舰长翻阅把关——自报与轨迹相悖会被打回重做，不要心存侥幸。',
   ].join('\n')
 }
@@ -242,8 +243,8 @@ export default function (pi: { registerTool: (tool: unknown) => void }) {
   pi.registerTool({
     name: "war_submit",
     label: "war_submit",
-    description: "交证：report 一段人话战报；evidence 必须是 JSON 字符串 {\\"checks\\":[{\\"item\\":\\"验收项\\",\\"passed\\":true}],\\"tests\\":{\\"command\\":\\"真实跑过的验证命令\\",\\"exit_code\\":0,\\"passed\\":N,\\"failed\\":0},\\"files\\":[\\"产出文件相对路径\\"]}，tests 另带 tests_evidence 指向 .stardeck/evidence/ 下的真实运行日志（尾部含退出码行）。舰桥核对格式、边界与轨迹；内容真实性由舰长翻阅把关——不要伪造。",
-    promptSnippet: "war_submit: 按 evidence JSON 形交证，tests 附取证轨迹",
+    description: "交证：report 一段人话战报；evidence 必须是 JSON 字符串 {\\"checks\\":[{\\"item\\":\\"验收项\\",\\"passed\\":true}],\\"tests\\":{\\"command\\":\\"真实跑过的验证命令\\",\\"exit_code\\":0,\\"passed\\":N,\\"failed\\":0},\\"files\\":[\\"产出文件相对路径\\"]}，tests 另带 tests_evidence 指向 .stardeck/evidence/ 下的真实运行日志（尾部含退出码行）；UI 改动另带 shots 前后对比截图（[{\\"before\\":\\".stardeck/evidence/shots/before.png\\",\\"after\\":\\"…/after.png\\"}]，舰桥核对存在性）。舰桥核对格式、边界与轨迹；内容真实性由舰长翻阅把关——不要伪造。",
+    promptSnippet: "war_submit: 按 evidence JSON 形交证，tests 附取证轨迹，UI 附前后截图",
     parameters: Type.Object({
       task_id: Type.String(),
       attempt_id: Type.String(),

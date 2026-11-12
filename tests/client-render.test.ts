@@ -817,17 +817,19 @@ test('D30 死路治理：全席缺席→安装引导卡（复制钮+重新探测
   r2.unmount()
 })
 
-test('D40 老板视图验收行：结论横幅+机械核验芯片+交付物钮在场；两步确认通过打到 war_close_task（手抖闸 800ms）', async () => {
+test('D40 老板视图验收行：结论横幅+机械核验芯片+交付物钮在场；两步确认通过打到 war_close_task（手抖闸 800ms）+ D41 截图/耗时/自报面', async () => {
+  const reportedAt = new Date()
+  const startedAt = new Date(reportedAt.getTime() - (4 * 60 + 12) * 1000)
   boardFixture = {
     ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r-boss',
     commands: [mkCmd({ commandId: 'cmd-b1', text: '给官网换新配色', status: 'approved', taskId: '20261112-boss1' })],
     tasks: [mkTask({
       taskId: '20261112-boss1', title: '换配色', status: 'reported', workspacePath: 'C:/ws/site',
-      attemptLog: [{ id: 'oc-b1', sessionId: 'ses-boss-1', startedAt: new Date().toISOString(), outcome: 'reported' }],
+      attemptLog: [{ id: 'oc-b1', sessionId: 'ses-boss-1', startedAt: startedAt.toISOString(), outcome: 'reported' }],
       reports: [{
-        ts: new Date().toISOString(), from: 'oc-b1', text: '配色已全部替换为新主题，对比度全达标。\n- 产物：theme.css\n测试 12 例全过。',
-        evidence: { checks: [{ item: '配色一致', passed: true }, { item: '对比度达标', passed: true }], tests: { command: 'npm test', exitCode: 0, passed: 12, failed: 0 }, files: ['theme.css'] },
-        testsTrail: '.stardeck/evidence/tests.log', deliverables: null,
+        ts: reportedAt.toISOString(), from: 'oc-b1', text: '配色已全部替换为新主题，对比度全达标。\n- 产物：theme.css\n测试 12 例全过。',
+        evidence: { checks: [{ item: '配色一致', passed: true }, { item: '对比度达标', passed: true }], tests: { command: 'npm test', exitCode: 0, passed: 12, failed: 0 }, files: ['theme.css'], shots: [{ before: '.stardeck/evidence/shots/before.png', after: '.stardeck/evidence/shots/after.png' }] },
+        testsTrail: '.stardeck/evidence/tests.log', shotsNote: '（前后对比截图已核对 1 对）', deliverables: null,
       }],
     })],
     threads: [], roster: [], rosterErrors: [],
@@ -851,6 +853,16 @@ test('D40 老板视图验收行：结论横幅+机械核验芯片+交付物钮�
     assert.ok(/取证轨迹|Evidence trail/.test(text), '取证轨迹芯片')
     assert.ok(/1 个交付物|1 deliverables/.test(text), '交付物计数芯片')
     assert.ok((row.querySelector('.war-boss-file')?.textContent ?? '').includes('theme.css'), '交付物预览钮（文件名）')
+    // D41 三件：前后对比芯片+缩略条 / 耗时芯片 / 自报虚线（checks 恒自报）。
+    assert.ok(/前后对比 1 对|Before\/after 1 pair/.test(text), 'D41 前后对比芯片（机核绿）')
+    assert.ok(/⏱ 4 分 12 秒/.test(text), 'D41 耗时芯片（reported 尝试领→交 4m12s）')
+    assert.ok(/验收标准 2\/2 · 自报/.test(text), 'D41 验收标准芯片带自报尾注（虚线语义并入文字）')
+    const selfChip = row.querySelector('.war-chip.boss-self')
+    assert.ok(selfChip !== null, 'D41 自报虚线芯片在场（.boss-self）')
+    const shotCells = [...row.querySelectorAll('.war-boss-shot')]
+    assert.equal(shotCells.length, 2, 'D41 截图缩略成对（改前/改后）')
+    assert.ok((shotCells[0]?.textContent ?? '').includes('before.png') || (shotCells[0]?.querySelector('.war-boss-shot-miss')?.textContent ?? '').includes('before.png'), '改前缩略（拉取缺席时文件名占位不炸行）')
+    assert.ok((row.textContent ?? '').includes('改后'), '改后标签在场')
     // 展开战报 → md 正文渲染（行内精确点击——「展开战报」非行内唯一标签）。
     const liveRow = document.querySelector('.war-boss-row')
     const expandBtn = [...(liveRow ?? row).querySelectorAll('button')].find(b => /展开战报|Show report/.test((b.textContent ?? '').trim()))

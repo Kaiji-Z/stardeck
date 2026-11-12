@@ -538,6 +538,17 @@ body[data-ds-dark-theme] .war-root{
 .war-chip.boss-ok{color:var(--war-done);border-color:var(--war-done-border)}
 .war-chip.boss-fail{color:var(--war-fail);border-color:var(--war-fail-border);font-weight:600}
 .war-chip.boss-warn{color:var(--war-wait);border-color:var(--war-wait-border)}
+/* D41 自报=虚线框（机核实线的反义——舰长一眼分得开「系统核过」与「他自己说的」） */
+.war-chip.boss-self{border-style:dashed;cursor:help}
+.war-chip.boss-dur{color:var(--war-text-2)}
+/* D41 前后对比截图条：改前/改后成对缩略，点击放大 */
+.war-boss-shots{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.war-boss-shot{position:relative;cursor:zoom-in;border:1px solid var(--war-border-hover);border-radius:var(--war-r-sm);background:var(--war-card-bg);padding:0;overflow:hidden;flex:0 0 auto}
+.war-boss-shot img{display:block;width:132px;height:82px;object-fit:cover;object-position:top left}
+.war-boss-shot-label{position:absolute;left:4px;top:4px;font-size:calc(11px*var(--war-fs));line-height:1.4;color:rgba(255,255,255,.96);background:rgba(15,23,42,.74);border-radius:var(--war-r-sm);padding:1px 6px;z-index:1}
+.war-boss-shot-miss{display:flex;width:132px;height:82px;align-items:center;justify-content:center;font-size:calc(11px*var(--war-fs));color:var(--war-text-3);font-family:var(--war-font-code);padding:4px;word-break:break-all;text-align:center}
+.war-boss-shot-cap{align-self:center;font-size:calc(12px*var(--war-fs));color:var(--war-text-2);max-width:200px}
+.war-preview-img{display:block;max-width:100%;max-height:70vh;object-fit:contain;margin:0 auto;border-radius:var(--war-r-sm)}
 .war-boss-files{display:flex;gap:6px;flex-wrap:wrap}
 .war-boss-file{cursor:pointer;border:1px dashed color-mix(in srgb,var(--war-run-border) 45%,transparent);border-radius:var(--war-r-sm);background:transparent;color:var(--war-run);font-size:calc(12px*var(--war-fs));padding:2px 8px;font-family:var(--war-font-code);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .war-boss-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}

@@ -645,6 +645,14 @@ export interface WarCopy {
     knockSend: string
     knockPlaceholder: string
     fail: string
+    /** D41 自报·机核标记（虚线芯片尾注）。 */
+    bossSelf: string
+    selfHint: string
+    shots: (n: number) => string
+    shotsNone: string
+    fmtDuration: (ms: number) => string
+    shotBefore: string
+    shotAfter: string
   }
   /** D26 舰桥频道（v0.3.0 对话范式的默认脸面）：聊天 chrome 文案。决策卡
    *  词汇（签发五项/验收/选项拼装）复用 focusPage 词典——一处正典不双写。 */
@@ -1407,6 +1415,18 @@ export const warCopy: WarCopy = {
     knockSend: '送达打回（续接令）',
     knockPlaceholder: '打回理由（必填）——外勤小队带着它重做',
     fail: '操作失败：',
+    bossSelf: '自报',
+    selfHint: '此项为外勤小队自报——舰桥未机械核验，内容真实性归舰长翻阅',
+    shots: n => `前后对比 ${n} 对 ✓`,
+    shotsNone: 'UI 无对比截图',
+    fmtDuration: (ms) => {
+      const s = Math.max(0, Math.round(ms / 1000))
+      if (s < 60) return `${s} 秒`
+      if (s < 3600) return `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+      return `${Math.floor(s / 3600)} 时 ${Math.floor((s % 3600) / 60)} 分`
+    },
+    shotBefore: '改前',
+    shotAfter: '改后',
   },
   bridge: {
     title: '舰桥频道',
@@ -2133,6 +2153,18 @@ export const plainCopy: WarCopy = {
     knockSend: '送达退回（续接单）',
     knockPlaceholder: '退回理由（必填）——执行器带着它重做',
     fail: '操作失败：',
+    bossSelf: '自报',
+    selfHint: '此项为执行器自报——未机械核验，内容真实性归你翻阅',
+    shots: n => `前后对比 ${n} 对 ✓`,
+    shotsNone: '界面改动无对比截图',
+    fmtDuration: (ms) => {
+      const s = Math.max(0, Math.round(ms / 1000))
+      if (s < 60) return `${s} 秒`
+      if (s < 3600) return `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+      return `${Math.floor(s / 3600)} 时 ${Math.floor((s % 3600) / 60)} 分`
+    },
+    shotBefore: '改前',
+    shotAfter: '改后',
   },
   bridge: {
     title: '对话频道',

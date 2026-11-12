@@ -373,7 +373,7 @@ export function boardProjection(stateDir: string, activityOf?: (sessionId: strin
           lastReport: u.lastReport ?? null,
         })),
         deliverables: task.deliverables.map(d => ({ kind: d.kind, summary: d.summary, detail: d.detail ?? null, ts: d.ts })),
-        reports: task.reports.map(r => ({ ts: r.ts, from: r.from, text: r.text, evidence: r.evidence ?? null, testsTrail: r.testsTrail ?? null })),
+        reports: task.reports.map(r => ({ ts: r.ts, from: r.from, text: r.text, evidence: r.evidence ?? null, testsTrail: r.testsTrail ?? null, shotsNote: r.shotsNote ?? null })),
         comments: task.comments.map(c => ({ ts: c.ts, from: c.from, text: c.text })),
         closedVerdict: task.closedVerdict ?? null,
         // D39-B Watchdog 哨兵旗（只读投影）：当前 attempt 疑似卡住——板面
@@ -793,6 +793,15 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
           const st = statSync(file)
           if (!st.isFile()) { send(404, { ok: false, error: '不是文件（可能是目录）' }); return }
           if (st.size > 512 * 1024) { send(413, { ok: false, error: '文件超过 512KB，请用「打开所在文件夹」查看' }); return }
+          // D41 前后对比截图：图片扩展名走 base64 data URL（板面 <img> 直渲染；
+          // 守卫与大小封顶与文本路径同一套，无新增放宽面）。
+          const imgExt = /\.(png|jpe?g|gif|webp|bmp|ico)$/i.test(name)
+          if (imgExt) {
+            const buf = readFileSync(file)
+            const mime = /\.png$/i.test(name) ? 'image/png' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : /\.gif$/i.test(name) ? 'image/gif' : /\.webp$/i.test(name) ? 'image/webp' : /\.bmp$/i.test(name) ? 'image/bmp' : 'image/x-icon'
+            send(200, { ok: true, path: file, name, size: st.size, binary: true, content: '', dataUrl: `data:${mime};base64,${buf.toString('base64')}` })
+            return
+          }
           const content = readFileSync(file, 'utf8')
           const binary = content.slice(0, 1024).includes('\0')
           send(200, { ok: true, path: file, name, size: st.size, binary, content: binary ? '' : content })

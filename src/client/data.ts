@@ -25,9 +25,10 @@ export interface BoardEvidence {
   tests?: { command: string; exitCode: number; passed: number; failed: number }
   diffstat?: string
   files?: string[]
+  shots?: Array<{ before: string; after: string; caption?: string }>
 }
 
-export interface BoardReport { ts: string; from: string; text: string; evidence: BoardEvidence | null; testsTrail: string | null }
+export interface BoardReport { ts: string; from: string; text: string; evidence: BoardEvidence | null; testsTrail: string | null; shotsNote: string | null }
 export interface BoardComment { ts: string; from: string; text: string }
 export interface BoardDeliverable { kind: string; summary: string; detail: string | null; ts: string }
 export type BoardQuality = 'common' | 'fine' | 'rare' | 'epic' | 'legendary'
