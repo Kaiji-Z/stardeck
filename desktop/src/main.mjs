@@ -6,7 +6,7 @@
  * 的/别的壳）则复用不重复拉、退出也不杀（谁生的谁管）。
  * @module stardeck-desktop/main
  */
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, Notification } from 'electron'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
@@ -50,10 +50,15 @@ const probe = () => new Promise(resolve => {
 
 const wait = ms => new Promise(r => setTimeout(r, ms))
 
+// Windows toast 需要 AppUserModelID（否则通知走不出/落不了操作中心）。
+app.setAppUserModelId('com.kaiji.stardeck')
+
 let daemon = null          // 本壳拉起的 daemon 子进程（复用既有 daemon 时=null 不代管）
 let win = null
 let tray = null
 let quitting = false
+let attentionTimer = null     // D40 注意力轮询（退出时清）
+let knownAttentionIds = null   // D40 已见定夺指纹集（null=首轮建基线不通知）
 
 const showWindow = () => {
   if (win !== null && !win.isDestroyed()) {
@@ -90,6 +95,7 @@ const killDaemon = () => {
 
 const quitAll = () => {
   quitting = true
+  if (attentionTimer !== null) clearInterval(attentionTimer)
   killDaemon()
   app.quit()
 }
@@ -129,6 +135,46 @@ async function main() {
     { label: '退出（含停服）', click: () => { quitAll() } },
   ]))
   tray.on('click', () => { showWindow() })
+
+  // ── D40 注意力拉取：轮询舰桥 digest（「等你」面）→ 任务栏角标 + 托盘 tooltip
+  // + 新到定夺的系统通知（窗口隐身才推——看得见就不打扰；首 poll 只建基线不
+  // 轰炸）。角标=预渲染点阵 1-9（>9 用 9 号饼：数字是「有账」信号不是精确计数）。
+  const KIND_LABEL = { clarify: '待答复', sign: '待签发', review: '待验收', retry: '待重试' }
+  const pollAttention = async () => {
+    try {
+      const res = await fetch(BASE + '/warroom/api/bridge/digest', { signal: AbortSignal.timeout(4000) })
+      if (!res.ok) return
+      const d = await res.json()
+      const items = Array.isArray(d.pendingDecisions) ? d.pendingDecisions : []
+      const ids = new Set(items.map(it => it.kind + ':' + it.refId))
+      const n = items.length
+      if (win !== null && !win.isDestroyed()) {
+        let badge = null
+        if (n > 0) {
+          const img = nativeImage.createFromPath(join(ASSETS_DIR, 'badge-' + Math.min(n, 9) + '.png'))
+          if (!img.isEmpty()) badge = img
+        }
+        try { win.setOverlayIcon(badge, n > 0 ? n + ' 张卡等你定夺' : '') } catch { /* 窗口已亡 */ }
+      }
+      if (tray !== null) tray.setToolTip(n > 0 ? 'stardeck · ' + n + ' 张卡等你定夺' : 'stardeck · 星舰甲板')
+      if (knownAttentionIds !== null) {
+        const fresh = items.filter(it => !knownAttentionIds.has(it.kind + ':' + it.refId))
+        const hidden = win === null || win.isDestroyed() || !win.isVisible()
+        if (fresh.length > 0 && hidden && Notification.isSupported()) {
+          const byKind = {}
+          for (const it of fresh) byKind[it.kind] = (byKind[it.kind] || 0) + 1
+          const parts = Object.keys(byKind).map(k => byKind[k] + ' ' + (KIND_LABEL[k] || k))
+          const note = new Notification({ title: 'stardeck 等你定夺', body: fresh.length + ' 张新卡：' + parts.join(' · ') })
+          note.on('click', () => { showWindow() })
+          note.show()
+        }
+      }
+      knownAttentionIds = ids
+    } catch { /* daemon 未就绪/网络抖动——下轮再问 */ }
+  }
+  attentionTimer = setInterval(() => { void pollAttention() }, 15000)
+  attentionTimer.unref()
+  void pollAttention()
 }
 
 const gotLock = app.requestSingleInstanceLock()

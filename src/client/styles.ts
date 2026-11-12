@@ -531,6 +531,19 @@ body[data-ds-dark-theme] .war-root{
 .war-actionerr{position:absolute;bottom:136px;right:24px;z-index:70;display:flex;align-items:center;gap:8px;max-width:480px;margin:0;padding:6px 10px;border-radius:var(--war-r-sm);border:1px solid var(--war-fail-border);background:var(--war-pop-bg);color:var(--war-fail);font-size:calc(12px*var(--war-fs));box-shadow:var(--war-shadow-2)}
 .war-legend-btn{padding:2px 10px;line-height:calc(18px*var(--war-fs));font-size:calc(12px*var(--war-fs));flex:0 0 auto}
 
+/* --- D40 老板视图验收行（报告舱「等你定夺」批处理面）--------------------------- */
+.war-boss-row{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--war-border-hover);border-radius:var(--war-r-md);background:var(--war-card-bg);box-shadow:var(--war-shadow-1)}
+.war-boss-conc{margin:0;font-size:calc(13px*var(--war-fs));line-height:1.6;color:var(--war-text-1);font-weight:600}
+.war-boss-chips{display:flex;gap:6px;flex-wrap:wrap}
+.war-chip.boss-ok{color:var(--war-done);border-color:var(--war-done-border)}
+.war-chip.boss-fail{color:var(--war-fail);border-color:var(--war-fail-border);font-weight:600}
+.war-chip.boss-warn{color:var(--war-wait);border-color:var(--war-wait-border)}
+.war-boss-files{display:flex;gap:6px;flex-wrap:wrap}
+.war-boss-file{cursor:pointer;border:1px dashed color-mix(in srgb,var(--war-run-border) 45%,transparent);border-radius:var(--war-r-sm);background:transparent;color:var(--war-run);font-size:calc(12px*var(--war-fs));padding:2px 8px;font-family:var(--war-font-code);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.war-boss-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.war-boss-knock{display:flex;flex-direction:column;gap:6px}
+.war-boss-knock .war-composer{min-height:56px}
+.war-boss-full{border-top:1px dashed var(--war-border-soft);padding-top:8px;font-size:calc(13px*var(--war-fs));line-height:1.6;color:var(--war-text-2);max-height:40vh;overflow-y:auto}
 /* --- V9.2 岛改版（聚焦 chip + 齿轮）---------------------------------------- */
 .war-island-focus{flex:0 1 auto;min-width:0;font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-run-strong);border:1px solid var(--war-run-border);background:var(--war-run-tint);border-radius:var(--war-r-pill);padding:2px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--war-font)}
 .war-island-focus:hover{background:color-mix(in srgb, var(--war-run-border) 18%, transparent)}

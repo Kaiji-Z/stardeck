@@ -62,6 +62,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promis
 const { createElement } = await import('react')
 const { createRoot } = await import('react-dom/client')
 const views = await import('../src/client/views.tsx')
+const { setSkin, setLang } = await import('../src/client/copy.ts')
 
 const services = { standaloneChrome: true } as never as Parameters<typeof views.warView>[0]
 
@@ -814,4 +815,63 @@ test('D30 死路治理：全席缺席→安装引导卡（复制钮+重新探测
     'proxyLoop=true 就绪文案在场',
   )
   r2.unmount()
+})
+
+test('D40 老板视图验收行：结论横幅+机械核验芯片+交付物钮在场；两步确认通过打到 war_close_task（手抖闸 800ms）', async () => {
+  boardFixture = {
+    ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r-boss',
+    commands: [mkCmd({ commandId: 'cmd-b1', text: '给官网换新配色', status: 'approved', taskId: '20261112-boss1' })],
+    tasks: [mkTask({
+      taskId: '20261112-boss1', title: '换配色', status: 'reported', workspacePath: 'C:/ws/site',
+      attemptLog: [{ id: 'oc-b1', sessionId: 'ses-boss-1', startedAt: new Date().toISOString(), outcome: 'reported' }],
+      reports: [{
+        ts: new Date().toISOString(), from: 'oc-b1', text: '配色已全部替换为新主题，对比度全达标。\n- 产物：theme.css\n测试 12 例全过。',
+        evidence: { checks: [{ item: '配色一致', passed: true }, { item: '对比度达标', passed: true }], tests: { command: 'npm test', exitCode: 0, passed: 12, failed: 0 }, files: ['theme.css'] },
+        testsTrail: '.stardeck/evidence/tests.log', deliverables: null,
+      }],
+    })],
+    threads: [], roster: [], rosterErrors: [],
+  }
+  setSkin('war')
+  setLang('zh')
+  const errs: string[] = []
+  const onErr = (e: Event): void => { errs.push(String((e as ErrorEvent).message ?? e)) }
+  window.addEventListener('error', onErr)
+  let r: Rendered | undefined
+  try {
+    r = await render(createElement(views.warView(services)))
+    await new Promise(resolve => setTimeout(resolve, 700))
+    assert.deepEqual(errs, [], '渲染期零 pageerror')
+    const row = document.querySelector('.war-boss-row')
+    assert.ok(row !== null, '老板视图验收行在场（报告舱顶部）')
+    const text = r.text()
+    assert.ok(text.includes('配色已全部替换为新主题'), '结论横幅=战报首行（结论先行正典）')
+    assert.ok(/验收标准 2\/2|Checks 2\/2/.test(text), '验收标准芯片')
+    assert.ok(/测试 12 过 0 败|Tests 12 passed/.test(text), '测试芯片（含 exit 0）')
+    assert.ok(/取证轨迹|Evidence trail/.test(text), '取证轨迹芯片')
+    assert.ok(/1 个交付物|1 deliverables/.test(text), '交付物计数芯片')
+    assert.ok((row.querySelector('.war-boss-file')?.textContent ?? '').includes('theme.css'), '交付物预览钮（文件名）')
+    // 展开战报 → md 正文渲染（行内精确点击——「展开战报」非行内唯一标签）。
+    const liveRow = document.querySelector('.war-boss-row')
+    const expandBtn = [...(liveRow ?? row).querySelectorAll('button')].find(b => /展开战报|Show report/.test((b.textContent ?? '').trim()))
+    expandBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.ok((row.querySelector('.war-boss-full')?.textContent ?? '').includes('测试 12 例全过'), '展开后全文在场')
+    // 两步确认：首击只武装（无网络调用）；<800ms 连击视手抖不上膛后击；≥800ms 再击才发令。
+    calls.length = 0
+    assert.ok(r.click(/通过收官|Accept & close/) !== null, '通过钮在场')
+    await new Promise(resolve => setTimeout(resolve, 60))
+    assert.ok(calls.every(c => !c.url.includes('/tools/call') || (c.body as { name?: string })?.name !== 'war_close_task'), '首击只武装不发令')
+    r.click(/再点一次确认|Click again/) // 间隔 60ms <800ms：手抖闸
+    await new Promise(resolve => setTimeout(resolve, 900))
+    r.click(/再点一次确认|Click again/)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const closeCall = calls.find(c => c.url.includes('/tools/call') && (c.body as { name?: string })?.name === 'war_close_task')
+    assert.ok(closeCall !== undefined, '二击通过 → war_close_task（captain-board 通道）')
+    assert.equal((closeCall!.body as { arguments?: { task_id?: string } }).arguments?.task_id, '20261112-boss1')
+  } finally {
+    r?.unmount()
+    window.removeEventListener('error', onErr)
+    boardFixture = { ok: true, active: true, warRoot: '/tmp/w', hqSessionId: null, revision: 'r0', commands: [], tasks: [], threads: [], roster: [], rosterErrors: [] }
+  }
 })

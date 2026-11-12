@@ -2212,6 +2212,124 @@ export function FocusPage(props: { cmd: BoardCommand; chain: BoardTask[]; status
 
 // --- 任务区 ------------------------------------------------------------------
 
+// --- D40 老板视图验收行（报告舱「等你定夺」批处理面）------------------------------
+// 给舰长看的不是原料而是可视化结论（舰长令 2026-11-12：老板要看的是员工汇报的
+// 可视化结论，不是工作细节/机器码）——结论横幅 + KillCredit 机械核验芯片行 +
+// 交付物预览 + 可展开全文。通过=两步确认（终局定夺不可逆，与舰桥验收卡同闸）；
+// 打回=附言必填（空理由的打回让外勤拿着悬空冒号重做同样的错）。批处理=每行
+// 独立定夺快扫——不设「全部通过」：一握一思是验收宪法的意思，UI 只加速不加橡皮图章。
+
+function BossReviewRow(props: { task: BoardTask; lineageTitle: string }): ReactNode {
+  const { task, lineageTitle } = props
+  const br = activeCopy().bossReview
+  const last = task.reports.length > 0 ? task.reports[task.reports.length - 1]! : null
+  const ev = last?.evidence ?? null
+  const checks = ev?.checks ?? []
+  const checksPassed = checks.filter(c => c.passed).length
+  const checksOk = checks.length > 0 && checksPassed === checks.length
+  const tests = ev?.tests ?? null
+  const testsOk = tests !== null && tests.exitCode === 0 && tests.failed === 0
+  const trailOk = last?.testsTrail !== null && last?.testsTrail !== undefined
+  const files = ev?.files ?? []
+  const ws = task.workspacePath ?? ''
+  const [expanded, setExpanded] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const armedAt = useRef(0)
+  const confirmTimer = useRef<number | null>(null)
+  useEffect(() => () => { if (confirmTimer.current !== null) clearTimeout(confirmTimer.current) }, [])
+  const [busy, setBusy] = useState(false)
+  const [knockOpen, setKnockOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [status, setStatus] = useState('')
+  const [preview, setPreview] = useState<{ ws: string; name: string } | null>(null)
+  const accept = (): void => {
+    if (busy) return
+    if (!confirming) {
+      setConfirming(true)
+      armedAt.current = Date.now()
+      if (confirmTimer.current !== null) clearTimeout(confirmTimer.current)
+      confirmTimer.current = window.setTimeout(() => { setConfirming(false); confirmTimer.current = null }, 5000)
+      return
+    }
+    if (Date.now() - armedAt.current < 800) return
+    if (confirmTimer.current !== null) { clearTimeout(confirmTimer.current); confirmTimer.current = null }
+    setBusy(true)
+    setStatus('')
+    void closeTask(task.taskId, '通过收官——板面老板视图验收').then(out => {
+      if (!out.ok) { setStatus(`${br.fail}${out.error ?? ''}`); setBusy(false) }
+    })
+  }
+  const knock = (): void => {
+    const reason = note.trim()
+    if (busy || reason === '') return
+    setBusy(true)
+    setStatus('')
+    void (async () => {
+      const out = await createCommand(`${activeCopy().taskCard.rejectTemplate(task.taskId)}${reason}`)
+      const cmdId = out.ok === true && out.commandId !== undefined ? out.commandId : null
+      const close = await closeTask(task.taskId, cmdId !== null ? `打回——续接令 ${cmdId}` : '打回——板面老板视图')
+      if (!close.ok) { setStatus(`${br.fail}${close.error ?? ''}`); setBusy(false) }
+    })()
+  }
+  const conclusion = (last?.text ?? '').split('\n').map(l => l.trim()).find(l => l !== '') ?? ''
+  const conclusionClip = conclusion.length > 160 ? `${conclusion.slice(0, 160)}…` : conclusion
+  return createElement('article', {
+    key: `boss-${task.taskId}`,
+    className: 'war-boss-row',
+    'data-boss-task': task.taskId,
+  },
+    createElement('div', { className: 'war-card-top' },
+      createElement('span', { className: 'war-chip st-reported' }, activeCopy().taskStatus.reported),
+      createElement('span', { className: 'war-title' }, lineageTitle !== '' ? lineageTitle : task.title),
+      createElement('span', { className: 'war-time' }, relTime(last?.ts ?? task.startedAt)),
+    ),
+    conclusionClip !== ''
+      ? createElement('p', { className: 'war-boss-conc' }, conclusionClip)
+      : null,
+    createElement('div', { className: 'war-boss-chips' },
+      checks.length > 0 ? createElement('span', { className: `war-chip ${checksOk ? 'boss-ok' : 'boss-fail'}` }, br.checks(checksPassed, checks.length)) : null,
+      tests !== null ? createElement('span', { className: `war-chip ${testsOk ? 'boss-ok' : 'boss-fail'}` }, br.tests(tests.passed, tests.failed, tests.exitCode)) : createElement('span', { className: 'war-chip boss-warn' }, br.testsNone),
+      createElement('span', { className: `war-chip ${trailOk ? 'boss-ok' : 'boss-warn'}` }, trailOk ? br.trailOk : br.trailNone),
+      files.length > 0 ? createElement('span', { className: 'war-chip boss-ok' }, br.files(files.length)) : null,
+    ),
+    files.length > 0 && ws !== ''
+      ? createElement('div', { className: 'war-boss-files' },
+          ...files.map(f => createElement('button', {
+            key: f, type: 'button', className: 'war-boss-file', title: f,
+            onClick: () => { setPreview({ ws, name: f }) },
+          }, f.split(/[\\/]/).pop() ?? f)),
+        )
+      : null,
+    createElement('div', { className: 'war-boss-acts' },
+      createElement('button', { type: 'button', className: 'war-btn', onClick: () => { setExpanded(v => !v) } }, expanded ? br.collapse : br.expand),
+      createElement('button', { type: 'button', className: 'war-btn', onClick: () => { setKnockOpen(v => !v) } }, br.knock),
+      createElement('button', {
+        type: 'button', className: confirming ? 'war-btn war-btn-warn' : 'war-btn primary', disabled: busy, onClick: accept,
+        title: confirming ? br.acceptConfirm : br.accept,
+      }, confirming ? br.acceptConfirm : br.accept),
+    ),
+    knockOpen
+      ? createElement('div', { className: 'war-boss-knock' },
+          createElement('textarea', {
+            className: 'war-composer', rows: 2, placeholder: br.knockPlaceholder, value: note,
+            onChange: e => { setNote(e.target.value) },
+          }),
+          createElement('div', { className: 'war-boss-acts' },
+            createElement('button', { type: 'button', className: 'war-btn war-btn-warn', disabled: busy || note.trim() === '', onClick: knock }, br.knockSend),
+          ),
+        )
+      : null,
+    expanded && last !== null
+      ? createElement('div', { className: 'war-boss-full' },
+          reportBody(last.text, ws !== '' ? (n: string): void => { setPreview({ ws, name: n }) } : undefined),
+        )
+      : null,
+    status !== '' ? createElement('p', { className: 'war-hq-picker-hint', role: 'status' }, status) : null,
+    preview !== null ? createElement(ArtifactPreviewModal, { ws: preview.ws, name: preview.name, onClose: () => { setPreview(null) } }) : null,
+  )
+}
+
+
 // --- 成形卡（V9.11 任务列=大副侧台账：任务书挂出前的占位形态，变体同聚焦页 ghost）---
 
 function FormingCard(cmd: BoardCommand, variant: 'plan' | 'talking' | 'drafting', onOpen: () => void, trace: CardTrace): ReactNode {
@@ -4247,7 +4365,12 @@ export function warView(services: ClientServicesFace): () => ReactNode {
             createElement('div', { className: 'war-zone war-report' },
               Zone('report', activeCopy().zones.report.title, report.length,
                 cmdTab === 'archived' ? '' : activeCopy().columns.done.empty,
-                report.map(({ t, a }) => SessionCard(t, a, (t2, a2) => { openSessionVia(t2, a2, 'report') }, traceFor(lineageOf(t.taskId)?.commandId ?? null))),
+                [
+                  // D40 老板视图验收行：reported 任务先呈可视化结论（结论横幅+
+                  // 机械核验芯片+交付物预览），一行一定夺快扫批处理。
+                  ...tabTasks.filter(t => t.status === 'reported').map(t => createElement(BossReviewRow, { key: 'boss-' + t.taskId, task: t, lineageTitle: lineageOf(t.taskId)?.text ?? t.title })),
+                  ...report.map(({ t, a }) => SessionCard(t, a, (t2, a2) => { openSessionVia(t2, a2, 'report') }, traceFor(lineageOf(t.taskId)?.commandId ?? null))),
+                ],
               ),
             ),
           ),

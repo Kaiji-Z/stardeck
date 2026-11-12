@@ -104,3 +104,59 @@ const png = Buffer.concat([
 mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(OUT, png)
 console.log(`icon 已生成：${OUT}（${png.length} bytes）`)
+
+// ── D40 角标数字（1-9）：任务栏 overlay 徽标——信号蓝圆饼 + 白字 3×5 点阵数字。
+// Windows 无原生托盘角标，win.setOverlayIcon 吃预渲染小图；纯点阵零依赖。
+const BADGE_S = 36
+const FONT = { // 3×5 点阵（行串，'1'=亮）
+  '1': ['010', '110', '010', '010', '111'],
+  '2': ['110', '101', '010', '100', '111'],
+  '3': ['110', '001', '010', '001', '110'],
+  '4': ['101', '101', '111', '001', '001'],
+  '5': ['111', '100', '110', '001', '110'],
+  '6': ['011', '100', '111', '101', '111'],
+  '7': ['111', '001', '010', '010', '010'],
+  '8': ['111', '101', '111', '101', '111'],
+  '9': ['111', '101', '111', '001', '110'],
+}
+for (const digit of Object.keys(FONT)) {
+  const bx = new Uint8Array(BADGE_S * BADGE_S * 4)
+  const bset = (x, y, r, g, b, a = 255) => {
+    const i = (y * BADGE_S + x) * 4
+    bx[i] = r; bx[i + 1] = g; bx[i + 2] = b; bx[i + 3] = a
+  }
+  const c = BADGE_S / 2
+  const rr = BADGE_S / 2 - 1
+  const glyph = FONT[digit]
+  const gw = 3, gh = 5, scale = 4
+  const ox = Math.round(c - (gw * scale) / 2), oy = Math.round(c - (gh * scale) / 2)
+  for (let y = 0; y < BADGE_S; y++) {
+    for (let x = 0; x < BADGE_S; x++) {
+      const d = Math.hypot(x - c + 0.5, y - c + 0.5)
+      if (d <= rr - 1.5) bset(x, y, 14, 116, 214) // 信号蓝（--war-run 同族）
+      else if (d <= rr) bset(x, y, 10, 80, 150, 255) // 描边深蓝
+      else { bset(x, y, 0, 0, 0, 0); continue }
+      const gx = Math.floor((x - ox) / scale), gy = Math.floor((y - oy) / scale)
+      if (gx >= 0 && gx < gw && gy >= 0 && gy < gh && glyph[gy][gx] === '1') bset(x, y, 255, 255, 255)
+    }
+  }
+  const braw = Buffer.alloc(BADGE_S * (BADGE_S * 4 + 1))
+  for (let y = 0; y < BADGE_S; y++) {
+    braw[y * (BADGE_S * 4 + 1)] = 0
+    Buffer.from(bx.buffer, y * BADGE_S * 4, BADGE_S * 4).copy(braw, y * (BADGE_S * 4 + 1) + 1)
+  }
+  const bihdr = Buffer.alloc(13)
+  bihdr.writeUInt32BE(BADGE_S, 0)
+  bihdr.writeUInt32BE(BADGE_S, 4)
+  bihdr[8] = 8
+  bihdr[9] = 6
+  const bpng = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', bihdr),
+    chunk('IDAT', deflateSync(braw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+  const out = join(dirname(OUT), 'badge-' + digit + '.png')
+  writeFileSync(out, bpng)
+  console.log('badge 已生成：' + out + '（' + bpng.length + ' bytes）')
+}

@@ -629,6 +629,23 @@ export interface WarCopy {
     confirmOk: string
     cancel: string
   }
+  /** D40 老板视图验收行（报告舱「等你定夺」）：给舰长看可视化结论，不看原料。 */
+  bossReview: {
+    checks: (passed: number, total: number) => string
+    tests: (passed: number, failed: number, exit: number) => string
+    testsNone: string
+    trailOk: string
+    trailNone: string
+    files: (n: number) => string
+    expand: string
+    collapse: string
+    accept: string
+    acceptConfirm: string
+    knock: string
+    knockSend: string
+    knockPlaceholder: string
+    fail: string
+  }
   /** D26 舰桥频道（v0.3.0 对话范式的默认脸面）：聊天 chrome 文案。决策卡
    *  词汇（签发五项/验收/选项拼装）复用 focusPage 词典——一处正典不双写。 */
   bridge: {
@@ -1375,6 +1392,22 @@ export const warCopy: WarCopy = {
     confirmOk: '确认撤令',
     cancel: '再想想',
   },
+  bossReview: {
+    checks: (p, t) => `验收标准 ${p}/${t}`,
+    tests: (p, f, e) => `测试 ${p} 过 ${f} 败 · exit ${e}`,
+    testsNone: '无测试声明',
+    trailOk: '取证轨迹 ✓',
+    trailNone: '无取证轨迹',
+    files: n => `${n} 个交付物`,
+    expand: '展开战报',
+    collapse: '收起战报',
+    accept: '通过收官',
+    acceptConfirm: '再点一次确认（终局）',
+    knock: '打回重做',
+    knockSend: '送达打回（续接令）',
+    knockPlaceholder: '打回理由（必填）——外勤小队带着它重做',
+    fail: '操作失败：',
+  },
   bridge: {
     title: '舰桥频道',
     motto: '和你的代理舰长说话：下令、问战况、问概念——舰队的事他兜着。',
@@ -2084,6 +2117,22 @@ export const plainCopy: WarCopy = {
     confirmTitle: '确认撤令？',
     confirmOk: '确认撤令',
     cancel: '再想想',
+  },
+  bossReview: {
+    checks: (p, t) => `验收项 ${p}/${t}`,
+    tests: (p, f, e) => `测试 ${p} 过 ${f} 败 · 退出码 ${e}`,
+    testsNone: '无测试声明',
+    trailOk: '取证轨迹 ✓',
+    trailNone: '无取证轨迹',
+    files: n => `${n} 个交付物`,
+    expand: '展开报告',
+    collapse: '收起报告',
+    accept: '通过并收官',
+    acceptConfirm: '再点一次确认（终局）',
+    knock: '退回重做',
+    knockSend: '送达退回（续接单）',
+    knockPlaceholder: '退回理由（必填）——执行器带着它重做',
+    fail: '操作失败：',
   },
   bridge: {
     title: '对话频道',
