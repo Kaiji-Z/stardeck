@@ -113,3 +113,44 @@ test('assertCronUsable rejects unsatisfiable crons (2月30日) and accepts norma
   // 2 月 29 日：未来 5 年内（2028）有触发时机，应通过。
   assert.doesNotThrow(() => { assertCronUsable('0 9 29 2 *', now) })
 })
+
+test('triggerDueBounties：到点落事件开新轮（fold 置回 published）、busy 轮 skipped、同刻幂等不重复到期', async () => {
+  const dir = tmpStateDir()
+  try {
+    const { triggerDueBounties } = await import('../src/daemon.ts')
+    const past = '2026-08-20T00:00:00.000Z'
+    // A：已收官的定时任务令（闲置轮——到点应重开）。
+    for (const e of [
+      { type: 'task_created', ts: past, campaignId: 't-open', title: '日常A', brief: 'b', acceptance: 'a', priority: 'normal' },
+      { type: 'task_published', ts: past, campaignId: 't-open', workspacePath: '/wa' },
+      { type: 'task_scheduled', ts: past, campaignId: 't-open', cron: '* * * * *', enabled: true },
+      { type: 'task_closed', ts: '2026-08-20T00:01:00.000Z', campaignId: 't-open', verdict: '验收通过' },
+    ] as const) appendEvent(dir, e)
+    // B：忙轮（published 未收官——到点只跳过）。
+    for (const e of [
+      { type: 'task_created', ts: past, campaignId: 't-busy', title: '日常B', brief: 'b', acceptance: 'a', priority: 'normal' },
+      { type: 'task_published', ts: past, campaignId: 't-busy', workspacePath: '/wb' },
+      { type: 'task_scheduled', ts: past, campaignId: 't-busy', cron: '* * * * *', enabled: true },
+    ] as const) appendEvent(dir, e)
+    const now = new Date('2026-08-25T02:00:00.000Z')
+    const r = triggerDueBounties(dir, now)
+    assert.equal(r.opened, 1)
+    assert.equal(r.skipped, 1)
+    // A：fold 吃到 triggered → rounds=1、置回 published（等补征召接力）。
+    const a = loadCampaign(dir, 't-open')
+    assert.equal(a.rounds, 1)
+    assert.equal(a.status, 'published')
+    assert.equal(a.schedule!.lastTriggeredAt, now.toISOString())
+    // B：skipped 不动轮次与状态，note 落账。
+    const b = loadCampaign(dir, 't-busy')
+    assert.equal(b.rounds, 0)
+    assert.equal(b.status, 'published')
+    // 同刻再 tick：两任务锚点均已滚动 → 零事件（错过即跳过、不重复到期）。
+    const r2 = triggerDueBounties(dir, new Date('2026-08-25T02:00:10.000Z'))
+    assert.equal(r2.opened + r2.skipped, 0)
+    const a2 = loadCampaign(dir, 't-open')
+    assert.equal(a2.rounds, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

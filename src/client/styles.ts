@@ -273,8 +273,6 @@ body[data-ds-dark-theme] .war-root{
 .war-island-panel{position:absolute;top:100%;left:12px;right:12px;display:flex;flex-direction:column;gap:8px;padding:10px 14px 12px;border:1px solid var(--war-border);border-top:0;border-radius:0 0 16px 16px;background:var(--war-pop-bg);box-shadow:var(--war-shadow-3);max-height:52vh;overflow-y:auto;animation:war-island-open .2s ease}
 @keyframes war-island-open{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.war-island-panel{animation:none}.war-island-pill{transition:none}}
-.war-dockpill{display:inline-flex;align-items:center;gap:6px}
-.war-dockseg{font-size:calc(12px*var(--war-fs))}
 .war-err{font-size:calc(12px*var(--war-fs));color:var(--war-fail)}
 .war-empty{color:var(--war-text-2);font-size:calc(12px*var(--war-fs));padding:12px 8px;text-align:center;border:1px dashed var(--war-border);border-radius:var(--war-r-md);margin:6px 0}
 
@@ -512,10 +510,6 @@ body[data-ds-dark-theme] .war-root{
 .war-cd-sessions{display:flex;flex-direction:column;gap:6px}
 .war-cd-session{display:flex;align-items:center;gap:8px;border:1px solid var(--war-border);border-radius:var(--war-r-sm);background:var(--war-well-bg);padding:4px 10px;cursor:pointer;font-family:var(--war-font);text-align:left}
 .war-cd-session:hover{border-color:var(--war-run-border)}
-.war-dock-home{cursor:pointer;border:1px solid var(--war-border);border-radius:var(--war-r-md);background:var(--war-card-bg);padding:2px 8px;font-family:var(--war-font)}
-.war-dock-home:hover{border-color:var(--war-run-border)}
-.war-dock-unread{font-size:calc(12px*var(--war-fs));color:var(--war-run);font-weight:600}
-
 /* --- buttons ------------------------------------------------------------------ */
 /* D38.4 批判 P2 收口：基础 .war-btn 升 pill——四角色宪法升全应用语法
  * （A 席实证：全局 primary pill 化后弹窗脚部方圆混排=宪法只管聊天窗的地方法病）。 */
@@ -537,22 +531,6 @@ body[data-ds-dark-theme] .war-root{
 .war-actionerr{position:absolute;bottom:136px;right:24px;z-index:70;display:flex;align-items:center;gap:8px;max-width:480px;margin:0;padding:6px 10px;border-radius:var(--war-r-sm);border:1px solid var(--war-fail-border);background:var(--war-pop-bg);color:var(--war-fail);font-size:calc(12px*var(--war-fs));box-shadow:var(--war-shadow-2)}
 .war-legend-btn{padding:2px 10px;line-height:calc(18px*var(--war-fs));font-size:calc(12px*var(--war-fs));flex:0 0 auto}
 
-/* --- shell entry (sidebar row + center-column takeover) ------------------------ */
-/* war-sidebar-* 挂在宿主侧栏（.war-root 之外）——宿主铬层，刻意保留
- * --dsw-alias 直引：--war-* 令牌在 war-root 上定义，这里解析不到。 */
-.war-sidebar-row{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font-size:calc(13px*var(--war-fs));font-family:var(--dsw-font-family);cursor:pointer;border-radius:8px;text-align:left}
-.war-sidebar-row:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
-.war-sidebar-row[data-active="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
-.war-sidebar-icon{display:inline-flex;align-items:center;flex:0 0 auto;color:currentColor}
-.war-sidebar-label{white-space:nowrap}
-/* V16 宿主侧栏收起（rail 态，祖先类 *_collapsed 后缀稳定）：藏文字只留图标，
- * 35px 轨道内图标居中（padding 收零，与宿主原生 rail 行对齐）。 */
-[class*="_collapsed"] .war-sidebar-row{justify-content:center;padding:7px 0;gap:0}
-[class*="_collapsed"] .war-sidebar-label{display:none}
-.war-shell-view{display:none}
-html[data-dsh-warroom-active] .war-shell-view{display:flex;flex-direction:column;height:100%}
-html[data-dsh-warroom-active] [data-pane='conversation'] > :not([data-dsh-warroom-view]),
-html[data-dsh-warroom-active] [class*='centerCol'] > :not([data-dsh-warroom-view]){display:none !important}
 /* --- V9.2 岛改版（聚焦 chip + 齿轮）---------------------------------------- */
 .war-island-focus{flex:0 1 auto;min-width:0;font-size:calc(12px*var(--war-fs));font-weight:600;color:var(--war-run-strong);border:1px solid var(--war-run-border);background:var(--war-run-tint);border-radius:var(--war-r-pill);padding:2px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--war-font)}
 .war-island-focus:hover{background:color-mix(in srgb, var(--war-run-border) 18%, transparent)}

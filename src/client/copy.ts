@@ -629,12 +629,6 @@ export interface WarCopy {
     confirmOk: string
     cancel: string
   }
-  dock: {
-    label: string
-    titleLine: (counts: { pending: number; waiting: number; active: number; failed: number }) => string
-    segLine: (counts: { pending: number; waiting: number; active: number; failed: number }) => string
-    unread: (n: number) => string
-  }
   /** D26 舰桥频道（v0.3.0 对话范式的默认脸面）：聊天 chrome 文案。决策卡
    *  词汇（签发五项/验收/选项拼装）复用 focusPage 词典——一处正典不双写。 */
   bridge: {
@@ -1207,26 +1201,26 @@ export const warCopy: WarCopy = {
     answerDone: '答复已送达——参谋会话续跑推进中，进展看命令卡与任务链。',
     answerFail: '答复失败：',
     answerTitle: '经 pi RPC 续跑把答复送进参谋会话（受理即回执；只支持 pi 席）',
-    clarifyRound: n => `大副第 ${n} 轮提问（等你答复）`,
+    clarifyRound: n => `参谋第 ${n} 轮提问（等你答复）`,
     clarifyHistory: '澄清问答史',
     clarifyCaptain: '舰长答复',
-    clarifyAnswered: '答复已入账——大副正带答复开新一轮定案',
+    clarifyAnswered: '答复已入账——参谋正带答复开新一轮定案',
     clarifyPickNote: '点选即记入答复（编号+字母）——可继续点选或自由补充，送达即办',
     clarifyGateHint: '带选项的问题各选一项（或在附言里作答）后可送达',
     meetingTitle: '会议室',
     meetingMotto: '这里只做一件事：把模糊命令收敛成强目标。',
     meetingRoundDone: n => `第 ${n} 轮 · 已答复`,
-    meetingFinalizing: '成案中——大副正带你的答复重开定案',
-    meetingEmpty: '大副正在读命令——它的提问会出现在这里。',
+    meetingFinalizing: '成案中——参谋正带你的答复重开定案',
+    meetingEmpty: '参谋正在读命令——它的提问会出现在这里。',
     meetingAwaitingSign: '任务书待你签',
-    meetingSigned: '已签发——大副发布中',
+    meetingSigned: '已签发——参谋发布中',
     signEditableNote: '五项都可改——签发文本就是最终任务书，原稿留档可审计。',
     signBtn: '✓ 签发',
     signBusy: '签发中…',
-    signDone: '签发已入账——大副即将按定稿文本发布。',
+    signDone: '签发已入账——参谋即将按定稿文本发布。',
     signFail: '签发失败：',
     redraftBtn: '驳回重拟',
-    signNotePh: '签发附言（可空）；驳回时这里必填意见——送达大副重拟任务书',
+    signNotePh: '签发附言（可空）；驳回时这里必填意见——送达参谋重拟任务书',
     briefTitle: '任务书（五项定案）',
     briefGoal: '目标',
     briefBackground: '背景与约束',
@@ -1261,7 +1255,7 @@ export const warCopy: WarCopy = {
     gradeSection: '自主度（放权多少）',
     gradeAuto: { name: '参谋分诊', hint: '默认。参谋掂量轻重：小改直做，大改呈方案' },
     gradeL0: { name: '!! 直接做', hint: '不等确认一路到底，适合有把握的小改动' },
-    gradeL2: { name: '?? 先看方案', hint: '签发档：大副出任务书，你逐项改定稿签发后才动工，适合大动作' },
+    gradeL2: { name: '?? 先看方案', hint: '签发档：参谋出任务书，你逐项改定稿签发后才动工，适合大动作' },
     scheduleSection: '发布时机（何时出发）',
     schedNow: { name: '立即', hint: '下达即转达参谋' },
     schedCron: { name: '定时', hint: '到点自动下达（一次有效）' },
@@ -1381,12 +1375,6 @@ export const warCopy: WarCopy = {
     confirmOk: '确认撤令',
     cancel: '再想想',
   },
-  dock: {
-    label: '作战室',
-    titleLine: c => `等·参谋 ${c.pending} · 等·指挥官 ${c.waiting} · 进行中 ${c.active}${c.failed > 0 ? ` · 已失败 ${c.failed}` : ''} —— 点击回到作战室`,
-    segLine: c => `作战室${c.pending > 0 ? ` 等·参谋${c.pending}` : ''} 等·指挥官${c.waiting} 进行${c.active}${c.failed > 0 ? ` 失败${c.failed}` : ''}`,
-    unread: n => `${n} 新`,
-  },
   bridge: {
     title: '舰桥频道',
     motto: '和你的代理舰长说话：下令、问战况、问概念——舰队的事他兜着。',
@@ -1494,7 +1482,7 @@ export const warCopy: WarCopy = {
     ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
     stopBtn: '停止',
     stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
-    stopIdleNote: '本轮无在途应答可停——大副哨位下一轮接管。',
+    stopIdleNote: '本轮无在途应答可停——参谋哨位下一轮接管。',
     metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
     thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },
@@ -2097,12 +2085,6 @@ export const plainCopy: WarCopy = {
     confirmOk: '确认撤令',
     cancel: '再想想',
   },
-  dock: {
-    label: '工作台',
-    titleLine: c => `等·规划 Agent ${c.pending} · 等·执行 Agent ${c.waiting} · 执行中 ${c.active}${c.failed > 0 ? ` · 已失败 ${c.failed}` : ''} —— 点击回到工作台`,
-    segLine: c => `工作台${c.pending > 0 ? ` 等·规划 Agent${c.pending}` : ''} 等·执行 Agent${c.waiting} 执行${c.active}${c.failed > 0 ? ` 失败${c.failed}` : ''}`,
-    unread: n => `${n} 新`,
-  },
   bridge: {
     title: '对话频道',
     motto: '和你的代理管家说话：下单、问进度、问用法——项目的事他兜着。',
@@ -2210,7 +2192,7 @@ export const plainCopy: WarCopy = {
     ctxTotal: (used: string, win: string) => `${used} / ${win} token`,
     stopBtn: '停止',
     stoppedNote: '已请求停止本轮应答（在途内容丢弃）。',
-    stopIdleNote: '本轮无在途应答可停——大副哨位下一轮接管。',
+    stopIdleNote: '本轮无在途应答可停——规划 Agent哨位下一轮接管。',
     metaLine: (model: string, effort: string, sec: string, tokens: string) => `${model} · ${effort} · ${sec}s · ${tokens}`,
     thinkingChars: (n: number) => `思考过程 · ${n} 字`,
   },

@@ -63,9 +63,8 @@ test('war-tokens: 组件区纯净——无 dsw 直穿、无裸 hex（豁免清�
   assert.ok(segs.length > 60, `CSS 段数异常: ${segs.length}`)
   const offenders: string[] = []
   for (const { selector, body } of segs) {
-    // 令牌定义块 = 基元层；宿主铬层（war-sidebar-* 挂 .war-root 之外的宿主侧栏）
-    // 刻意保留 dsw 直引——两者都不是组件区。
-    if (DEFINITION_SELECTORS.has(selector) || selector.startsWith('.war-sidebar-row')) continue
+    // 令牌定义块 = 基元层（宿主铬层 war-sidebar-* 已随 D38 收口退役）。
+    if (DEFINITION_SELECTORS.has(selector)) continue
     if (body.includes('var(--dsw-')) offenders.push(`dsw 直穿 @ ${selector}`)
     for (const line of body.split('\n')) {
       if (!/#[0-9a-fA-F]{3,8}\b/.test(line)) continue

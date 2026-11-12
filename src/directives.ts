@@ -58,6 +58,9 @@ export interface DirectiveInput {
   readonly text: string
   readonly author?: string
   readonly url?: string
+  /** 源触发指纹（sourceId::externalId）——扇出幂等的崩溃窗自愈依据：input 已
+   *  在场而 seen 缺席（两账本跨文件无单写原子）时凭它认出「已扇出」。 */
+  readonly originKey?: string
 }
 
 /** 进件环形上限：卡上下文是「最近发生了什么」，不是全文档案——长线程截尾。 */
@@ -175,7 +178,7 @@ export type DirectiveEvent =
   // D39-C 订阅扇出：外部源线程的后续进件（context-only——不改 status、不扩权；
   // daemon 收口侧前置过滤终态卡，fold 终态守卫再兜一道）。author/url=源侧身份
   // 与反链（聚焦页「外部进件」段数据源）。
-  | { type: 'directive_input'; ts: string; directiveId: string; text: string; author?: string; url?: string }
+  | { type: 'directive_input'; ts: string; directiveId: string; text: string; author?: string; url?: string; originKey?: string }
 
 /** Terminal statuses — later transitions are ignored (a published command
  * cannot be re-approved, a cancelled one cannot resurrect). */
@@ -359,7 +362,7 @@ export function foldDirectives(events: ReadonlyArray<DirectiveEvent>): Directive
       // 扩权），环形截尾保最近 {@link DIRECTIVE_INPUTS_CAP} 条；终态卡不吃
       // 新件（收口侧已过滤，这里是第二道守卫——重放/乱序防御）。
       case 'directive_input': {
-        const inputs = [...(current.inputs ?? []), { ts: event.ts, text: event.text, ...(event.author !== undefined ? { author: event.author } : {}), ...(event.url !== undefined ? { url: event.url } : {}) }]
+        const inputs = [...(current.inputs ?? []), { ts: event.ts, text: event.text, ...(event.author !== undefined ? { author: event.author } : {}), ...(event.url !== undefined ? { url: event.url } : {}), ...(event.originKey !== undefined ? { originKey: event.originKey } : {}) }]
         current.inputs = inputs.length > DIRECTIVE_INPUTS_CAP ? inputs.slice(inputs.length - DIRECTIVE_INPUTS_CAP) : inputs
         break
       }

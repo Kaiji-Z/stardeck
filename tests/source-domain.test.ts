@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -16,7 +16,7 @@ const {
   composeTriggerText, composeWritebackBody, subscriptionIndex, fanoutTriggerToDirective,
   writebackPending, writebackKeyClosed, WRITEBACK_MAX_ATTEMPTS, sourceKey, appendSourceEvents,
 } = await import('../src/sources.ts')
-const { foldDirectives, DIRECTIVE_INPUTS_CAP, readDirectiveEvents } = await import('../src/directives.ts')
+const { foldDirectives, DIRECTIVE_INPUTS_CAP, readDirectiveEvents, appendDirectiveEvent, loadDirectives } = await import('../src/directives.ts')
 type DirectiveEvent = import('../src/directives.ts').DirectiveEvent
 
 function tempState(): string { return mkdtempSync(join(tmpdir(), 'sd-src-')) }
@@ -197,4 +197,30 @@ test('composeWritebackBody：closed 形=结论先行+交付物+KillCredit 证据
   assert.ok(failed.includes('网络不通'))
   const cancelled = composeWritebackBody('cancelled', { text: '[GitHub issue #13] 需求' }, undefined)
   assert.ok(cancelled.includes('命令已撤销'))
+})
+
+test('fanout 崩溃窗自愈：input 在场而 seen 缺席时重放只补 seen，不叠重复 directive_input（originKey 指纹）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sd-fanout-heal-'))
+  try {
+    appendDirectiveEvent(dir, { type: 'directive_created', ts: 't0', directiveId: 'cmd-h', text: '修 bug' })
+    const trig = { sourceId: 'github:o/r', externalId: 'issue:9:comment:77', kind: 'comment' as const, threadKey: 'github:o/r#9', author: 'eve', text: '补充复现步骤' }
+    // 首次扇出成功（input+seen 双落）。
+    assert.equal(fanoutTriggerToDirective(dir, trig, 'cmd-h'), true)
+    // 人为掰开崩溃窗：抹掉 seen（保留 directive_input）——模拟崩在两笔之间。
+    const srcFile = join(dir, 'sources.jsonl')
+    writeFileSync(srcFile, '', 'utf8')
+    // 重放：凭 input 的 originKey 认出已扇出 → 只补 seen，不叠 input。
+    assert.equal(fanoutTriggerToDirective(dir, trig, 'cmd-h'), true)
+    const d = loadDirectives(dir).find(x => x.id === 'cmd-h')!
+    assert.equal((d.inputs ?? []).length, 1, '不叠重复上下文')
+    assert.equal((d.inputs ?? [])[0]!.originKey, 'github:o/r::issue:9:comment:77')
+    // seen 已闭合 → 第三次走快路径拒绝。
+    assert.equal(fanoutTriggerToDirective(dir, trig, 'cmd-h'), false)
+    // 无关新评论照常全量扇出（input+seen）。
+    assert.equal(fanoutTriggerToDirective(dir, { ...trig, externalId: 'issue:9:comment:78', text: '第二条' }, 'cmd-h'), true)
+    const d2 = loadDirectives(dir).find(x => x.id === 'cmd-h')!
+    assert.equal((d2.inputs ?? []).length, 2)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

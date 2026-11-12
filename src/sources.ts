@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { appendJsonl, appendJsonlBatch } from './jsonl.ts'
 import { readJsonlCached } from './fold-cache.ts'
-import { appendDirectiveEvent, newDirectiveId, type DirectiveOrigin } from './directives.ts'
+import { loadDirectives,  appendDirectiveEvent, newDirectiveId, type DirectiveOrigin } from './directives.ts'
 import type { CampaignState } from './types.ts'
 
 /** 准入强度：explicit=允许名单内作者的显式请求；inferred=observe/auto 档放行的推断候选。 */
@@ -283,7 +283,12 @@ export function subscriptionIndex(directives: ReadonlyArray<{ id: string; status
 
 /** 扇出收口：源线程新评论 → directive_input（context-only）+ seen 记录
  *  （disposition='fanned'，幂等键同源）。终态守卫由调用方（订阅表）保证，
- *  这里再判一次 directive 在场。 */
+ *  这里再判一次 directive 在场。
+ *  崩溃窗自愈（2026-11-12 审计轮）：两账本跨文件无单写原子——input 先落、
+ *  seen 后落，崩在中间时重放凭 directive_input 携带的 originKey 认出「已扇
+ *  出」，只补 seen 不再叠 input（与 admitted 路径的确定性 id+heal 双保险对
+ *  齐）。环形截尾把老 input 滚出 20 条窗后指纹失效——需崩溃后 15s 内同卡再
+ *  进 20 条件才触发，实际上不可能，注记在案。 */
 export function fanoutTriggerToDirective(
   stateDir: string,
   trigger: SourceTrigger,
@@ -295,10 +300,20 @@ export function fanoutTriggerToDirective(
   if (fold.seen.has(key)) return false
   const ts = now.toISOString()
   const gate = { strength: 'explicit' as const, disposition: 'fanned' as const }
-  appendDirectiveEvent(stateDir, { type: 'directive_input', ts, directiveId, text: clipBody(trigger.text), ...(trigger.author !== undefined ? { author: trigger.author } : {}), ...(trigger.url !== undefined ? { url: trigger.url } : {}) })
+  const directive = loadDirectives(stateDir).find(d => d.id === directiveId)
+  if (directive !== undefined && (directive.inputs ?? []).some(i => i.originKey === key)) {
+    // 崩溃窗重放：input 已在场而 seen 缺席——补 seen 闭合窗口，不叠重复上下文。
+    appendSourceEvents(stateDir, [{
+      type: 'source_trigger_seen', ts, sourceId: trigger.sourceId, externalId: trigger.externalId, kind: trigger.kind,
+      threadKey: trigger.threadKey, author: trigger.author, ...(trigger.url !== undefined ? { url: trigger.url } : ''),
+      excerpt: excerptOf(trigger.text), strength: gate.strength, disposition: gate.disposition, directiveId,
+    }])
+    return true
+  }
+  appendDirectiveEvent(stateDir, { type: 'directive_input', ts, directiveId, text: clipBody(trigger.text), originKey: key, ...(trigger.author !== undefined ? { author: trigger.author } : {}), ...(trigger.url !== undefined ? { url: trigger.url } : {}) })
   appendSourceEvents(stateDir, [{
     type: 'source_trigger_seen', ts, sourceId: trigger.sourceId, externalId: trigger.externalId, kind: trigger.kind,
-    threadKey: trigger.threadKey, author: trigger.author, ...(trigger.url !== undefined ? { url: trigger.url } : {}),
+    threadKey: trigger.threadKey, author: trigger.author, ...(trigger.url !== undefined ? { url: trigger.url } : ''),
     excerpt: excerptOf(trigger.text), strength: gate.strength, disposition: gate.disposition, directiveId,
   }])
   return true

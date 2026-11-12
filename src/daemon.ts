@@ -25,7 +25,7 @@ import { readSessionHistory } from './history.ts'
 import { spawn } from 'node:child_process'
 import { staffWorklist, staffOrderFor, spawnStaffAgent, staffExecutorFor, harvestStaffDirectiveEvents, finalStaffReply, renderBriefForSign, CLARIFY_ROUNDS_CAP, proxyOrderFor, proxyCommandBlocksOf, proxyVerdictBlocksOf, proxySceneBlocksOf, proxyManagementBlocksOf, type StaffWorkItem } from './staff.ts'
 import { appendBridgeEvent, bridgeUnanswered, bridgeHistoryWindow, loadBridgeMessages, syncBridgeNotices, estimateTokens, type BridgeArtifact, type BridgeMessageMeta } from './bridge.ts'
-import { boardProjection, bridgeDigest, directiveProjection, ledgerSlice } from './dashboard.ts'
+import { boardProjection, bridgeDigest, directiveProjection, ledgerSlice, dueBounties } from './dashboard.ts'
 import { probeFleet, fleetSeatIds, bindableSeatIds, bindNoteFor } from './fleet.ts'
 import { ensureDirs, loadConfig, persistFleetBinding, readSourcesConfig, writeSourcesConfig, type StardeckConfig } from './config.ts'
 import { fanoutTriggerToDirective, healOrphanAdmissions, ingestSourceTrigger, loadSourceFold, appendSourceEvents, subscriptionIndex, composeWritebackBody, writebackKeyCancelled, writebackKeyClosed, writebackKeyFailed, writebackPending, type SourceTrigger } from './sources.ts'
@@ -73,6 +73,26 @@ export function folderPickerScript(title: string): string {
     "$r=$f.ShowDialog($owner); $owner.Dispose();",
     "if($r -eq [System.Windows.Forms.DialogResult]::OK){ [Console]::Out.Write($f.SelectedPath) }",
   ].join(' ')
+}
+
+/** 定时任务令到点触发（插件仓 bountyFuse 的独立形态替位，2026-11-12 审计轮
+ *  补位——此前 war_publish 的 cron 参数向 agent 承诺「到点自动重开」，但独立
+ *  形态零生产者、rounds 恒 0）。语义与插件仓逐字对齐：只落 task_schedule_triggered
+ *  事件（错过即跳过——dueBounties 锚定上次触发，从不回填）；唤醒征召仍是
+ *  patrolTick 补征召段的职责，一哨一事。busy 轮（published/in_progress/reported）
+ *  落 skipped:true 不动状态；闲置轮 fold 置回 published 等补征召接力。 */
+export function triggerDueBounties(stateDir: string, now: Date = new Date()): { opened: number; skipped: number } {
+  let opened = 0
+  let skipped = 0
+  for (const b of dueBounties(stateDir, now.getTime())) {
+    appendEvent(stateDir, {
+      type: 'task_schedule_triggered', ts: now.toISOString(), campaignId: b.taskId,
+      skipped: !b.openRound, ...(b.openRound ? {} : { note: b.reason }),
+    })
+    if (b.openRound) opened += 1
+    else skipped += 1
+  }
+  return { opened, skipped }
 }
 
 export function startDaemon(configOverride: Partial<StardeckConfig> = {}): DaemonHandle {
@@ -454,6 +474,10 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           registry.forgetTask(c.taskId)
         }
       }
+      // ①.5 定时任务令到点（triggerDueBounties——插件仓 bountyFuse 替位）：只落
+      // 事件；新开的 published 轮由下方补征召段在同一轮接手。
+      const due = triggerDueBounties(stateDir)
+      if (due.opened + due.skipped > 0) console.log(`[stardeck] 定时任务令到点：重开 ${due.opened} · 跳过 ${due.skipped}`)
       // ② 补征召：发布态任务无在役执行者 → 按队列计划征召（工作区互斥+满编由 conscript 判）。
       // 含「起跑即夭折」回收（mtit94od 实测案例）：执行者 spawn 后未 claim 即退（如 API key 缺失），
       // 死会话若不遗忘会永久占住任务——①的失联回收只管 in_progress，published 态无人清，

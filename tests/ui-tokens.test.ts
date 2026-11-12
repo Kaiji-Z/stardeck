@@ -2,12 +2,12 @@
  * 独立形态令牌基座机检锁。
  * 旧不变量（P0-1，2026-09-01）：styles.ts 的 L1 层引用宿主 --dsw-* 变量，
  *   独立形态由 public/index.html :root 块供给——缺任何一枚=令牌荒漠（评审
- *   17/40 的根因）；「引用面 ≥20」地板防提取逻辑失效。
- * D38 演进（2026-10-24）：新设计语言令牌定义块（.war-root / 深色覆盖）全
- *   字面值自洽——宿主别名不再是依赖面，「令牌荒漠」在结构上不可能复发，
- *   「引用面 ≥20」地板随之退役。新不变量更硬：
- *   ① 定义块零 var(--dsw-*)（自洽化锁定）；② 残余 --dsw-* 引用（宿主铬层
- *   .war-sidebar-*）仍必须在 index.html 有定义；③ 基座非空。
+ *   17/40 的根因）。
+ * D38 演进（2026-10-24）：令牌定义块全字面值自洽，「令牌荒漠」结构性消亡。
+ * D38 收口（2026-11-12）：宿主铬层（.war-sidebar-*）与 index.html 的
+ *   --dsw-* 令牌农场（浅色 alias/全量 static/暗色 alias）一并退役——
+ *   不变量升到终态：① 定义块零 var(--dsw-*)；② **src 与 index.html 全线
+ *   零 --dsw-*（直引与定义都不许回流）**；③ 基座非空。
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -32,17 +32,10 @@ test('ui-tokens：L1 令牌定义块自洽——D38 起定义块零 --dsw-* 依�
   }
 })
 
-test('ui-tokens：styles.ts 残余 --dsw-* 引用（宿主铬层）都在 index.html 有定义', () => {
-  const referenced = new Set([...stylesSrc.matchAll(/var\((--dsw-[a-z0-9-]+)/g)].map(m => m[1]!))
-  const defined = new Set([...indexHtml.matchAll(/(--dsw-[a-z0-9-]+)\s*:/g)].map(m => m[1]!))
-  const missing = [...referenced].filter(name => !defined.has(name))
-  assert.deepEqual(missing, [], `index.html 缺独立形态令牌定义：${missing.join(', ')}`)
-})
-
-test('ui-tokens：index.html 基座每枚 --dsw-* 都有非空取值（防空壳定义）', () => {
-  const defs = [...indexHtml.matchAll(/(--dsw-[a-z0-9-]+)\s*:\s*([^;]+);/g)]
-  assert.ok(defs.length >= 20, `index.html --dsw-* 定义数异常（${defs.length}）`)
-  for (const [, name, value] of defs) {
-    assert.ok(value!.trim().length > 0, `${name} 取值为空`)
-  }
+test('ui-tokens：--dsw-* 全线退役——styles.ts 零直引、index.html 零定义（防回流锁）', () => {
+  const referenced = [...stylesSrc.matchAll(/var\((--dsw-[a-z0-9-]+)/g)].map(m => m[1]!)
+  assert.deepEqual(referenced, [], `styles.ts 出现宿主别名直引（D38 收口后被禁）：${[...new Set(referenced)].join(', ')}`)
+  const defined = [...indexHtml.matchAll(/(--dsw-[a-z0-9-]+)\s*:/g)].map(m => m[1]!)
+  assert.deepEqual(defined, [], `index.html 出现 --dsw-* 定义（令牌农场已退役，别再回流）：${[...new Set(defined)].join(', ')}`)
+  assert.ok(indexHtml.includes('#stardeck-boot'), '基座非空（boot 壳在场）')
 })

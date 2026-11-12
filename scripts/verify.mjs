@@ -39,7 +39,7 @@ const needles = [
   ['src/config.ts', ['stardeckHome', 'loadConfig']],
   ['src/client-standalone.tsx', ['warView', 'ensureWarStyles', 'warroom-last-seen', 'fleetGate', '/warroom/api/fleet']],
   ['bin/stardeck.mjs', ['dist/cli.mjs']],
-  ['public/index.html', ['stardeck-root', '/client.js', '--dsw-alias-state-business-primary', '--dsw-font-family']],
+  ['public/index.html', ['stardeck-root', '/client.js', 'data-ds-dark-theme']],
   ['dist/cli.mjs', ['stardeck']],
   ['dist/client.js', ['stardeck-root']],
 ]

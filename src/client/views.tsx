@@ -31,8 +31,9 @@ import { waitKindOf } from './waithint.ts'
 import { looksLikeFilePath, parseMd, pinFinalMessage, splitInline } from './report-face.ts'
 import { QUALITY_TIERS } from '../types.ts'
 
-/** V17 三页签全局切片（进行中/已收官/已归档）：模块级 store——WarView 与
- * WarDockPill 两个挂载点共享同源状态（localStorage 持久化，缺省进行中）。 */
+/** V17 三页签全局切片（进行中/已收官/已归档）：模块级 store（localStorage
+ * 持久化，缺省进行中）——本仓 WarView 单挂载点；插件仓宿主壳的 WarDockPill
+ * 对位物仍共享同源状态（两仓 views 分叉注记）。 */
 export type CmdTab = 'active' | 'settled' | 'archived'
 const CMD_TAB_KEY = 'warroom-cmd-tab'
 let cmdTabState: CmdTab = (() => {
@@ -86,7 +87,7 @@ export interface ClientServicesFace {
 }
 
 /** 文案一律经 activeCopy()（皮肤词典）取——不写内联字面量；词典在渲染期取值，
- * 皮肤切换后由 WarView/WarDockPill 的 useSyncExternalStore 订阅触发重渲染拉新文案。
+ * 皮肤切换后由 WarView 的 useSyncExternalStore 订阅触发重渲染拉新文案。
  *  cls/dot 是样式键不属于皮肤文案，留在视图层（皮肤只换词不换样式）。 */
 const COMMAND_STATUS_STYLE: Record<BoardCommand['status'], { cls: string; dot: string }> = {
   draft: { cls: 'st-draft', dot: 'draft' },
@@ -3507,7 +3508,7 @@ export function warView(services: ClientServicesFace): () => ReactNode {
     // 皮肤/语言切换 → 整板重渲染拉新文案（词典经 activeCopy() 渲染期取值）。
     useSyncExternalStore(subscribeSkin, skinId)
     useSyncExternalStore(subscribeLang, langId)
-    // V17 三页签：与 WarDockPill 同源；页签是客户端过滤器（板照旧全量投影）。
+    // V17 三页签：页签是客户端过滤器（板照旧全量投影）。
     // V18.2：板面吃「生效页签」=悬停/点击预览 ?? 用户选定——星球悬停切档时
     // 三列+调度条+星域切片整体跟随，离开星球自动还原用户原页签。
     const cmdTab = useSyncExternalStore(subscribeCmdTab, cmdTabShown)
@@ -4424,42 +4425,4 @@ export function warView(services: ClientServicesFace): () => ReactNode {
       }) : null,
     )
   }
-}
-
-/** The composer dock status pill — v3: also the warroom HOME button (click
- * reopens the board via the shell entry) with an unread-since-last-seen badge. */
-export function WarDockPill(): ReactNode {
-  const { data } = useWar()
-  useSyncExternalStore(subscribeSkin, skinId)
-  useSyncExternalStore(subscribeLang, langId)
-  // V17：岛计数随页签（所见即所数）；✉ 徽标与到访摘要保持全局。
-  const tab = useSyncExternalStore(subscribeCmdTab, cmdTabShown)
-  if (data === null || !data.active) return null
-  const tasksAll = data.tasks
-  const tabOfPill = (c: BoardCommand): CmdTab => {
-    if (c.archived !== null) return 'archived'
-    const ch = commandTasks(c, tasksAll)
-    return c.status !== 'cancelled' && !(ch.length > 0 && ch.every(t => t.status === 'closed' || t.status === 'failed')) ? 'active' : 'settled'
-  }
-  const pillCmdIds = new Set(data.commands.filter(c => tabOfPill(c) === tab).map(c => c.commandId))
-  const lineageCmdOf = (taskId: string): string => {
-    for (const c of data.commands) if (commandTasks(c, tasksAll).some(t => t.taskId === taskId)) return c.commandId
-    return ''
-  }
-  const pending = data.commands.filter(c => (c.status === 'received' || c.status === 'talking') && pillCmdIds.has(c.commandId)).length
-  const active = data.tasks.filter(t => t.status === 'in_progress' && pillCmdIds.has(lineageCmdOf(t.taskId))).length
-  const waiting = data.tasks.filter(t => t.status === 'published' && pillCmdIds.has(lineageCmdOf(t.taskId))).length
-  const failed = data.tasks.filter(t => t.status === 'failed' && pillCmdIds.has(lineageCmdOf(t.taskId))).length
-  let lastSeen = 0
-  try { lastSeen = Date.parse(localStorage.getItem('warroom-last-seen') ?? '') || 0 } catch { lastSeen = 0 }
-  const fresh = (iso: string | null | undefined): boolean => iso !== undefined && iso !== null && Date.parse(iso) > lastSeen
-  const unread = data.commands.filter(c => (c.status === 'received' || c.status === 'talking') && fresh(c.createdAt)).length
-    + data.tasks.filter(t => t.status === 'reported' && fresh(t.reports.length > 0 ? t.reports[t.reports.length - 1]!.ts : t.startedAt)).length
-    + data.tasks.filter(t => t.status === 'failed' && fresh(t.attemptLog.find(a => a.outcome === 'failed')?.endedAt ?? t.startedAt)).length
-  const goHome = (): void => { document.dispatchEvent(new CustomEvent('warroom-open-request')) }
-  const counts = { pending, waiting, active, failed }
-  return createElement('button', { className: 'war-dockpill war-dock-home', type: 'button', onClick: goHome, title: activeCopy().dock.titleLine(counts) },
-    createElement('span', { className: 'war-dockseg' }, activeCopy().dock.segLine(counts)),
-    unread > 0 ? createElement('span', { className: 'war-dock-unread' }, activeCopy().dock.unread(unread)) : null,
-  )
 }
