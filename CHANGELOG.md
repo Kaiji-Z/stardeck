@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-12
+
+### Added（D40+D41 验收面与诚实交付：舰长令「最小负荷并行」两刀）
+
+- **D40 注意力拉取**：desktop 主进程 15s 轮询 digest 的 pendingDecisions → 任务栏角标（点阵预渲染 1-9）+ 托盘 tooltip + 新到定夺系统通知（窗口隐身才推、首轮建基线）——「等你」推到眼前，不是用户轮询。
+- **D40 老板视图验收面**：报告舱 BossReviewRow——结论横幅（战报首行，结论先行正典）+ KillCredit 机械核验芯片行（绿/红/琥珀）+ 交付物预览 + 展开全文；通过=两步确认（5s 窗口 + 800ms 手抖闸）、打回=附言必填自动转续接令。不设「全部通过」橡皮图章（一握一思是验收宪法）。
+- **D41 前后对比截图判据**（super-agent 诚实交付同款先例）：`SubmissionEvidence.shots`（工作区路径对）+ `shotsVerdict` 纯函数——报了截图逐对核存在性，越界/不存在打回（与取证轨迹同权）；UI 任务缺截图注记不打回（不进 killCreditAllGreen，验收宪法不动）。板面改前/改后缩略并排（data URL 直渲）+ 点击放大；workspace/file 端点图片走 base64 dataUrl（守卫与 512KB 封顶同套）。
+- **D41 耗时芯片**：reported 尝试领→交时长（`末次汇报 ts − attemptLog.startedAt`，避开 task_closed 改写 endedAt 的坑）。
+- **D41 自报·机核标记**：自报=虚线芯片+尾注（验收标准恒自报、tests 缺轨迹琥珀+自报）；机核=实线绿——「他说的」与「系统验的」一眼分开。
+
+### Changed（八席 latest 适配轮）
+
+- 全局 CLI 升级并实弹复核：opencode 1.19.5（live 门 17/17）/ pi 1.5.2 / claude 2.1.322 / gemini 0.68 / qwen 0.27 / zcode 引擎 0.17.1 / codex 0.167.2（隔离前缀，四坑全数延续）/ dsh 0.2.2-rc.2。
+- pi 1.x：zai 转内置供应商认 `ZAI_API_KEY`——`piSeatEnv` 桥旧名 `Z_AI_API_KEY`（零迁移）；扩展 default 工厂契约与 RPC 帧延续零改。
+- dsh 0.2.2：llm-deepseek 改走 Anthropic Messages wire——`dshDeepseekBaseUrl` 把 z.ai 域 OpenAI 面自动改译 `/api/anthropic`（实弹通过）。
+
+### Fixed（全仓审计轮：五路审查核证后的修复批）
+
+- 任务级 cron 零生产者（patrolTick 补 triggerDueBounties ①.5 节拍）；fanout 原子性（originKey 自愈）；参谋/大副术语按 5241694 正典统一；桌面托盘图标实弹修复；send() 真实落码回流；JSONL 尾字节检测治崩断粘连 + 批量单写原子（`jsonl.ts` 新模块）；readCodexHistory 双根解析；GitHub 源升序消化（desc+页封顶漏旧事件）；dashboard 状态码真实出线。
+
 ## [0.9.0] - 2026-11-11
 
 ### Added（D39 进水口与哨兵：对齐 dsh-superagent 的上游差距）
