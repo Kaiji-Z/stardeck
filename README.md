@@ -164,12 +164,12 @@ pnpm live         # 端到端实机门：真 CLI 外勤全链（开发态）
 
 | 状态 | CLI | 说明 |
 |---|---|---|
-| ✅ 稳定 | [opencode](https://opencode.ai) | 开源、多供应商；项目级 `opencode.json` 注入 MCP 桥 |
-| ✅ 稳定 | [pi](https://github.com/badlogic/pi-mono) | 轻量；扩展件注册出口协议工具 |
-| ✅ 稳定 | zcode | GLM 系；模型走其自身配置 |
-| ✅ 稳定 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 原生订阅或 anthropic 兼容网关 |
-| ✅ 稳定 | [Codex CLI](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连 |
-| ✅ 稳定 | dsh（DeepSeek Harness） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*） |
+| ✅ 稳定 | [opencode](https://opencode.ai) | 开源、多供应商；项目级 `opencode.json` 注入 MCP 桥（最新适配 1.19.5） |
+| ✅ 稳定 | [pi](https://github.com/badlogic/pi-mono) | 轻量；扩展件注册出口协议工具（最新适配 1.5.2——zai 内置供应商认 `ZAI_API_KEY`，旧 `Z_AI_API_KEY` 自动补位） |
+| ✅ 稳定 | zcode | GLM 系；模型走其自身配置（引擎随桌面应用，0.17.x 实测） |
+| ✅ 稳定 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 原生订阅或 anthropic 兼容网关（最新适配 2.1.322） |
+| ✅ 稳定 | [Codex CLI](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连（最新适配 0.167.2，隔离 CODEX_HOME） |
+| ✅ 稳定 | dsh（DeepSeek Harness） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*——0.2.2 起走 Anthropic Messages wire，z.ai 网关自动改译 `/api/anthropic` 面） |
 | 🚧 暂不可绑 | Gemini CLI | 双席未接通（外勤契约在档未实弹、大副通道未建）——配好 key 实弹转正后开放 |
 | 🚧 暂不可绑 | Qwen Code | 双席未接通（外勤半证、大副通道未建）——实弹转正后开放 |
 | 🚧 即将支持 | Copilot CLI / Amp / Cursor CLI / Droid | 适配进行中（部分走 ACP 协议） |
@@ -395,12 +395,12 @@ Fleet binding is persisted to the config file and survives restarts; rebind anyt
 
 | Status | CLI | Notes |
 |---|---|---|
-| ✅ Stable | [opencode](https://opencode.ai) | Open-source, multi-provider; MCP bridge injected via project `opencode.json` |
-| ✅ Stable | [pi](https://github.com/badlogic/pi-mono) | Lightweight; an extension registers the exit-protocol tools |
-| ✅ Stable | zcode | GLM family; model lives in its own config |
-| ✅ Stable | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native subscription or an anthropic-compatible gateway |
-| ✅ Stable | [Codex CLI](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP |
-| ✅ Stable | dsh (DeepSeek Harness) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_*) |
+| ✅ Stable | [opencode](https://opencode.ai) | Open-source, multi-provider; MCP bridge injected via project `opencode.json` (verified up to 1.19.5) |
+| ✅ Stable | [pi](https://github.com/badlogic/pi-mono) | Lightweight; an extension registers the exit-protocol tools (verified up to 1.5.2 — builtin zai provider takes `ZAI_API_KEY`; legacy `Z_AI_API_KEY` auto-bridged) |
+| ✅ Stable | zcode | GLM family; model lives in its own config (engine ships with the desktop app, tested on 0.17.x) |
+| ✅ Stable | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native subscription or an anthropic-compatible gateway (verified up to 2.1.322) |
+| ✅ Stable | [Codex CLI](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP (verified up to 0.167.2, isolated CODEX_HOME) |
+| ✅ Stable | dsh (DeepSeek Harness) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_* — since 0.2.2 speaks the Anthropic Messages wire; z.ai gateways are auto-rewritten to the `/api/anthropic` face) |
 | 🚧 Not bindable yet | Gemini CLI | Dual-role incomplete (executor contract never live-fired, no staff channel) — opens after a key + live-fire |
 | 🚧 Not bindable yet | Qwen Code | Dual-role incomplete (executor half-proven, no staff channel) — opens after live-fire |
 | 🚧 Coming soon | Copilot CLI / Amp / Cursor CLI / Droid | Adapters in progress (some via ACP) |

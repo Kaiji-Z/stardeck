@@ -477,7 +477,7 @@ export async function spawnHeadlessPi(args: HeadlessAgentArgs): Promise<Executor
   return spawnCli(args.executorBin, piPrintArgs({ model: args.model, prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
-      env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+      env: piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
     })
 }
 
@@ -602,6 +602,17 @@ export function piPrintArgs(args: { model: string; prompt: string }): string[] {
   ]
 }
 
+/** pi 席 env 桥（pi 1.x 定案，2026-11-12 实弹）：1.5 起内置 zai 供应商认
+ *  ZAI_API_KEY（0.84 时代是自注扩展吃 Z_AI_API_KEY）；旧机 Z_AI_* 配置零迁移
+ *  补位——显式 ZAI_API_KEY 恒优先，非 zai 配置不受扰。 */
+export function piSeatEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra }
+  if (env.ZAI_API_KEY === undefined && process.env.ZAI_API_KEY === undefined && process.env.Z_AI_API_KEY !== undefined) {
+    env.ZAI_API_KEY = process.env.Z_AI_API_KEY
+  }
+  return env
+}
+
 /** opencode 适配器（R0 已验证全链）。 */
 export const opencodeAdapter: ExecutorAdapter = {
   id: 'opencode',
@@ -660,7 +671,7 @@ export const piAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, piPrintArgs({ model: args.model, prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+        env: piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
       })
   },
 }
@@ -1074,6 +1085,20 @@ export function dshModelId(model: string): string {
   return id.trim() !== '' ? id.trim() : 'glm-5.2'
 }
 
+/** dsh 0.2.2 的 DEEPSEEK_BASE_URL 改译（纯，测试管辖）：llm-deepseek 已换
+ *  Anthropic Messages wire——z.ai 域的 OpenAI 面（…/coding/paas/v4 等）改译
+ *  同域 /api/anthropic（claude 席同款端点，2026-11-12 实弹 200）；非 z.ai 域
+ *  与显式 DEEPSEEK_BASE_URL 原样透传（自定义网关自负责）。 */
+export function dshDeepseekBaseUrl(zaiBaseUrl: string): string {
+  try {
+    const u = new URL(zaiBaseUrl)
+    if (u.hostname === 'z.ai' || u.hostname === 'api.z.ai' || u.hostname.endsWith('.z.ai')) {
+      return `${u.protocol}//${u.hostname}/api/anthropic`
+    }
+  } catch { /* 非 URL 形态：透传，让上游自己报错（诚实面） */ }
+  return zaiBaseUrl
+}
+
 /** dsh --patch 外挂层内容（纯，测试管辖）：agent-default-model 路由 GLM +
  * llm-deepseek 模型目录补条目——**maxTokens 必须显式**（catalog 缺条目时
  * provider 默认 max_tokens 非法，z.ai 网关拒收「限制[1,131072]」，2026-09-05
@@ -1151,7 +1176,10 @@ export async function spawnHeadlessDsh(args: HeadlessAgentArgs): Promise<Executo
   const env: NodeJS.ProcessEnv = { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }
   // 网关映射：DEEPSEEK_* 优先；缺席时 Z_AI_*（本机 GLM 网关正典）补位。
   if (env.DEEPSEEK_API_KEY === undefined && process.env.Z_AI_API_KEY !== undefined) env.DEEPSEEK_API_KEY = process.env.Z_AI_API_KEY
-  if (env.DEEPSEEK_BASE_URL === undefined && process.env.Z_AI_BASE_URL !== undefined) env.DEEPSEEK_BASE_URL = process.env.Z_AI_BASE_URL
+  // dsh 0.2.2 起 llm-deepseek 走 Anthropic Messages wire（正典 api.deepseek.com
+  // /anthropic）——z.ai 侧对应面=/api/anthropic。Z_AI_BASE_URL 是 OpenAI 面
+  // （…/coding/paas/v4），直喂 404（2026-11-12 实弹抓的坑）；z.ai 域内改译。
+  if (env.DEEPSEEK_BASE_URL === undefined && process.env.Z_AI_BASE_URL !== undefined) env.DEEPSEEK_BASE_URL = dshDeepseekBaseUrl(process.env.Z_AI_BASE_URL)
   const session = isSourceEntry
     ? spawnCli(process.execPath, dshHeadlessArgs({ cloneRoot: dshCloneRootOf(binTs), binTs, patchPath, prompt: args.prompt ?? PROMPT }),
         {
@@ -1197,17 +1225,19 @@ export const dshAdapter: ExecutorAdapter = {
   },
 }
 
-// ═══ 第五/六舰队（2026-09-02 定案「扩充舰队支持广度」）═══
-// claude（Anthropic Claude Code 2.1.258）：已验证——`claude -p --output-format
-// json` 无头一次性（尾包 session_id/result），项目级 `.mcp.json` 与 zcode 同构
-// （Claude 同款 mcpServers 机制），`claude --resume <会话号>` 回会话，会话
-// JSONL 落 ~/.claude/projects/（历史弹窗零 token 读档）。鉴权双路：原生
-// `claude /login`（订阅）或 env ANTHROPIC_BASE_URL+ANTHROPIC_AUTH_TOKEN 走
-// anthropic 兼容网关（本机实证 z.ai/api/anthropic + GLM，首弹即通）。
-// gemini（Google Gemini CLI 0.58）：契约实验性（本机无 GEMINI_API_KEY）——
-// `-p` 无头与 `.gemini/settings.json` mcpServers、`--resume`、自定义命令
-// `.gemini/commands/*.toml`（prompt 必填/description 可选，bundle 源码实证）
-// 全部在档；0.58 无 --output-format → 无进程内会话号捕获（实验性诚实降级）。
+// ═══ 第五/六舰队（2026-09-02 定案「扩充舰队支持广度」；2026-11-12 升 latest 复核）═══
+// claude（Anthropic Claude Code，最新适配 2.1.322）：已验证——`claude -p
+// --output-format json` 无头一次性（尾包 session_id/result），项目级
+// `.mcp.json` 与 zcode 同构（Claude 同款 mcpServers 机制），`claude --resume
+// <会话号>` 回会话，会话 JSONL 落 ~/.claude/projects/（历史弹窗零 token
+// 读档）。鉴权双路：原生 `claude /login`（订阅）或 env
+// ANTHROPIC_BASE_URL+ANTHROPIC_AUTH_TOKEN 走 anthropic 兼容网关（本机实证
+// z.ai/api/anthropic + GLM，首弹即通）。
+// gemini（Google Gemini CLI，最新适配 0.68——bundle/gemini.js 入口原样）：
+// 契约实验性（本机无 GEMINI_API_KEY）——`-p` 无头与 `.gemini/settings.json`
+// mcpServers、`--resume`、自定义命令 `.gemini/commands/*.toml`（prompt
+// 必填/description 可选，bundle 源码实证）全部在档；无 --output-format →
+// 无进程内会话号捕获（实验性诚实降级）。
 
 /** claude 入口探测：win32 优先 npm 全局包内原生 exe（bin/claude.exe 直接
  * spawn——原生二进制不走 .cmd 垫片）；其余退 PATH。 */

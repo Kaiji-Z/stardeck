@@ -212,3 +212,33 @@ test('V24.1 seatAgentPrefix：编号前缀=席别（oc- 全席遗留退场）', 
   assert.equal(seatAgentPrefix('mistral'), 'mi')
   assert.ok(Object.keys(SEAT_AGENT_PREFIX).length >= 8)
 })
+
+test('D41+ 席位适配（2026-11-12 五席升 latest）：pi ZAI_API_KEY 桥 + dsh anthropic 面改译', async () => {
+  const { piSeatEnv, dshDeepseekBaseUrl } = await import('../src/executor.ts')
+  // dsh 0.2.2 wire 改译：z.ai OpenAI 面 → 同域 anthropic 面；非 z.ai 域透传。
+  assert.equal(dshDeepseekBaseUrl('https://api.z.ai/api/coding/paas/v4'), 'https://api.z.ai/api/anthropic', 'coding 面（v4 前缀）改译')
+  assert.equal(dshDeepseekBaseUrl('https://api.z.ai/api/paas/v4'), 'https://api.z.ai/api/anthropic', '开放平台面改译')
+  assert.equal(dshDeepseekBaseUrl('https://api.deepseek.com/anthropic'), 'https://api.deepseek.com/anthropic', '官方面透传')
+  assert.equal(dshDeepseekBaseUrl('https://my-gw.local/v1'), 'https://my-gw.local/v1', '自定义网关透传（自负责）')
+  assert.equal(dshDeepseekBaseUrl('not a url'), 'not a url', '非 URL 形态透传（诚实报错归上游）')
+  // pi 1.x env 桥：ZAI_API_KEY 显式在场恒优先；缺席时 Z_AI_API_KEY 补位；都缺不动。
+  const prevZai = process.env.ZAI_API_KEY, prevZ = process.env.Z_AI_API_KEY
+  try {
+    delete process.env.ZAI_API_KEY
+    process.env.Z_AI_API_KEY = 'sk-old-style'
+    const bridged = piSeatEnv({ STARDECK_HTTP: 'http://x' })
+    let env = bridged
+    assert.equal(env.ZAI_API_KEY, 'sk-old-style', '旧名补位（零迁移）')
+    process.env.ZAI_API_KEY = 'sk-new-style'
+    env = piSeatEnv({})
+    assert.equal(env.ZAI_API_KEY, 'sk-new-style', '新名恒优先')
+    delete process.env.ZAI_API_KEY
+    delete process.env.Z_AI_API_KEY
+    env = piSeatEnv({})
+    assert.equal(env.ZAI_API_KEY, undefined, '都缺不造键')
+    assert.equal(bridged.STARDECK_HTTP, 'http://x', 'extra 透传')
+  } finally {
+    if (prevZai !== undefined) process.env.ZAI_API_KEY = prevZai; else delete process.env.ZAI_API_KEY
+    if (prevZ !== undefined) process.env.Z_AI_API_KEY = prevZ; else delete process.env.Z_AI_API_KEY
+  }
+})
