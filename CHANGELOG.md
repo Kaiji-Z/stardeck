@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-18
+
+### Added（绑定门舰队安装/更新入口 + 集中凭证注入舰队：2026-11-17 舰长令）
+
+- **绑定门=安装/更新正路**：每张席位卡内嵌操作行——未检出席给 `npm i -g <pkg>` 一键复制、已装席给版本 chip（`--version` 首行实探）+ `@latest` 更新命令 + 官方 GitHub 仓库链接（opencode=anomalyco 迁移后 / pi=earendil-works 改名后正典 / zcode=zai-org/ZCode / dsh 无公开仓注记）——「要装这些 CLI 才能用」在门上自解释。
+- **零舰队逃生口**：本机无可绑席时绑定门可跳过（「先上甲板，稍后再装」）——聊天窗经内置 BYOK loop 照常可用，执行链诚实缺席。
+- **共享凭证注入舰队**：「设置→模型设置」新增「注入舰队 CLI」开关（缺省开）——同一份 key/基址在征召时按供应商族翻译成各 CLI 标准环境变量注入子进程（pi=`ZAI_API_KEY`、claude/opencode=z.ai anthropic 兼容面 `ANTHROPIC_*`、dsh=`DEEPSEEK_*`）；同名 env 以此配置为准（开关旁加粗警示）；codex=垫片侧 key、zcode=自管两席诚实注记不吃注入；自建代理/未知网关零注入不猜方言。保存即时生效（征召/大副/代理舰长/续跑投递四咽喉统一走 `fleet-creds.ts` 翻译，config>env 纪律）。
+
+### Changed
+
+- impeccable 批判轮（dual-agent 25/40）五点全修：操作行横向溢出（网格列 minmax(0,1fr)+wrap，三档宽度实测入视口）；版本 chip 对比度 AA 达标（text-2+12px）；设置抽屉摘要随弹窗保存即时翻新；注入段上移至 key 行前一屏可见；复制钮自称「复制」+aria-label 携命令全文。
+- AGENTS.md 顶部新增「你是 agent？只想用不想开发」拦截段——落库自服务探针（零上下文 agent 实测 9/10）指出的唯一想歪点：站进 clone 的 agent 现在首屏就被引向 `npm i -g + connect` 用户正路。
+
+### Fixed
+
+- **版本探针可执行形态白名单**：win32 下对 dsh 源码入口（bin.ts）跑 shell 探针会按文件关联 ShellExecute（本机 .ts 关联 Media Player）——每次 GET /fleet 弹一个播放器窗口；现只放行 .js/.mjs/.cjs（经 node）、.exe/.cmd/.bat/.com 与裸名，其余扩展名零 spawn 诚实空版本。
+
 ## [0.9.1] - 2026-11-12
 
 ### Added（D40+D41 验收面与诚实交付：舰长令「最小负荷并行」两刀）
