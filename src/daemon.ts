@@ -36,6 +36,8 @@ import { issueProxySeat, seatByToken, loadProxySeats } from './proxy-seats.ts'
 import { runProxyLoop, proxyLoopEnvOf, mergeLoopEnv, thinkingDialectSupported } from './proxy-loop.ts'
 import { presetByBaseUrl } from './client/provider-presets.ts'
 import { readLoopConfig, writeLoopConfig, type LoopConfig } from './config.ts'
+import { fleetEnvFor } from './fleet-creds.ts'
+import { childEnv } from './executor.ts'
 import { renderScene, type SceneContext } from './scene.ts'
 import type { CampaignState } from './types.ts'
 
@@ -141,6 +143,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       model: activeModel,
       modelProvider: config.modelProvider,
       codexShimBase: config.codexShimBase,
+      credEnv,
       executorBin: binFor(activeExecutor),
       stateDir,
     })
@@ -166,7 +169,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       if (entry === undefined || entry.executor !== 'pi') return false
       const out = await deliverViaRpc({
         bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId,
-        message: text, kind: 'follow_up',
+        message: text, kind: 'follow_up', env: childEnv(credEnv, {}),
       })
       if (!out.ok) console.warn(`[stardeck] 批注转达失败（task ${session.taskId}）：${out.error ?? '未知'}`)
       return out.ok
@@ -203,11 +206,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       const out = entry.executor === 'pi'
         ? await deliverViaRpc({
           bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel,
-          message, kind: 'prompt',
+          message, kind: 'prompt', env: childEnv(credEnv, {}),
         })
         : await deliverViaOpencode({
           bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel,
-          message, stateDir,
+          message, stateDir, env: childEnv(credEnv, {}),
         })
       if (!out.ok) return { ok: false, error: `答复投递失败：${out.error ?? '未知'}` }
       settled = out.settled
@@ -286,6 +289,10 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
   // D33 段3：loop 供给运行态（config.loop 段优先，env 回落；窗口 POST 即时翻新）。
   const loopCfg: LoopConfig = readLoopConfig()
   const effectiveLoopEnv = () => mergeLoopEnv(process.env, loopCfg)
+  // 2026-11-17 舰队共享凭证：同一份 loop 凭证按 fleet-creds 翻译成各 CLI 标准
+  // env，spawn 咽喉（征召/大副/代理舰长/续跑投递）统一注入——config>env 纪律。
+  // key 缺席或 fleetInject 关=空对象（行为与旧版字节等价）；窗口保存即时翻新。
+  let credEnv: Record<string, string> = fleetEnvFor(loopCfg.baseUrl, loopCfg.apiKey, loopCfg.fleetInject)
   const tools = warTools({
     store,
     stateDir,
@@ -375,6 +382,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           const eff = effectiveLoopEnv()
           return {
             model: eff.model, baseUrl: eff.baseUrl, effort: eff.effort,
+            fleetInject: loopCfg.fleetInject,
             keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'),
             // D37：思考方言支持（UI 门控——不支持的供应商档位钮禁用恒自动）。
             effortSupported: thinkingDialectSupported(eff.baseUrl, eff.model),
@@ -390,9 +398,11 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           if (patch.baseUrl !== undefined) loopCfg.baseUrl = patch.baseUrl
           if (patch.apiKey !== undefined) loopCfg.apiKey = patch.apiKey
           if (patch.effort !== undefined) loopCfg.effort = patch.effort
+          if (patch.fleetInject !== undefined) loopCfg.fleetInject = patch.fleetInject
           const out = writeLoopConfig(loopCfg)
+          credEnv = fleetEnvFor(loopCfg.baseUrl, loopCfg.apiKey, loopCfg.fleetInject)
           const eff = effectiveLoopEnv()
-          return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, effort: eff.effort, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
+          return { ok: out.ok, model: eff.model, baseUrl: eff.baseUrl, effort: eff.effort, fleetInject: loopCfg.fleetInject, keySource: eff.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), error: out.ok ? undefined : out.error }
         },
         test: async (overrides?: { model?: string; baseUrl?: string; apiKey?: string }) => {
           // P1 修（D33 critique A 八轮）：测「舰长所见」——表单半截输入未保存时
@@ -647,6 +657,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         executorBin: binFor(staffFleet),
         stateDir,
         codexShimBase: config.codexShimBase,
+        credEnv,
       })
       staffItems = items
       console.log(`[stardeck] 大副应征 ${agentId}（${staffFleet} 席，工单 ${items.length} 件，日志 ${staffSession.logPath}）`)
@@ -892,8 +903,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
           void (async () => {
             try {
               const out = entry.executor === 'pi'
-                ? await deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, kind: 'prompt' })
-                : await deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, stateDir })
+                ? await deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, kind: 'prompt', env: childEnv(credEnv, {}) })
+                : await deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, model: activeModel, message: brief, stateDir, env: childEnv(credEnv, {}) })
               if (!out.ok) {
                 console.warn(`[stardeck] 代理舰长续跑投递失败（${out.error ?? '未知'}）——退避后全新回合兜底`)
                 proxyResumeRetryAfter = Date.now() + 120_000
@@ -1022,6 +1033,7 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         executorBin: binFor(fleetNow),
         stateDir,
         codexShimBase: config.codexShimBase,
+        credEnv,
         role: 'proxy',
       })
       console.log(`[stardeck] 代理舰长应征 ${agentId}（${fleetNow} 席，待答 ${pendingMsgs.length} 条，日志 ${proxySession.logPath}）`)
@@ -1063,8 +1075,8 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
       // 双席同链：受理回执 → 等消化（settled，15min 上限）→ 释单飞守卫（投递
       // 失败=诚实留卡，卡上下文已在账——下一轮收割/续跑自然可见）。
       const deliver = entry.executor === 'pi'
-        ? deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, kind: 'follow_up' })
-        : deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, ...(activeModel !== '' ? { model: activeModel } : {}), stateDir })
+        ? deliverViaRpc({ bin: binFor('pi'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, kind: 'follow_up', env: childEnv(credEnv, {}) })
+        : deliverViaOpencode({ bin: binFor('opencode'), cwd: entry.workspacePath, sessionId: entry.sessionId, message, ...(activeModel !== '' ? { model: activeModel } : {}), stateDir, env: childEnv(credEnv, {}) })
       void deliver
         .then(out => {
           if (!out.ok) console.warn(`[stardeck] 外部进件投递失败（已留卡）：${out.error ?? '未知'}`)
@@ -1324,8 +1336,9 @@ export function startDaemon(configOverride: Partial<StardeckConfig> = {}): Daemo
         }
         if (key === 'GET /warroom/api/fleet') {
           // D30 开箱面：proxyLoop 随门面下发——全席缺席时门给「内置 loop」诚实指引。
+          // 2026-11-17：fleetInject/loopKeySource 同发——门脚「已配共享凭证」提示行。
           const effLoop = effectiveLoopEnv()
-          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin), proxyLoop: effLoop.enabled, loopModel: effLoop.model, loopKeySource: effLoop.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env') })
+          return sendJson(res, 200, { ok: true, active: { executor: activeExecutor, model: activeModel }, seats: probeFleet(config.executorBin), proxyLoop: effLoop.enabled, loopModel: effLoop.model, loopKeySource: effLoop.apiKey === '' ? 'none' : (loopCfg.apiKey !== '' ? 'config' : 'env'), fleetInject: loopCfg.fleetInject })
         }
         if (key === 'POST /warroom/api/fleet') {
           const body = JSON.parse(await readBody(req)) as { executor?: unknown; model?: unknown }

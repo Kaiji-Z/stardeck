@@ -10,8 +10,8 @@ import { Fragment, createElement, useState, useSyncExternalStore } from 'react'
 import { langId, subscribeLang } from './copy.ts'
 import { agentInstallPrompt } from '../agent-prompt.ts'
 
-export interface Seat { id: string; label: string; ok: boolean; bin: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
-export interface FleetState { active: { executor: string; model: string }; seats: Seat[]; proxyLoop?: boolean }
+export interface Seat { id: string; label: string; ok: boolean; bin: string; version?: string; experimental?: boolean; note: string; noteEn?: string; adapter?: boolean; staffReady?: boolean }
+export interface FleetState { active: { executor: string; model: string }; seats: Seat[]; proxyLoop?: boolean; fleetInject?: boolean; loopKeySource?: 'none' | 'config' | 'env' }
 
 /** 席位三分语义（纯）：可绑定（大副+外勤双接通且实证在役）/ 受限·实验性（契约
  * 在档但本机有已知阻碍）/ 未检出。V19.13 双席正典：**staffReady=false=不可选**
@@ -60,16 +60,33 @@ interface GateCopy {
   agentCardTitle: string
   agentCardHint: string
   agentCardBtn: string
+  /** 2026-11-17 安装/更新入口：缺席席=安装命令、已装席=更新命令+版本 chip，
+   *  官方仓库链接恒在场（用户据此知道「要装这些 CLI 才能用」）。 */
+  updateVia: (pkg: string) => string
+  updateBtn: string
+  versionPrefix: string
+  repoLink: string
+  /** 零舰队逃生口：无任何可绑席时门可跳过（先上甲板聊天/看板，稍后再装）。 */
+  skipInstall: string
+  /** 共享凭证提示行（key 在位时门脚交代注入状态）。 */
+  credReady: string
+  credOff: string
 }
 
-/** 可安装席的正典 npm 包名（2026-10 本机 npm ls 实锚；zcode/dsh 走各自渠道无 npm 包）。 */
-const INSTALL_PKGS: Record<string, string> = {
-  opencode: 'opencode-ai',
-  pi: '@earendil-works/pi-coding-agent',
-  codex: '@openai/codex',
-  claude: '@anthropic-ai/claude-code',
-  gemini: '@google/gemini-cli',
-  qwen: '@qwen-code/qwen-code',
+/** 席位安装/更新入口正典（2026-11-17；包名=本机 npm ls 实锚，仓库=npm
+ *  repository 元数据/官方源实锚）：opencode 仓已迁 anomalyco（sst/ 旧链重定向）、
+ *  pi 已改名 earendil-works（README 旧链 badlogic/pi-mono 过时）；zcode 开源仓
+ *  zai-org/ZCode 无 npm 包（走桌面版/源码构建）；dsh 无公开仓（DeepSeek 内部
+ *  渠道——席位 note 交代源码仓克隆）。 */
+const SEAT_LINKS: Record<string, { pkg?: string; repo?: string }> = {
+  opencode: { pkg: 'opencode-ai', repo: 'https://github.com/anomalyco/opencode' },
+  pi: { pkg: '@earendil-works/pi-coding-agent', repo: 'https://github.com/earendil-works/pi' },
+  codex: { pkg: '@openai/codex', repo: 'https://github.com/openai/codex' },
+  zcode: { repo: 'https://github.com/zai-org/ZCode' },
+  claude: { pkg: '@anthropic-ai/claude-code', repo: 'https://github.com/anthropics/claude-code' },
+  gemini: { pkg: '@google/gemini-cli', repo: 'https://github.com/google-gemini/gemini-cli' },
+  qwen: { pkg: '@qwen-code/qwen-code', repo: 'https://github.com/QwenLM/qwen-code' },
+  dsh: {},
 }
 
 const GATE: Record<'zh' | 'en', GateCopy> = {
@@ -107,6 +124,13 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     agentCardTitle: '把控制权交给你的 agent（形态 A · 纯面板）',
     agentCardHint: '不装 CLI 也能用：把下面这段话粘给你的 agent（zcode/Claude Code/opencode 等），它会自己安装 stardeck、接入代理舰长席并打开看板——之后你在 agent 对话里自然语言操控舰队。',
     agentCardBtn: '复制接入提示词',
+    updateVia: pkg => `npm i -g ${pkg}@latest`,
+    updateBtn: '更新',
+    versionPrefix: '已装',
+    repoLink: '仓库',
+    skipInstall: '先上甲板，稍后再装',
+    credReady: '已配共享凭证：pi / claude / dsh / opencode（标准 env 面）征召时自动取用；codex 走垫片侧 key、zcode 由其自身管理——可在 设置→对话模型 调整。',
+    credOff: '已配对话模型 key，但未开启「注入舰队」——设置→对话模型 里可开启，让舰队 CLI 免各自配 key。',
   },
   en: {
     statusLabel: { ready: 'Bindable', limited: 'Limited · experimental', absent: 'Not found' },
@@ -142,6 +166,13 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     agentCardTitle: 'Hand control to your own agent (Form A · pure panel)',
     agentCardHint: 'No CLI needed: paste the prompt below into your agent (zcode / Claude Code / opencode …). It will install stardeck, take the acting-captain seat and open the board — you then steer the fleet in plain language inside your agent chat.',
     agentCardBtn: 'Copy install prompt',
+    updateVia: pkg => `npm i -g ${pkg}@latest`,
+    updateBtn: 'Update',
+    versionPrefix: 'installed',
+    repoLink: 'repo',
+    skipInstall: 'Board first, install later',
+    credReady: 'Shared credential configured: pi / claude / dsh / opencode (standard env vars) pick it up automatically on conscription; codex takes its key on the shim side and zcode manages its own — adjust under Settings → Chat model.',
+    credOff: 'Chat-model key is set but "Inject into fleet CLIs" is off — enable it under Settings → Chat model so fleet CLIs share this key without per-CLI setup.',
   },
 }
 
@@ -169,15 +200,18 @@ export function fleetGate(props: {
   const [model, setModel] = useState(props.fleet.active.model)
   const [showAbsent, setShowAbsent] = useState(false)
   // D30 开箱面：全席缺席死路治理——复制反馈态（哪个包名的命令刚被复制）。
+  // 2026-11-17：命令显式传入（install/update 同一通路；席位卡与引导卡共用）。
   const [copiedId, setCopiedId] = useState('')
-  const copyInstall = (id: string): void => {
-    const pkg = INSTALL_PKGS[id]
-    if (pkg === undefined) return
-    const cmd = t.installVia(pkg)
+  const copyCmd = (id: string, cmd: string): void => {
     const done = (): void => { setCopiedId(id); setTimeout(() => { setCopiedId(c => (c === id ? '' : c)) }, 2000) }
     try {
       void navigator.clipboard?.writeText(cmd).then(done).catch(() => console.warn(t.copyFail))
     } catch { console.warn(t.copyFail) }
+  }
+  const copyInstall = (id: string): void => {
+    const pkg = SEAT_LINKS[id]?.pkg
+    if (pkg === undefined) return
+    copyCmd(id, t.installVia(pkg))
   }
   const card = (seat: Seat): ReturnType<typeof createElement> => {
     const status = seatStatusOf(seat)
@@ -205,6 +239,40 @@ export function fleetGate(props: {
           },
         }, t.statusLabel[status]),
       ),
+      // 2026-11-17 安装/更新入口行：缺席席=安装命令复制；已装席=版本 chip+更新
+      // 命令复制；官方仓库链接恒在场（zcode 无 npm 包只链接；dsh 无公开仓——
+      // 渠道见席位注记）。让「要装这些 CLI 才能用」在门上自解释。
+      (() => {
+        const link = SEAT_LINKS[seat.id] ?? {}
+        const absent = status === 'absent'
+        const cmd = link.pkg !== undefined ? (absent ? t.installVia(link.pkg) : t.updateVia(link.pkg)) : ''
+        if (cmd === '' && link.repo === undefined) return null
+        return createElement('div', { 'data-war-seat-ops': seat.id, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 } },
+          !absent && seat.version !== undefined && seat.version !== ''
+            ? createElement('span', {
+                'data-war-seat-version': seat.id,
+                style: { flex: '0 0 auto', fontSize: 'calc(11px*var(--war-fs))', color: 'var(--war-text-3)', fontFamily: 'var(--war-font-code)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '40%' },
+              }, `${t.versionPrefix} ${seat.version}`)
+            : null,
+          cmd !== ''
+            ? createElement('code', {
+                style: { flex: '1 1 auto', minWidth: 0, fontFamily: 'var(--war-font-code)', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-1)', background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '5px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+              }, cmd)
+            : null,
+          cmd !== ''
+            ? createElement('button', {
+                type: 'button',
+                onClick: () => { copyCmd(seat.id, cmd) },
+                style: { flex: '0 0 auto', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--war-border)', background: 'transparent', color: copiedId === seat.id ? 'var(--war-done)' : 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))' },
+              }, copiedId === seat.id ? t.copied : absent ? seat.label : t.updateBtn)
+            : null,
+          link.repo !== undefined
+            ? createElement('a', {
+                'data-war-seat-repo': seat.id, href: link.repo, target: '_blank', rel: 'noreferrer',
+                style: { flex: '0 0 auto', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-2)', textDecoration: 'none', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap' },
+              }, `${t.repoLink} ↗`)
+            : null)
+      })(),
       // D29 critique：注解两层制——第一句人话常驻，其余收进「技术细节」折叠
       //（「垫片/上游 exec 路径」是 release note 语言，不该在第一屏筛选用户）。
       createElement('div', { style: { marginTop: 6, fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.5 } },
@@ -276,11 +344,11 @@ export function fleetGate(props: {
               style: { padding: '12px 14px', borderRadius: 'var(--war-r-md, 10px)', background: 'var(--war-well-bg)', border: '1px solid var(--war-border-soft)' },
             },
               createElement('div', { style: { fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.6 } }, t.installTitle),
-              ...absentSeats.filter(s => INSTALL_PKGS[s.id] !== undefined).map(seat =>
+              ...absentSeats.filter(s => SEAT_LINKS[s.id]?.pkg !== undefined).map(seat =>
                 createElement('div', { key: `ins-${seat.id}`, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
                   createElement('code', {
                     style: { flex: '1 1 auto', fontFamily: 'var(--war-font-code)', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-1)', background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '5px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-                  }, t.installVia(INSTALL_PKGS[seat.id]!)),
+                  }, t.installVia(SEAT_LINKS[seat.id]!.pkg!)),
                   createElement('button', {
                     type: 'button',
                     onClick: () => { copyInstall(seat.id) },
@@ -310,6 +378,13 @@ export function fleetGate(props: {
             }, `${showAbsent ? '▾ ' : '▸ '}${t.absentFold(absentSeats.length)}`)
           : null,
         showAbsent ? absentSeats.map(card) : null),
+      // 2026-11-17 共享凭证提示行：key 在位才出现——注入开=覆盖面交代、关=指路开。
+      props.fleet.loopKeySource !== undefined && props.fleet.loopKeySource !== 'none'
+        ? createElement('div', {
+            key: 'cred-line', 'data-war-cred-line': '1',
+            style: { flex: '0 0 auto', marginTop: 10, fontSize: 'calc(12px*var(--war-fs))', color: props.fleet.fleetInject === false ? 'var(--war-text-3)' : 'var(--war-done)', lineHeight: 1.5 },
+          }, props.fleet.fleetInject === false ? t.credOff : t.credReady)
+        : null,
       // D35 形态 A：agent 接入卡（恒在场——与绑定哪支舰队无关）。复制一条提示词，
       // 用户的 agent 自己装 stardeck+接入代理舰长席+开板。
       createElement('div', {
@@ -333,7 +408,10 @@ export function fleetGate(props: {
         : null,
       createElement('div', { className: 'war-gate-actions', style: { display: 'flex', gap: 8, marginTop: 18, flex: '0 0 auto' } },
         props.dismissible
-          ? createElement('button', { onClick: props.onDismiss, style: { padding: '9px 14px', borderRadius: 8, border: '1px solid var(--war-border)', background: 'transparent', color: 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(13px*var(--war-fs))' } }, t.back)
+          ? createElement('button', {
+              'data-war-gate-skip': '1', onClick: props.onDismiss,
+              style: { padding: '9px 14px', borderRadius: 8, border: '1px solid var(--war-border)', background: 'transparent', color: 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(13px*var(--war-fs))' },
+            }, props.fleet.seats.some(s => seatStatusOf(s) === 'ready') ? t.back : t.skipInstall)
           : null,
         createElement('button', {
           disabled: picked !== undefined && seatStatusOf(picked) === 'absent',

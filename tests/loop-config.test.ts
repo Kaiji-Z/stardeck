@@ -26,10 +26,10 @@ test('loop 配置读写往返：loop 段落本机 config、既有键保留、清
   const prev = process.env.STARDECK_CONFIG
   process.env.STARDECK_CONFIG = cfgPath
   try {
-    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '' }, '无 loop 段=空配置')
+    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '', fleetInject: true }, '无 loop 段=空配置（注入缺省开）')
     const w1 = writeLoopConfig({ model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1' })
     assert.equal(w1.ok, true)
-    assert.deepEqual(readLoopConfig(), { model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1', effort: '' })
+    assert.deepEqual(readLoopConfig(), { model: 'glm-5.3-flash', baseUrl: 'https://api.x/', apiKey: 'sk-t1', effort: '', fleetInject: true })
     const fileBody = JSON.parse(readFileSync(cfgPath, 'utf8')) as { executor?: string; loop?: unknown }
     assert.equal(fileBody.executor, 'opencode', '既有键原样保留')
     assert.ok(fileBody.loop !== undefined, 'loop 段在场')
@@ -37,6 +37,13 @@ test('loop 配置读写往返：loop 段落本机 config、既有键保留、清
     assert.equal(w2.ok, true)
     assert.equal(readLoopConfig().apiKey, '', '空串=清除 key')
     assert.equal(readLoopConfig().model, 'glm-5.3-flash', '未 patch 的键不动')
+    // 2026-11-17 舰队注入开关往返：显式关→落盘；不携带该字段的 patch 不动它。
+    assert.equal(writeLoopConfig({ fleetInject: false }).ok, true)
+    assert.equal(readLoopConfig().fleetInject, false, '显式关闭落盘')
+    writeLoopConfig({ model: 'glm-5.2' })
+    assert.equal(readLoopConfig().fleetInject, false, '无关 patch 不动注入开关')
+    assert.equal(writeLoopConfig({ fleetInject: true }).ok, true)
+    assert.equal(readLoopConfig().fleetInject, true, '再开往返')
   } finally {
     if (prev === undefined) delete process.env.STARDECK_CONFIG
     else process.env.STARDECK_CONFIG = prev
@@ -109,6 +116,24 @@ test('真 daemon：loop-config 三端点 + /fleet 回读 + key 永不出线', { 
     assert.equal(t2.probe.ok, false, '覆盖坏基址=诚实报败')
     const diskPre = JSON.parse(readFileSync(join(stateDir, 'config.json'), 'utf8')) as { loop?: { apiKey?: string } }
     assert.equal(diskPre.loop?.apiKey, 'sk-loop-test', 'key 只落本机 config')
+    // 2026-11-17 舰队注入开关端点面：GET 默认开 → POST 关（含 /fleet 回读翻新）
+    // → 非法类型静默忽略。key 本体仍永不出线（g1 已验，此处 JSON dump 同查）。
+    const gi0 = await fetch(`${base}/warroom/api/loop-config`).then(r => r.json()) as { fleetInject?: boolean }
+    assert.equal(gi0.fleetInject, true, '缺省=注入开')
+    const fi1 = await fetch(`${base}/warroom/api/fleet`).then(r => r.json()) as { fleetInject?: boolean }
+    assert.equal(fi1.fleetInject, true, '/fleet 注入开关回读')
+    const pi = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fleetInject: false }) }).then(r => r.json()) as { saved: { ok: boolean; fleetInject?: boolean } }
+    assert.equal(pi.saved.ok, true)
+    assert.equal(pi.saved.fleetInject, false, '保存回执带注入开关')
+    const fi2 = await fetch(`${base}/warroom/api/fleet`).then(r => r.json()) as { fleetInject?: boolean }
+    assert.equal(fi2.fleetInject, false, '/fleet 注入开关即时翻新')
+    await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fleetInject: 'yes' }) })
+    const gi1 = await fetch(`${base}/warroom/api/loop-config`).then(r => r.json()) as { fleetInject?: boolean }
+    assert.equal(gi1.fleetInject, false, '非 boolean 静默忽略（不覆盖已存档）')
+    assert.ok(!JSON.stringify(gi1).includes('sk-loop-test'), 'key 本体仍不出线')
+    const diskFi = JSON.parse(readFileSync(join(stateDir, 'config.json'), 'utf8')) as { loop?: { fleetInject?: boolean } }
+    assert.equal(diskFi.loop?.fleetInject, false, '注入开关只落本机 config')
+    await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fleetInject: true }) })
     // D37 思考强度往返：POST effort=fast → GET 回读；非法档静默忽略；占用表在场。
     const pe = await fetch(`${base}/warroom/api/loop-config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ effort: 'fast' }) }).then(r => r.json()) as { saved: { ok: boolean; effort?: string } }
     assert.equal(pe.saved.ok, true)
@@ -262,7 +287,7 @@ test('纯分支三件：env+cfg 双 key 时硬关仍禁；STARDECK_CONFIG 缺席
   const prev = process.env.STARDECK_CONFIG
   process.env.STARDECK_CONFIG = join(mkdtempSync(join(tmpdir(), 'sd-nofile-')), 'absent.json')
   try {
-    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '' }, '文件缺席=空配置')
+    assert.deepEqual(readLoopConfig(), { model: '', baseUrl: '', apiKey: '', effort: '', fleetInject: true }, '文件缺席=空配置')
     writeLoopConfig({ model: 'only-model' })
     writeLoopConfig({ baseUrl: 'https://b' })
     const l = readLoopConfig()

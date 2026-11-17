@@ -680,12 +680,13 @@ export function registerDashboard(webServer: RouteRegistry, deps: DashboardDeps)
         send(200, { ok: true, ...deps.loopConfig.get() })
         return
       } else if (r.method === 'POST' && pathname === '/warroom/api/loop-config' && deps.loopConfig !== undefined) {
-        const raw = JSON.parse(await readBody(r) || '{}') as { model?: unknown; baseUrl?: unknown; apiKey?: unknown; effort?: unknown }
-        const patch: { model?: string; baseUrl?: string; apiKey?: string; effort?: '' | 'fast' | 'deep' } = {}
+        const raw = JSON.parse(await readBody(r) || '{}') as { model?: unknown; baseUrl?: unknown; apiKey?: unknown; effort?: unknown; fleetInject?: unknown }
+        const patch: { model?: string; baseUrl?: string; apiKey?: string; effort?: '' | 'fast' | 'deep'; fleetInject?: boolean } = {}
         if (typeof raw.model === 'string') patch.model = raw.model.trim()
         if (typeof raw.baseUrl === 'string') patch.baseUrl = raw.baseUrl.trim().replace(/\/+$/, '')
         if (typeof raw.apiKey === 'string') patch.apiKey = raw.apiKey.trim()
         if (raw.effort === 'fast' || raw.effort === 'deep' || raw.effort === '') patch.effort = raw.effort
+        if (typeof raw.fleetInject === 'boolean') patch.fleetInject = raw.fleetInject
         send(200, { ok: true, saved: deps.loopConfig.save(patch) })
         return
       } else if (r.method === 'POST' && pathname === '/warroom/api/loop-abort' && deps.loopAbort !== undefined) {

@@ -8,6 +8,26 @@
  * @module stardeck/client/copy-en
  */
 import type { WarCopy } from './copy.ts'
+import type { FleetFamily } from '../fleet-creds.ts'
+
+/** EN counterpart of INJECT_COPY_ZH in copy.ts（键形逐键对齐；覆盖面口径与
+ *  fleet-creds.fleetEnvFor 发射的变量族一致）。 */
+const INJECT_COPY_EN: Pick<WarCopy['bridge'], 'injectLabel' | 'injectOn' | 'injectOff' | 'injectHint' | 'injectCover' | 'injectOffShort'> = {
+  injectLabel: 'Inject into fleet CLIs',
+  injectOn: 'On',
+  injectOff: 'Off',
+  injectHint: 'When on, this key/base URL feeds the chat window and is also injected into fleet CLI child processes on conscription — same-named environment variables take this config (overriding your shell). Takes effect on save.',
+  injectCover: {
+    zai: 'Coverage: pi reads ZAI_API_KEY; claude / opencode use the z.ai anthropic-compatible face (ANTHROPIC_*); dsh reads DEEPSEEK_*. codex takes its key on the shim side and zcode manages its own — those two seats skip injection.',
+    deepseek: 'Coverage: dsh / pi read DEEPSEEK_*; claude / opencode use api.deepseek.com/anthropic (ANTHROPIC_*). codex takes its key on the shim side; zcode manages its own.',
+    openai: 'Coverage: CLIs honoring OPENAI_API_KEY / OPENAI_BASE_URL standard vars (opencode etc.). codex takes its key on the shim side; zcode manages its own.',
+    moonshot: 'Coverage: CLIs honoring MOONSHOT_API_KEY. codex takes its key on the shim side; zcode manages its own.',
+    dashscope: 'Coverage: CLIs honoring DASHSCOPE_API_KEY. codex takes its key on the shim side; zcode manages its own.',
+    anthropic: 'Coverage: claude / opencode read ANTHROPIC_* (base URL passed as-is). codex takes its key on the shim side; zcode manages its own.',
+    unknown: 'No fleet-injection mapping for this provider yet (gateway dialects are not guessed) — the key only feeds the chat window.',
+  },
+  injectOffShort: 'fleet injection off',
+}
 
 /** 军事皮肤（英译）：military flavor，角色同中文军事典——Sovereign/Staff
  * Officer/Field Commander/Battlefield。 */
@@ -718,6 +738,7 @@ export const enWarCopy: WarCopy = {
     effortFast: 'Fast',
     effortDeep: 'Deep',
     effortUnsupported: 'Thinking levels not supported by this provider (always auto)',
+    ...INJECT_COPY_EN,
     ctxTitle: 'Context usage',
     ctxChipHint: 'Click for the breakdown',
     recallBtn: 'Recall',
@@ -1454,6 +1475,7 @@ export const enPlainCopy: WarCopy = {
     effortFast: 'Fast',
     effortDeep: 'Deep',
     effortUnsupported: 'Thinking levels not supported by this provider (always auto)',
+    ...INJECT_COPY_EN,
     ctxTitle: 'Context usage',
     ctxChipHint: 'Click for the breakdown',
     recallBtn: 'Recall',

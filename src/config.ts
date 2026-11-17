@@ -223,9 +223,14 @@ export interface LoopConfig {
   /** D37 思考强度（照搬 lookatstudy 三档）：''=自动不干预 / 'fast'=thinking disabled /
    *  'deep'=thinking enabled——仅 GLM 家族端点生效（bodyPatch 方言，见 proxy-loop）。 */
   effort: '' | 'fast' | 'deep'
+  /** 2026-11-17 舰队注入开关：true=同一份凭证（baseUrl+apiKey）除喂内置 loop 外，
+   *  再按 fleet-creds.fleetEnvFor 翻译成各 CLI 的标准 env 注入 spawn（大副/外勤/
+   *  续跑投递全咽喉）；false=只喂 loop。生效条件另含 key/baseUrl 非空——空 key
+   *  时开关无效果。缺省 true（配一次全家吃是本刀产品意图）。 */
+  fleetInject: boolean
 }
 
-const EMPTY_LOOP: LoopConfig = { model: '', baseUrl: '', apiKey: '', effort: '' }
+const EMPTY_LOOP: LoopConfig = { model: '', baseUrl: '', apiKey: '', effort: '', fleetInject: true }
 
 export function readLoopConfig(): LoopConfig {
   const path = configFilePath()
@@ -238,6 +243,7 @@ export function readLoopConfig(): LoopConfig {
       baseUrl: typeof l.baseUrl === 'string' ? l.baseUrl : '',
       apiKey: typeof l.apiKey === 'string' ? l.apiKey : '',
       effort: l.effort === 'fast' || l.effort === 'deep' ? l.effort : '',
+      fleetInject: typeof l.fleetInject === 'boolean' ? l.fleetInject : true,
     }
   } catch {
     return { ...EMPTY_LOOP }
@@ -266,6 +272,7 @@ export function writeLoopConfig(patch: Partial<LoopConfig>): { ok: true; loop: L
     baseUrl: patch.baseUrl !== undefined ? patch.baseUrl : prev.baseUrl,
     apiKey: patch.apiKey !== undefined ? patch.apiKey : prev.apiKey,
     effort: patch.effort !== undefined ? patch.effort : prev.effort,
+    fleetInject: patch.fleetInject !== undefined ? patch.fleetInject : prev.fleetInject,
   }
   try {
     mkdirSync(dirname(path), { recursive: true })

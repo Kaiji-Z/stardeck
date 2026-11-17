@@ -221,6 +221,8 @@ export async function deliverViaOpencode(args: {
   stateDir: string
   graceMs?: number
   settledTimeoutMs?: number
+  /** 舰队共享凭证注入（缺省=继承 daemon 环境，行为与旧版字节等价）。 */
+  env?: NodeJS.ProcessEnv
 }): Promise<{ ok: boolean; error?: string; settled: Promise<boolean> }> {
   const logDir = join(args.stateDir, 'logs')
   mkdirSync(logDir, { recursive: true })
@@ -229,8 +231,8 @@ export async function deliverViaOpencode(args: {
   const isJs = /\.(js|mjs|cjs)$/.test(args.bin)
   const argv = opencodeAnswerArgv({ cwd: args.cwd, sessionId: args.sessionId, model: args.model, message: args.message })
   const child = isJs
-    ? spawn(process.execPath, [args.bin, ...argv], { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true })
-    : spawn(args.bin, argv, { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true })
+    ? spawn(process.execPath, [args.bin, ...argv], { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true, env: args.env })
+    : spawn(args.bin, argv, { stdio: ['ignore', 'pipe', 'pipe'], cwd: args.cwd, windowsHide: true, env: args.env })
   const log = createWriteStream(logPath, { flags: 'a' })
   child.stdout?.pipe(log)
   child.stderr?.pipe(log)

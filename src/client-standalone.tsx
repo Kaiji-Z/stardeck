@@ -12,7 +12,7 @@ import { createElement, useCallback, useEffect, useRef, useState, type CSSProper
 import { createRoot } from 'react-dom/client'
 import { ensureWarStyles } from './client/styles.ts'
 import { warView, type ClientServicesFace } from './client/views.tsx'
-import { fleetGate, type FleetState } from './client/fleet-gate.tsx'
+import { fleetGate, seatStatusOf, type FleetState } from './client/fleet-gate.tsx'
 import { BridgePane } from './client/bridge.tsx'
 import { collectInbox } from './client/inbox.ts'
 import { useWar } from './client/data.ts'
@@ -210,8 +210,8 @@ function App(): ReturnType<typeof createElement> {
     }
   }, [])
   const loadFleet = useCallback((): void => {
-    fetch('/warroom/api/fleet').then(r => r.json()).then((f: { ok?: boolean; active?: FleetState['active']; seats?: FleetState['seats']; proxyLoop?: boolean }) => {
-      if (f.ok === true && f.active !== undefined && f.seats !== undefined) setFleet({ active: f.active, seats: f.seats, proxyLoop: f.proxyLoop })
+    fetch('/warroom/api/fleet').then(r => r.json()).then((f: { ok?: boolean; active?: FleetState['active']; seats?: FleetState['seats']; proxyLoop?: boolean; fleetInject?: boolean; loopKeySource?: 'none' | 'config' | 'env' }) => {
+      if (f.ok === true && f.active !== undefined && f.seats !== undefined) setFleet({ active: f.active, seats: f.seats, proxyLoop: f.proxyLoop, fleetInject: f.fleetInject, loopKeySource: f.loopKeySource })
     }).catch(() => { /* daemon 不在——仍放行进甲板（读投影会显示离线态） */ })
       .finally(() => { setFleetSettled(true) })
   }, [])
@@ -235,7 +235,11 @@ function App(): ReturnType<typeof createElement> {
     return createElement('div', { style: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontFamily: 'sans-serif' } }, activeCopy().loading.connecting)
   }
   if ((phase === 'entry' || phase === 'switch') && fleet !== undefined) {
-    return createElement(fleetGate, { fleet, onEnter: enter, dismissible: phase === 'switch', onDismiss: () => { setPhase('board') }, error, onReprobe: loadFleet })
+    // 2026-11-17 零舰队逃生口：本机无任何可绑席时门可跳过（「先上甲板，稍后再
+    // 装」）——聊天窗经内置 loop 仍可用（BYOK），执行链诚实缺席；有可绑席则
+    // 维持绑定优先（原行为不变）。
+    const noReadySeat = !fleet.seats.some(s => seatStatusOf(s) === 'ready')
+    return createElement(fleetGate, { fleet, onEnter: enter, dismissible: phase === 'switch' || noReadySeat, onDismiss: () => { setPhase('board') }, error, onReprobe: loadFleet })
   }
   const bc = activeCopy().bridge
   // 舰队胶囊：常驻（球上方一档；旗 OFF 无球时落底角）——切舰队只影响后续征召。

@@ -708,6 +708,8 @@ export interface StaffSpawnArgs {
   stateDir: string
   /** V19.13 codex 垫片基址（codex 席大副的 GLM 直驱面；余席忽略）。 */
   codexShimBase?: string
+  /** 舰队共享凭证 env（fleet-creds.fleetEnvFor 产物；缺省=不注入）。 */
+  credEnv?: Record<string, string>
   /** D27 席位（缺省 staff=字节不变）：proxy=代理舰长席（title/日志前缀/无头
    *  指令换面；spawn 路径不另构——进程框定法全席共用）。 */
   role?: 'staff' | 'proxy'
@@ -745,6 +747,7 @@ export async function spawnStaffAgent(args: StaffSpawnArgs): Promise<ExecutorSes
     role: proxy ? 'proxy' : 'staff',
     attachTaskId: args.agentId,
     prompt: proxy ? PROXY_PROMPT : STAFF_PROMPT,
+    credEnv: args.credEnv,
   }
   if (args.executor === 'zcode') {
     // zcode 模型串不透传（引擎吃自身 config 的 provider 条目）。

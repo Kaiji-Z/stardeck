@@ -26,6 +26,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createInterface as readlineCreateInterface } from 'node:readline'
 import { commanderOrderFor } from './prompts.ts'
 import { codexShimProviderArgs } from './codex-shim.ts'
+import { dshDeepseekBaseUrl } from './fleet-creds.ts'
+
+// 实现 2026-11-17 迁至 fleet-creds.ts（零依赖纯函数单一源）；原位 re-export
+// 保 API——既有 import 面（executor-face.test 等）字节不变。
+export { dshDeepseekBaseUrl } from './fleet-creds.ts'
 
 /** MCP 桥的绝对路径（随包发布；dist 构建后与 daemon 同目录）。 */
 export function mcpBridgePath(): string {
@@ -47,6 +52,8 @@ export interface ExecutorSpawnArgs {
   modelProvider: string
   /** V19.13 codex 垫片基址（非空=codex 模型面走 Responses→chat 垫片，压过 modelProvider）。 */
   codexShimBase?: string
+  /** 舰队共享凭证 env（fleet-creds.fleetEnvFor 产物；缺省=不注入）。 */
+  credEnv?: Record<string, string>
   executorBin: string
   stateDir: string
 }
@@ -397,6 +404,16 @@ export interface HeadlessAgentArgs {
   attachTaskId?: string
   /** V19.13 codex 垫片基址（codex 席 GLM 直驱；余席忽略）。 */
   codexShimBase?: string
+  /** 舰队共享凭证 env（fleet-creds.fleetEnvFor 产物）：覆盖 process.env 同名项
+   *  （config>env 纪律）；缺省=不注入（行为与旧版字节等价）。 */
+  credEnv?: Record<string, string>
+}
+
+/** 舰队子进程 env 底座：process.env ← credEnv ← 席位专属（STARDECK_HTTP/AGENT、
+ *  CODEX_HOME 等）——共享凭证覆盖用户 shell 同名项（与 mergeLoopEnv 的
+ *  config>env 同纪律），席位专属恒最高。 */
+export function childEnv(credEnv: Record<string, string> | undefined, extra: Record<string, string>): NodeJS.ProcessEnv {
+  return { ...process.env, ...(credEnv ?? {}), ...extra }
 }
 
 /** spawn 后接管日志/退场记账的共用段（三适配器与大副共用）。
@@ -438,6 +455,7 @@ export async function spawnHeadlessOpencode(args: HeadlessAgentArgs): Promise<Ex
     args.prompt ?? PROMPT,
   ], {
     cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
+    env: childEnv(args.credEnv, {}),
     onStdoutLine: args.attachTaskId !== undefined
       ? opencodeSessionCapture({ stateDir: args.stateDir, taskId: args.attachTaskId, workspacePath: args.workspacePath })
       : undefined,
@@ -457,7 +475,7 @@ export async function spawnHeadlessZcode(args: HeadlessAgentArgs): Promise<Execu
   return spawnCli(args.executorBin, zcodePromptArgs({ prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
-      env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+      env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
       onStdoutLine: args.attachTaskId !== undefined
         ? zcodeSessionCapture({ stateDir: args.stateDir, taskId: args.attachTaskId, workspacePath: args.workspacePath })
         : undefined,
@@ -477,7 +495,7 @@ export async function spawnHeadlessPi(args: HeadlessAgentArgs): Promise<Executor
   return spawnCli(args.executorBin, piPrintArgs({ model: args.model, prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
-      env: piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
+      env: { ...piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }), ...(args.credEnv ?? {}) },
     })
 }
 
@@ -494,7 +512,7 @@ export async function spawnHeadlessClaude(args: HeadlessAgentArgs): Promise<Exec
   return spawnCli(args.executorBin, claudePrintArgs({ model: args.model, prompt: args.prompt ?? PROMPT }),
     {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
-      env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+      env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
       onStdoutLine: args.attachTaskId !== undefined
         ? claudeSessionCapture({ stateDir: args.stateDir, taskId: args.attachTaskId, workspacePath: args.workspacePath })
         : undefined,
@@ -552,7 +570,7 @@ export function spawnHeadlessCodexStaff(args: HeadlessAgentArgs): ExecutorSessio
       workspacePath: args.workspacePath, model: codexModelId(args.model), codexShimBase: args.codexShimBase, prompt: args.prompt ?? PROMPT,
     }), {
       cwd: args.workspacePath, stateDir: args.stateDir, role: args.role, agentId: args.agentId, taskId: '',
-      env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) },
+      env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) }),
       onStdoutLine: args.attachTaskId !== undefined
         ? codexSessionCapture({ stateDir: args.stateDir, taskId: args.attachTaskId, workspacePath: args.workspacePath })
         : undefined,
@@ -628,6 +646,7 @@ export const opencodeAdapter: ExecutorAdapter = {
       stateDir: args.stateDir,
       role: 'executor',
       attachTaskId: args.taskId,
+      credEnv: args.credEnv,
     })
     return { ...session, taskId: args.taskId }
   },
@@ -650,7 +669,7 @@ export const codexAdapter: ExecutorAdapter = {
     }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) },
+        env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId, CODEX_HOME: codexHomeFor(args.workspacePath) }),
         onStdoutLine: codexSessionCapture({ stateDir: args.stateDir, taskId: args.taskId, workspacePath: args.workspacePath }),
       })
   },
@@ -671,7 +690,7 @@ export const piAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, piPrintArgs({ model: args.model, prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
+        env: { ...piSeatEnv({ STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }), ...(args.credEnv ?? {}) },
       })
   },
 }
@@ -1043,7 +1062,7 @@ export const zcodeAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, zcodePromptArgs({ prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+        env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
         onStdoutLine: zcodeSessionCapture({ stateDir: args.stateDir, taskId: args.taskId, workspacePath: args.workspacePath }),
       })
   },
@@ -1083,20 +1102,6 @@ export function dshCloneRootOf(binTs: string): string {
 export function dshModelId(model: string): string {
   const id = model.includes('/') ? model.slice(model.indexOf('/') + 1) : model
   return id.trim() !== '' ? id.trim() : 'glm-5.2'
-}
-
-/** dsh 0.2.2 的 DEEPSEEK_BASE_URL 改译（纯，测试管辖）：llm-deepseek 已换
- *  Anthropic Messages wire——z.ai 域的 OpenAI 面（…/coding/paas/v4 等）改译
- *  同域 /api/anthropic（claude 席同款端点，2026-11-12 实弹 200）；非 z.ai 域
- *  与显式 DEEPSEEK_BASE_URL 原样透传（自定义网关自负责）。 */
-export function dshDeepseekBaseUrl(zaiBaseUrl: string): string {
-  try {
-    const u = new URL(zaiBaseUrl)
-    if (u.hostname === 'z.ai' || u.hostname === 'api.z.ai' || u.hostname.endsWith('.z.ai')) {
-      return `${u.protocol}//${u.hostname}/api/anthropic`
-    }
-  } catch { /* 非 URL 形态：透传，让上游自己报错（诚实面） */ }
-  return zaiBaseUrl
 }
 
 /** dsh --patch 外挂层内容（纯，测试管辖）：agent-default-model 路由 GLM +
@@ -1173,8 +1178,8 @@ export async function spawnHeadlessDsh(args: HeadlessAgentArgs): Promise<Executo
   writeFileSync(patchPath, dshPatchYml(args.model ?? ''), 'utf8')
   const binTs = args.executorBin
   const isSourceEntry = binTs.endsWith('.ts')
-  const env: NodeJS.ProcessEnv = { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }
-  // 网关映射：DEEPSEEK_* 优先；缺席时 Z_AI_*（本机 GLM 网关正典）补位。
+  const env: NodeJS.ProcessEnv = childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId })
+  // 网关映射：DEEPSEEK_* 优先（共享凭证注入已在 childEnv 落位）；缺席时 Z_AI_*（本机 GLM 网关正典）补位。
   if (env.DEEPSEEK_API_KEY === undefined && process.env.Z_AI_API_KEY !== undefined) env.DEEPSEEK_API_KEY = process.env.Z_AI_API_KEY
   // dsh 0.2.2 起 llm-deepseek 走 Anthropic Messages wire（正典 api.deepseek.com
   // /anthropic）——z.ai 侧对应面=/api/anthropic。Z_AI_BASE_URL 是 OpenAI 面
@@ -1373,7 +1378,7 @@ export const claudeAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, claudePrintArgs({ model: args.model, prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+        env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
         onStdoutLine: claudeSessionCapture({ stateDir: args.stateDir, taskId: args.taskId, workspacePath: args.workspacePath }),
       })
   },

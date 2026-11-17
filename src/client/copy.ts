@@ -15,6 +15,27 @@
  */
 
 import type { BoardCommand, BoardTask, BoardAttempt } from './data.ts'
+import type { FleetFamily } from '../fleet-creds.ts'
+
+/** 2026-11-17 舰队注入段文案（war/plain 两 zh 典同值——皮肤中立；en 典在 copy-en.ts）。
+ *  injectCover 键形与 fleet-creds.FleetFamily 逐键对齐，覆盖面口径与 fleetEnvFor
+ *  发射的变量族一致（UI 不许多说也不许漏说）。 */
+const INJECT_COPY_ZH: { injectLabel: string; injectOn: string; injectOff: string; injectHint: string; injectCover: Record<FleetFamily, string>; injectOffShort: string } = {
+  injectLabel: '注入舰队 CLI',
+  injectOn: '开启',
+  injectOff: '关闭',
+  injectHint: '开启后，这份 key/基址除喂本聊天窗外，还在征召时注入舰队 CLI 子进程——同名环境变量以此为准（覆盖 shell 里自己设的）。保存后生效。',
+  injectCover: {
+    zai: '覆盖面：pi 取 ZAI_API_KEY；claude / opencode 走 z.ai anthropic 兼容面（ANTHROPIC_*）；dsh 取 DEEPSEEK_*。codex 的 key 在 codex-shim 垫片侧配、zcode 由其自身管理——这两席不吃注入。',
+    deepseek: '覆盖面：dsh / pi 取 DEEPSEEK_*；claude / opencode 走 api.deepseek.com/anthropic（ANTHROPIC_*）。codex 的 key 在垫片侧配、zcode 自管——不吃注入。',
+    openai: '覆盖面：认 OPENAI_API_KEY / OPENAI_BASE_URL 标准面的 CLI（opencode 等）。codex 的 key 在垫片侧配、zcode 自管——不吃注入。',
+    moonshot: '覆盖面：认 MOONSHOT_API_KEY 标准面的 CLI。codex 的 key 在垫片侧配、zcode 自管——不吃注入。',
+    dashscope: '覆盖面：认 DASHSCOPE_API_KEY 标准面的 CLI。codex 的 key 在垫片侧配、zcode 自管——不吃注入。',
+    anthropic: '覆盖面：claude / opencode 取 ANTHROPIC_*（基址原样）。codex 的 key 在垫片侧配、zcode 自管——不吃注入。',
+    unknown: '该供应商暂无舰队注入映射（不猜网关方言）——key 只喂本聊天窗。',
+  },
+  injectOffShort: '未注入舰队',
+}
 
 export interface WarCopy {
   head: { title: string; subActive: string; subIdle: string; /** 侧栏入口悬停 title 后缀（入典：随皮肤派生）。 */ entrySuffix: string
@@ -763,6 +784,14 @@ export interface WarCopy {
     effortFast: string
     effortDeep: string
     effortUnsupported: string
+    /** 2026-11-17 舰队注入段（模型设置弹窗+抽屉摘要行）：开关药丸+一句纪律+
+     *  按供应商族的覆盖面人话（injectCover 键形与 fleet-creds.FleetFamily 对齐）。 */
+    injectLabel: string
+    injectOn: string
+    injectOff: string
+    injectHint: string
+    injectCover: Record<FleetFamily, string>
+    injectOffShort: string
     /** D38.3 舰长撤回（两步确认）+ 决策卡坞折叠。 */
     recallBtn: string
     recallConfirm: string
@@ -1514,6 +1543,7 @@ export const warCopy: WarCopy = {
     effortFast: '快速',
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
+    ...INJECT_COPY_ZH,
     ctxTitle: '上下文占用',
     ctxChipHint: '点击看四段明细',
     recallBtn: '撤回',
@@ -2252,6 +2282,7 @@ export const plainCopy: WarCopy = {
     effortFast: '快速',
     effortDeep: '深度',
     effortUnsupported: '当前供应商不支持思考档位（恒自动）',
+    ...INJECT_COPY_ZH,
     ctxTitle: '上下文占用',
     ctxChipHint: '点击看四段明细',
     recallBtn: '撤回',

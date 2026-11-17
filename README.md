@@ -89,7 +89,9 @@ stardeck                       # 起 daemon + 自动打开浏览器（首跑自�
 
 聊天是**流式透明**的：发话约 1 秒内代理舰长开工，回复过程全程可见——**思考过程**（推理内容逐字上屏的折叠区）、**工具使用**（调了哪个只读通道、参数与结果摘要）、再到终答逐字打出；它在想什么、查什么，一屏看得见。
 
-本机一个 CLI 都没有？门面会给出各席安装命令（一键复制）；也可以不装任何 CLI——内置 BYOK loop 默认在岗：进板后 **设置 → 模型设置** 弹窗选供应商（Z.ai/DeepSeek/Kimi/阿里百炼/MiniMax/OpenAI/Anthropic 兼容层等预设，附领 key 直达链接）→ 贴 key → 测试连接即可开聊（key 只存本机 config，不进仓库不进日志；也可用 `Z_AI_BASE_URL`/`Z_AI_API_KEY` 环境变量，`STARDECK_PROXY_LOOP=0` 显式关）。
+本机一个 CLI 都没有？**绑定门就是安装/更新的正路**：每张席位卡自带一键复制的安装命令（未装）/更新命令+已装版本（已装）与官方 GitHub 仓库链接；全席缺席时点「先上甲板，稍后再装」也能先进门——内置 BYOK loop 默认在岗：进板后 **设置 → 模型设置** 弹窗选供应商（Z.ai/DeepSeek/Kimi/阿里百炼/MiniMax/OpenAI/Anthropic 兼容层等预设，附领 key 直达链接）→ 贴 key → 测试连接即可开聊（key 只存本机 config，不进仓库不进日志；也可用 `Z_AI_BASE_URL`/`Z_AI_API_KEY` 环境变量，`STARDECK_PROXY_LOOP=0` 显式关）。
+
+**共享凭证（配一次，全舰队吃）**：模型设置弹窗里的「注入舰队 CLI」开关（默认开）会把同一份 key/基址在征召时注入舰队 CLI 子进程——pi 取 `ZAI_API_KEY`、claude/opencode 走 z.ai anthropic 兼容面（`ANTHROPIC_*`）、dsh 取 `DEEPSEEK_*`；同名环境变量以本页配置为准。codex 的 key 在 codex-shim 垫片侧配、zcode 由其自身管理（两席不吃注入，席位卡如实注记）。自建代理/未知网关=零注入不猜方言。
 
 ### 把你自己的 agent 接进来当代理舰长（一行命令）
 
@@ -162,17 +164,17 @@ pnpm live         # 端到端实机门：真 CLI 外勤全链（开发态）
 
 **双席正典**：一个舰队能被选中，必须**大副 + 外勤两个岗位都接通**——大副分诊呈批、外勤干活交证，都跑在你选的 CLI 上。
 
-| 状态 | CLI | 说明 |
-|---|---|---|
-| ✅ 稳定 | [opencode](https://opencode.ai) | 开源、多供应商；项目级 `opencode.json` 注入 MCP 桥（最新适配 1.19.5） |
-| ✅ 稳定 | [pi](https://github.com/badlogic/pi-mono) | 轻量；扩展件注册出口协议工具（最新适配 1.5.2——zai 内置供应商认 `ZAI_API_KEY`，旧 `Z_AI_API_KEY` 自动补位） |
-| ✅ 稳定 | zcode | GLM 系；模型走其自身配置（引擎随桌面应用，0.17.x 实测） |
-| ✅ 稳定 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 原生订阅或 anthropic 兼容网关（最新适配 2.1.322） |
-| ✅ 稳定 | [Codex CLI](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连（最新适配 0.167.2，隔离 CODEX_HOME） |
-| ✅ 稳定 | dsh（DeepSeek Harness） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*——0.2.2 起走 Anthropic Messages wire，z.ai 网关自动改译 `/api/anthropic` 面） |
-| 🚧 暂不可绑 | Gemini CLI | 双席未接通（外勤契约在档未实弹、大副通道未建）——配好 key 实弹转正后开放 |
-| 🚧 暂不可绑 | Qwen Code | 双席未接通（外勤半证、大副通道未建）——实弹转正后开放 |
-| 🚧 即将支持 | Copilot CLI / Amp / Cursor CLI / Droid | 适配进行中（部分走 ACP 协议） |
+| 状态 | CLI | 官方仓库 | 说明 |
+|---|---|---|---|
+| ✅ 稳定 | opencode | [anomalyco/opencode](https://github.com/anomalyco/opencode)（[官网](https://opencode.ai)；原 sst/ 旧链重定向） | 开源、多供应商；项目级 `opencode.json` 注入 MCP 桥（最新适配 1.19.5） |
+| ✅ 稳定 | pi | [earendil-works/pi](https://github.com/earendil-works/pi)（原 badlogic/pi-mono 已改名） | 轻量；扩展件注册出口协议工具（最新适配 1.5.2——zai 内置供应商认 `ZAI_API_KEY`，旧 `Z_AI_API_KEY` 自动补位） |
+| ✅ 稳定 | zcode | [zai-org/ZCode](https://github.com/zai-org/ZCode) | GLM 系；模型走其自身配置（引擎随桌面应用，0.17.x 实测） |
+| ✅ 稳定 | Claude Code | [anthropics/claude-code](https://github.com/anthropics/claude-code)（[文档](https://docs.anthropic.com/en/docs/claude-code)） | 原生订阅或 anthropic 兼容网关（最新适配 2.1.322） |
+| ✅ 稳定 | Codex CLI | [openai/codex](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连（最新适配 0.167.2，隔离 CODEX_HOME） |
+| ✅ 稳定 | dsh（DeepSeek Harness） | 无公开仓（内部渠道） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*——0.2.2 起走 Anthropic Messages wire，z.ai 网关自动改译 `/api/anthropic` 面） |
+| 🚧 暂不可绑 | Gemini CLI | [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | 双席未接通（外勤契约在档未实弹、大副通道未建）——配好 key 实弹转正后开放 |
+| 🚧 暂不可绑 | Qwen Code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | 双席未接通（外勤半证、大副通道未建）——实弹转正后开放 |
+| 🚧 即将支持 | Copilot CLI / Amp / Cursor CLI / Droid | — | 适配进行中（部分走 ACP 协议） |
 
 ## 架构速览
 
@@ -344,7 +346,9 @@ What's the fleet status? Give me a quick rundown
 
 `!!` forces direct execution (skips plan approval), `??` forces plan-first. Default tiers are triaged by the AI first mate.
 
-No CLI on this machine? The gate shows one-click-copy install commands for every seat; or set `STARDECK_PROXY_LOOP=1` plus `Z_AI_BASE_URL`/`Z_AI_API_KEY` environment variables and restart — the chat captain runs on the built-in loop (keys live in env vars only, never on disk).
+No CLI on this machine? **The gate is the install/update home**: every seat card carries a one-click-copy install command (not detected) or update command + installed version (detected), plus the official GitHub repo link. With zero bindable seats, "Board first, install later" still lets you in — the built-in BYOK loop is on duty by default: open **Settings → Chat model** after boarding, pick a provider preset (Z.ai / DeepSeek / Kimi / Aliyun / MiniMax / OpenAI / Anthropic-compat, with get-a-key links), paste your key, hit *Test connection*, and chat away (the key lives only in local config — never in the repo or logs; `Z_AI_BASE_URL`/`Z_AI_API_KEY` env vars also work, `STARDECK_PROXY_LOOP=0` disables).
+
+**Shared credentials (configure once, feed the whole fleet)**: the "Inject into fleet CLIs" toggle in the chat-model dialog (on by default) injects the same key/base URL into fleet CLI child processes on conscription — pi reads `ZAI_API_KEY`, claude/opencode use the z.ai anthropic-compatible face (`ANTHROPIC_*`), dsh reads `DEEPSEEK_*`; same-named environment variables take this config. codex's key lives on the codex-shim side and zcode manages its own (those two seats skip injection, honestly noted on their cards). Unknown gateways get zero injection — no dialect guessing.
 
 ### Plug your own agent in as the proxy captain (one line)
 
@@ -393,17 +397,17 @@ Fleet binding is persisted to the config file and survives restarts; rebind anyt
 
 **Dual-role canon**: a fleet is selectable only when **both roles are wired** — the first mate (triage & briefing) and the field agents (work & evidence) all run on the CLI you pick.
 
-| Status | CLI | Notes |
-|---|---|---|
-| ✅ Stable | [opencode](https://opencode.ai) | Open-source, multi-provider; MCP bridge injected via project `opencode.json` (verified up to 1.19.5) |
-| ✅ Stable | [pi](https://github.com/badlogic/pi-mono) | Lightweight; an extension registers the exit-protocol tools (verified up to 1.5.2 — builtin zai provider takes `ZAI_API_KEY`; legacy `Z_AI_API_KEY` auto-bridged) |
-| ✅ Stable | zcode | GLM family; model lives in its own config (engine ships with the desktop app, tested on 0.17.x) |
-| ✅ Stable | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native subscription or an anthropic-compatible gateway (verified up to 2.1.322) |
-| ✅ Stable | [Codex CLI](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP (verified up to 0.167.2, isolated CODEX_HOME) |
-| ✅ Stable | dsh (DeepSeek Harness) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_* — since 0.2.2 speaks the Anthropic Messages wire; z.ai gateways are auto-rewritten to the `/api/anthropic` face) |
-| 🚧 Not bindable yet | Gemini CLI | Dual-role incomplete (executor contract never live-fired, no staff channel) — opens after a key + live-fire |
-| 🚧 Not bindable yet | Qwen Code | Dual-role incomplete (executor half-proven, no staff channel) — opens after live-fire |
-| 🚧 Coming soon | Copilot CLI / Amp / Cursor CLI / Droid | Adapters in progress (some via ACP) |
+| Status | CLI | Official repo | Notes |
+|---|---|---|---|
+| ✅ Stable | opencode | [anomalyco/opencode](https://github.com/anomalyco/opencode) ([site](https://opencode.ai); the old sst/ links redirect) | Open-source, multi-provider; MCP bridge injected via project `opencode.json` (verified up to 1.19.5) |
+| ✅ Stable | pi | [earendil-works/pi](https://github.com/earendil-works/pi) (renamed from badlogic/pi-mono) | Lightweight; an extension registers the exit-protocol tools (verified up to 1.5.2 — builtin zai provider takes `ZAI_API_KEY`; legacy `Z_AI_API_KEY` auto-bridged) |
+| ✅ Stable | zcode | [zai-org/ZCode](https://github.com/zai-org/ZCode) | GLM family; model lives in its own config (engine ships with the desktop app, tested on 0.17.x) |
+| ✅ Stable | Claude Code | [anthropics/claude-code](https://github.com/anthropics/claude-code) ([docs](https://docs.anthropic.com/en/docs/claude-code)) | Native subscription or an anthropic-compatible gateway (verified up to 2.1.322) |
+| ✅ Stable | Codex CLI | [openai/codex](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP (verified up to 0.167.2, isolated CODEX_HOME) |
+| ✅ Stable | dsh (DeepSeek Harness) | no public repo (internal channel) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_* — since 0.2.2 speaks the Anthropic Messages wire; z.ai gateways are auto-rewritten to the `/api/anthropic` face) |
+| 🚧 Not bindable yet | Gemini CLI | [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Dual-role incomplete (executor contract never live-fired, no staff channel) — opens after a key + live-fire |
+| 🚧 Not bindable yet | Qwen Code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | Dual-role incomplete (executor half-proven, no staff channel) — opens after live-fire |
+| 🚧 Coming soon | Copilot CLI / Amp / Cursor CLI / Droid | — | Adapters in progress (some via ACP) |
 
 ## Architecture
 

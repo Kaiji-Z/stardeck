@@ -1,8 +1,9 @@
 /**
  * stardeck 舰队面（UI 入口绑定，2026-09-01）：「每次打开绑一个 coding CLI」
- * 的产品形态落地——探测本机可绑的三席（opencode/pi/codex）、给出诚实可用性
- * 与实验性标记；daemon 持运行态 activeExecutor（POST /warroom/api/fleet 切换，
- * 只影响后续征召，在役进程不动）。
+ * 的产品形态落地——探测本机十二席（绝对入口 existsSync 定 ok / 裸名 --version
+ * 探针；2026-11-17 起兼捕获版本串）、给出诚实可用性与实验性标记；daemon 持
+ * 运行态 activeExecutor（POST /warroom/api/fleet 切换，只影响后续征召，在役
+ * 进程不动）。
  * 探测纪律（不装）：绝对路径 existsSync 即真；裸名（unix PATH 形）退
  * `--version` 探针；codex 席在本机带「实验性」标记——Windows 工具桥缺陷
  * 已实证记录（README「执行者适配器」），不隐瞒也不拦人试。
@@ -22,6 +23,9 @@ export interface FleetSeatInfo {
   ok: boolean
   /** 探测到的入口路径（展示/排查用）。 */
   bin: string
+  /** `--version` 首行（''=未探测到/探测失败）——2026-11-17 绑定门安装/更新
+   *  面用：已装席展示版本+更新命令，未装席展示安装命令。 */
+  version: string
   /** 实验性（可绑但已知风险）。 */
   experimental?: boolean
   /** 一句人话说明（绑定卡展示，中文）。 */
@@ -32,8 +36,8 @@ export interface FleetSeatInfo {
    * 绑定门挡住——不装样子）。 */
   adapter: boolean
   /** V19.13 双席正典：大副+外勤双接通（可选的充分条件）。false=只能外勤
-   * 或两者都未实弹——不可选（舰长令 2026-09-06：大副接不通的舰队不算稳定
-   * 舰队）。契约席恒 false。 */
+   *  或两者都未实弹——不可选（舰长令 2026-09-06：大副接不通的舰队不算稳定
+   *  舰队）。契约席恒 false。 */
   staffReady: boolean
 }
 
@@ -59,28 +63,51 @@ const SEATS: ReadonlyArray<{ id: string; label: string; experimental?: boolean; 
   { id: 'droid', label: 'droid', note: '即将支持：Factory Droid（需 Factory 账号）。', noteEn: 'Coming soon: Factory Droid (requires a Factory account).', detect: (c) => c !== '' ? c : 'droid' },
 ]
 
-/** 探针注入位（测试用；缺省真跑 --version）。 */
-export type VersionProbe = (bin: string) => boolean
+/** 探针注入位（测试用；缺省真跑 --version 捕获 stdout）。false=缺席/探测
+ *  失败；字符串=进程可跑（stdout 原文——首行截取/trim/60 字符上限统一在
+ *  probeFleet 归一，注入探针同规则）。 */
+export type VersionProbe = (bin: string) => string | false
 
-function defaultVersionProbe(bin: string): boolean {
+function defaultVersionProbe(bin: string): string | false {
   try {
-    const r = spawnSync(bin, ['--version'], { timeout: 15_000, windowsHide: true, shell: process.platform === 'win32' })
-    return r.status === 0
+    // win32 .cmd 垫片纪律（同 executor.spawnCli 家法）：JS 入口（.js/.mjs/.cjs——
+    // pi/codex/gemini/qwen/zcode 的包内形态）必须经 process.execPath 直跑，
+    // shell:true 交给 cmd.exe 的 .js 是「不是内部或外部命令」→版本恒空串。
+    // .ts（dsh 源码入口）无 loader 跑不动=诚实空版本。.exe/.cmd/裸名走 shell。
+    const js = /\.(js|mjs|cjs)$/i.test(bin)
+    const r = js
+      ? spawnSync(process.execPath, [bin, '--version'], { timeout: 15_000, windowsHide: true })
+      : spawnSync(bin, ['--version'], { timeout: 15_000, windowsHide: true, shell: process.platform === 'win32' })
+    if (r.status !== 0) return false
+    return String(r.stdout ?? '')
   } catch {
     return false
   }
 }
 
+/** 探针产物 → 展示版本串（纯）：首行/trim/60 字符封顶（多行长输出不撑爆门面）。 */
+function versionOf(probed: string | false): string {
+  if (probed === false) return ''
+  const first = probed.split(/\r?\n/, 1)[0] ?? ''
+  return first.trim().slice(0, 60)
+}
+
 /**
- * 探测三席可绑性。executorBinOverride 是全局入口覆盖（config.executorBin，
- * 三席共用——它是「指到某个入口」的运维逃生阀，非按席配置）。
+ * 探测席位可绑性+版本。executorBinOverride 是全局入口覆盖（config.executorBin，
+ * 席位共用——它是「指到某个入口」的运维逃生阀，非按席配置）。
+ * ok 语义不变（绝对路径 existsSync / 裸名 probe 成功）；version 对两种形态
+ * 都 best-effort 取（绝对路径席探测失败不影响 ok——文件在即真，跑不跑得动
+ * 让征召首发如实报错）。
  */
 export function probeFleet(executorBinOverride = '', probe: VersionProbe = defaultVersionProbe): FleetSeatInfo[] {
   return SEATS.map(seat => {
     const bin = seat.detect(executorBinOverride)
-    const ok = isAbsolute(bin) || bin.includes('\\') || bin.includes('/') ? existsSync(bin) : probe(bin)
+    const pathy = isAbsolute(bin) || bin.includes('\\') || bin.includes('/')
+    const probed = probe(bin)
+    const ok = pathy ? existsSync(bin) : probed !== false
     return {
       id: seat.id, label: seat.label, ok, bin,
+      version: versionOf(probed),
       ...(seat.experimental === true ? { experimental: true } : {}),
       note: seat.note, noteEn: seat.noteEn,
       adapter: seat.adapter === true || ADAPTERS[seat.id] !== undefined,

@@ -16,6 +16,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } fr
 import { abandonCommand, answerCommand, archiveCommand, closeTask, createCommand, decidePlan, detachThread, fetchSourcesView, markTalking, regradeCommand, saveSourcesPatch, setBridgeProxyVerdict, useWar, warBoardStore, type BoardAttempt, type BoardCommand, type BoardEvidence, type BoardQuality, type BoardTask, type BoardThread, type FrontChoice, type SourcesView } from './data.ts'
 import { activeCopy, setSkin, skinId, subscribeSkin, setLang, langId, subscribeLang, type SkinId } from './copy.ts'
 import { PROVIDER_PRESETS, presetByBaseUrl } from './provider-presets.ts'
+import { fleetFamilyOf, type FleetFamily } from '../fleet-creds.ts'
 import { agingLeader, collectInbox, formatWait, inboxGrowthAnnounce, type InboxItem, type InboxKind } from './inbox.ts'
 import { clarifyCovered, clarifyProse } from './clarify-gate.ts'
 import { visitDelta, type VisitDelta } from './visit.ts'
@@ -3116,15 +3117,18 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
   // D37 思考强度（三档段——随保存一并提交；表单态不直写 config）。
   const [effort, setEffort] = useState<'' | 'fast' | 'deep'>('')
   const [effortSupported, setEffortSupported] = useState(true)
+  // 2026-11-17 舰队注入开关（同一份凭证喂舰队 CLI——保存=唯一提交同纪律）。
+  const [fleetInject, setFleetInject] = useState(true)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const refresh = (): void => {
-    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; baseUrl?: string; keySource?: 'config' | 'env' | 'none'; effort?: '' | 'fast' | 'deep'; effortSupported?: boolean }) => {
+    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; baseUrl?: string; keySource?: 'config' | 'env' | 'none'; effort?: '' | 'fast' | 'deep'; effortSupported?: boolean; fleetInject?: boolean }) => {
       if (typeof d.model === 'string') setModel(d.model)
       if (typeof d.baseUrl === 'string') setBaseUrl(d.baseUrl)
       if (d.keySource !== undefined) setKeySource(d.keySource)
       if (d.effort === 'fast' || d.effort === 'deep' || d.effort === '') setEffort(d.effort)
       if (typeof d.effortSupported === 'boolean') setEffortSupported(d.effortSupported)
+      if (typeof d.fleetInject === 'boolean') setFleetInject(d.fleetInject)
     }).catch(() => { /* daemon 不在——来源行照实 none */ })
   }
   useEffect(refresh, [])
@@ -3132,7 +3136,7 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
   // 契约统一为「药丸=填表、保存=唯一提交」——供应商/模型药丸都不直写 config
   // （选了供应商没 key 时落盘=存坏配置；批判双轨制 P1 在此一并埋掉）。
   const matchedPreset = presetByBaseUrl(baseUrl)
-  const save = (patch: Record<string, string>): void => {
+  const save = (patch: Record<string, string | boolean>): void => {
     setBusy(true)
     void fetch('/warroom/api/loop-config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
       .then(r => r.json()).then((d: { saved?: { ok?: boolean; error?: string; keySource?: 'config' | 'env' | 'none' } }) => {
@@ -3221,12 +3225,25 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
           createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } }),
           keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null),
         createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
+        // 2026-11-17 舰队注入段：开关药丸（保存=唯一提交）+ 一句纪律 + 覆盖面
+        // 提示（按当前 baseUrl 的供应商族给人话——fleet-creds.fleetFamilyOf 同源）。
+        createElement('div', { className: 'war-settings-section' }, bc.injectLabel),
+        createElement('div', { className: 'war-skin-row', 'data-loopcfg-inject': '1' },
+          ...([['on', bc.injectOn], ['off', bc.injectOff]] as const).map(([v, label]) => createElement('button', {
+            key: v, type: 'button',
+            className: `war-skin-opt war-skin-opt-sm${(v === 'on') === fleetInject ? ' on' : ''}`,
+            'aria-pressed': (v === 'on') === fleetInject,
+            'data-loopcfg-injectopt': v,
+            onClick: () => { setFleetInject(v === 'on') },
+          }, label))),
+        createElement('p', { className: 'war-settings-note' }, bc.injectHint),
+        createElement('p', { className: 'war-settings-note', 'data-loopcfg-injectcover': '1' }, bc.injectCover[fleetFamilyOf(baseUrl)]),
         note !== '' ? createElement('p', { className: 'war-settings-note', role: 'status', 'data-loopcfg-note': '1' }, note) : null),
       // 底部动作条（粘底）：测试连接 | 保存。
       createElement('div', { className: 'war-loopdlg-foot' },
         createElement('button', { type: 'button', className: 'war-btn', disabled: busy, 'data-loopcfg-test': '1', onClick: test }, bc.testBtn),
         createElement('button', { type: 'button', className: 'war-btn primary', disabled: busy, 'data-loopcfg-save': '1', onClick: () => {
-          const patch: Record<string, string> = { model, baseUrl, effort }
+          const patch: Record<string, string | boolean> = { model, baseUrl, effort, fleetInject }
           if (keyInput !== '') patch.apiKey = keyInput
           save(patch)
           setKeyInput('')
@@ -3239,17 +3256,17 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
  *  弹窗开合状态归 SettingsDrawer（抽屉先开、弹窗后压 Esc 栈=Esc 先关弹窗）。 */
 function LoopConfigLauncher(props: { onOpen: () => void }): ReactNode {
   const bc = activeCopy().bridge
-  const [summary, setSummary] = useState<{ model: string; keySource: 'config' | 'env' | 'none' }>({ model: '', keySource: 'none' })
+  const [summary, setSummary] = useState<{ model: string; keySource: 'config' | 'env' | 'none'; fleetInject: boolean }>({ model: '', keySource: 'none', fleetInject: true })
   useEffect(() => {
-    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; keySource?: 'config' | 'env' | 'none' }) => {
-      setSummary({ model: typeof d.model === 'string' ? d.model : '', keySource: d.keySource ?? 'none' })
+    void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; keySource?: 'config' | 'env' | 'none'; fleetInject?: boolean }) => {
+      setSummary({ model: typeof d.model === 'string' ? d.model : '', keySource: d.keySource ?? 'none', fleetInject: d.fleetInject !== false })
     }).catch(() => { /* daemon 不在——摘要照实空 */ })
   }, [])
   return createElement('div', { className: 'war-looplaunch', 'data-looplaunch': '1' },
     createElement('div', { className: 'war-looplaunch-text' },
       createElement('span', { className: 'war-set-toggle-label' }, bc.modelSection),
       createElement('span', { className: 'war-set-toggle-hint', 'data-looplaunch-summary': '1' },
-        summary.model === '' ? bc.keySourceNone : `${summary.model} · ${summary.keySource === 'config' ? bc.keySourceConfig : summary.keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone}`)),
+        summary.model === '' ? bc.keySourceNone : `${summary.model} · ${summary.keySource === 'config' ? bc.keySourceConfig : summary.keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone}${summary.keySource !== 'none' && !summary.fleetInject ? ` · ${bc.injectOffShort}` : ''}`)),
     createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-open': '1', onClick: props.onOpen }, bc.modelSettingsBtn),
   )
 }

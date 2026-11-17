@@ -817,6 +817,94 @@ test('D30 死路治理：全席缺席→安装引导卡（复制钮+重新探测
   r2.unmount()
 })
 
+test('2026-11-17 安装/更新入口：席位卡操作行——已装席=版本 chip+更新命令+仓库链接；缺席席=安装命令；zcode 无包只链接；dsh 无行', async () => {
+  const { fleetGate } = await import('../src/client/fleet-gate.tsx')
+  const seats = [
+    { id: 'opencode', label: 'opencode', ok: true, bin: 'C:/opencode.js', version: '1.19.5', note: '开源 coding agent。', adapter: true, staffReady: true },
+    { id: 'pi', label: 'pi', ok: false, bin: 'C:/absent-pi.js', version: '', note: '轻量 coding agent。', adapter: true, staffReady: true },
+    { id: 'zcode', label: 'zcode', ok: true, bin: 'C:/zcode.js', version: '0.17.1', note: 'GLM 系 coding agent。', adapter: true, staffReady: true },
+    { id: 'dsh', label: 'dsh', ok: true, bin: 'C:/dsh/bin.ts', version: '0.2.2', note: 'DeepSeek Harness。', adapter: true, staffReady: true },
+  ]
+  let entered = ''
+  const r = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: seats as never },
+    onEnter: (executor: string) => { entered = executor }, dismissible: false,
+  }))
+  try {
+    // 已装席（opencode）：版本 chip + 更新命令 + 仓库链接。
+    const ops = document.querySelector('[data-war-seat-ops="opencode"]') as HTMLElement | null
+    assert.ok(ops !== null, 'opencode 操作行在场')
+    assert.ok((ops?.textContent ?? '').includes('npm i -g opencode-ai@latest'), '更新命令在场')
+    assert.ok((ops?.textContent ?? '').includes('1.19.5'), '版本 chip 在场')
+    const repo = ops?.querySelector('[data-war-seat-repo="opencode"]') as HTMLAnchorElement | null
+    assert.ok(repo !== null && repo.getAttribute('href') === 'https://github.com/anomalyco/opencode', '官方仓库链接（anomalyco 迁移后正典）')
+    // 缺席席（pi）：在折叠面里——先展开再断言。安装命令（无 @latest）+ 仓库链接
+    // （earendil-works 改名后正典）。
+    const foldBtn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent ?? '').includes('即将支持')) as HTMLButtonElement | undefined
+    assert.ok(foldBtn !== undefined, '缺席折叠钮在场')
+    foldBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const piOps = document.querySelector('[data-war-seat-ops="pi"]') as HTMLElement | null
+    assert.ok((piOps?.textContent ?? '').includes('npm i -g @earendil-works/pi-coding-agent'), '安装命令在场')
+    assert.ok((piOps?.textContent ?? '').includes('@latest') === false, '缺席席给安装命令不给更新命令')
+    assert.equal((piOps?.querySelector('[data-war-seat-repo="pi"]') as HTMLAnchorElement | null)?.getAttribute('href'), 'https://github.com/earendil-works/pi')
+    // zcode 无 npm 包：只有仓库链接（zai-org/ZCode），无命令。
+    const zcOps = document.querySelector('[data-war-seat-ops="zcode"]') as HTMLElement | null
+    assert.ok((zcOps?.textContent ?? '').includes('npm i') === false, 'zcode 无包名=无命令')
+    assert.equal((zcOps?.querySelector('[data-war-seat-repo="zcode"]') as HTMLAnchorElement | null)?.getAttribute('href'), 'https://github.com/zai-org/ZCode')
+    // dsh 无公开仓：整行缺席。
+    assert.ok(document.querySelector('[data-war-seat-ops="dsh"]') === null, 'dsh 无操作行（渠道见席位注记）')
+    assert.equal(entered, '', '操作行点击不触发进入')
+    // 复制钮：点击走剪贴板通路（happy-dom 无 clipboard 也不炸——copyCmd 有 catch）。
+    const copyBtn = ops?.querySelector('button')
+    copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(resolve => setTimeout(resolve, 20))
+  } finally { r.unmount() }
+})
+
+test('2026-11-17 零舰队逃生口+凭证提示行：无 ready 席时门可跳过（先上甲板）；有 ready 席时仍是「返回甲板」；key 在位给注入状态行', async () => {
+  const { fleetGate } = await import('../src/client/fleet-gate.tsx')
+  const allAbsent = ['opencode', 'pi'].map(id => ({ id, label: id, ok: false, bin: `bin-${id}`, note: '未检出。', adapter: true, staffReady: true }))
+  let dismissed = 0
+  const r = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: allAbsent as never, loopKeySource: 'config', fleetInject: true },
+    onEnter: () => {}, dismissible: true, onDismiss: () => { dismissed++ },
+  }))
+  try {
+    const skip = document.querySelector('[data-war-gate-skip]') as HTMLButtonElement | null
+    assert.ok(skip !== null, '可跳过钮在场（dismissible=true 时渲染）')
+    assert.ok((skip?.textContent ?? '').includes('先上甲板'), '零 ready 席=「先上甲板，稍后再装」文案')
+    // 凭证提示行：key 在位+注入开 → 覆盖面交代（含 codex/zcode 诚实盲区）。
+    const cred = document.querySelector('[data-war-cred-line]') as HTMLElement | null
+    assert.ok(cred !== null, '凭证提示行在场')
+    assert.ok((cred?.textContent ?? '').includes('codex'), '覆盖面交代在场')
+    skip!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(dismissed, 1, '点击触发 onDismiss（进甲板）')
+  } finally { r.unmount() }
+  const withReady = [
+    { id: 'opencode', label: 'opencode', ok: true, bin: 'C:/oc.js', version: '1.0.0', note: 'x', adapter: true, staffReady: true },
+  ]
+  const r2 = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: withReady as never, loopKeySource: 'config', fleetInject: false },
+    onEnter: () => {}, dismissible: true, onDismiss: () => {},
+  }))
+  try {
+    const back = document.querySelector('[data-war-gate-skip]') as HTMLButtonElement | null
+    assert.ok((back?.textContent ?? '').includes('返回甲板'), '有 ready 席时保持「返回甲板」语义（绑定优先不变）')
+    const cred = document.querySelector('[data-war-cred-line]') as HTMLElement | null
+    assert.ok((cred?.textContent ?? '').includes('未开启'), '注入关=指路文案（credOff）')
+  } finally { r2.unmount() }
+  const r3 = await render(createElement(fleetGate, {
+    fleet: { active: { executor: 'opencode', model: '' }, seats: withReady as never },
+    onEnter: () => {}, dismissible: false,
+  }))
+  try {
+    assert.ok(document.querySelector('[data-war-gate-skip]') === null, 'dismissible=false（entry 且有 ready 席）=无跳过钮（原行为锁）')
+    assert.ok(document.querySelector('[data-war-cred-line]') === null, '无 key=无凭证行（不空谈）')
+  } finally { r3.unmount() }
+})
+
 test('D40 老板视图验收行：结论横幅+机械核验芯片+交付物钮在场；两步确认通过打到 war_close_task（手抖闸 800ms）+ D41 截图/耗时/自报面', async () => {
   const reportedAt = new Date()
   const startedAt = new Date(reportedAt.getTime() - (4 * 60 + 12) * 1000)
