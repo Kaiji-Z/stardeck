@@ -3214,6 +3214,22 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
             onClick: () => { setEffort(v) },
           }, label))),
         !effortSupported ? createElement('p', { className: 'war-settings-note' }, bc.effortUnsupported) : null,
+        // 2026-11-17 舰队注入段（批判 P2 上移：原在 key/source 之后——新能力被
+        // 埋在自己弹窗的折叠线下；现居思考强度与 key 行之间，一屏可见）。
+        // 开关药丸（保存=唯一提交）+ consent 级覆盖警示（舰长拍板升格到开关旁，
+        // 不再是 12px 尾注）+ 覆盖面人话（按当前 baseUrl 供应商族——fleetFamilyOf 同源）。
+        createElement('div', { className: 'war-settings-section' }, bc.injectLabel),
+        createElement('div', { className: 'war-skin-row', 'data-loopcfg-inject': '1', role: 'group', 'aria-label': bc.injectLabel },
+          ...([['on', bc.injectOn], ['off', bc.injectOff]] as const).map(([v, label]) => createElement('button', {
+            key: v, type: 'button',
+            className: `war-skin-opt war-skin-opt-sm${(v === 'on') === fleetInject ? ' on' : ''}`,
+            'aria-pressed': (v === 'on') === fleetInject,
+            'data-loopcfg-injectopt': v,
+            onClick: () => { setFleetInject(v === 'on') },
+          }, label))),
+        createElement('p', { className: 'war-settings-note', 'data-loopcfg-injectwarn': '1', style: { fontWeight: 600 } }, bc.injectOverrideWarn),
+        createElement('p', { className: 'war-settings-note' }, bc.injectHint),
+        createElement('p', { className: 'war-settings-note', 'data-loopcfg-injectcover': '1' }, bc.injectCover[fleetFamilyOf(baseUrl)]),
         // key 行：标签+领 key 链接同行（照搬 zcode access.apiKeyManagementUrl）。
         createElement('div', { className: 'war-loopcfg-keyrow' },
           createElement('span', { className: 'war-bcard-flabel' }, bc.keyLabel),
@@ -3225,19 +3241,6 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
           createElement('input', { type: 'password', className: 'war-bcard-input', placeholder: keySource === 'config' ? bc.keyPhSaved : bc.keyPh, value: keyInput, 'data-loopcfg-key': '1', onChange: e => { setKeyInput(String(e.target.value ?? '')) } }),
           keySource === 'config' ? createElement('button', { type: 'button', className: 'war-btn', 'data-loopcfg-clear': '1', onClick: () => { save({ apiKey: '' }) } }, bc.keyClear) : null),
         createElement('p', { className: 'war-settings-note', 'data-loopcfg-source': keySource }, keySource === 'config' ? bc.keySourceConfig : keySource === 'env' ? bc.keySourceEnv : bc.keySourceNone),
-        // 2026-11-17 舰队注入段：开关药丸（保存=唯一提交）+ 一句纪律 + 覆盖面
-        // 提示（按当前 baseUrl 的供应商族给人话——fleet-creds.fleetFamilyOf 同源）。
-        createElement('div', { className: 'war-settings-section' }, bc.injectLabel),
-        createElement('div', { className: 'war-skin-row', 'data-loopcfg-inject': '1' },
-          ...([['on', bc.injectOn], ['off', bc.injectOff]] as const).map(([v, label]) => createElement('button', {
-            key: v, type: 'button',
-            className: `war-skin-opt war-skin-opt-sm${(v === 'on') === fleetInject ? ' on' : ''}`,
-            'aria-pressed': (v === 'on') === fleetInject,
-            'data-loopcfg-injectopt': v,
-            onClick: () => { setFleetInject(v === 'on') },
-          }, label))),
-        createElement('p', { className: 'war-settings-note' }, bc.injectHint),
-        createElement('p', { className: 'war-settings-note', 'data-loopcfg-injectcover': '1' }, bc.injectCover[fleetFamilyOf(baseUrl)]),
         note !== '' ? createElement('p', { className: 'war-settings-note', role: 'status', 'data-loopcfg-note': '1' }, note) : null),
       // 底部动作条（粘底）：测试连接 | 保存。
       createElement('div', { className: 'war-loopdlg-foot' },
@@ -3254,14 +3257,15 @@ function ModelSettingsDialog(props: { onClose: () => void }): ReactNode {
 
 /** 设置抽屉里的对话模型行（D34 舰长令收成一行）：当前态摘要+「模型设置…」钮。
  *  弹窗开合状态归 SettingsDrawer（抽屉先开、弹窗后压 Esc 栈=Esc 先关弹窗）。 */
-function LoopConfigLauncher(props: { onOpen: () => void }): ReactNode {
+function LoopConfigLauncher(props: { onOpen: () => void; refreshSignal?: number }): ReactNode {
   const bc = activeCopy().bridge
   const [summary, setSummary] = useState<{ model: string; keySource: 'config' | 'env' | 'none'; fleetInject: boolean }>({ model: '', keySource: 'none', fleetInject: true })
+  const { refreshSignal } = props
   useEffect(() => {
     void fetch('/warroom/api/loop-config').then(r => r.json()).then((d: { model?: string; keySource?: 'config' | 'env' | 'none'; fleetInject?: boolean }) => {
       setSummary({ model: typeof d.model === 'string' ? d.model : '', keySource: d.keySource ?? 'none', fleetInject: d.fleetInject !== false })
     }).catch(() => { /* daemon 不在——摘要照实空 */ })
-  }, [])
+  }, [refreshSignal])
   return createElement('div', { className: 'war-looplaunch', 'data-looplaunch': '1' },
     createElement('div', { className: 'war-looplaunch-text' },
       createElement('span', { className: 'war-set-toggle-label' }, bc.modelSection),
@@ -3308,6 +3312,9 @@ function SettingsDrawer(props: {
   // D34 舰长令：模型设置独立弹窗（弹窗压在抽屉之上——useModalLayer 后入栈，
   // Esc 只关弹窗不关抽屉）。
   const [loopDlgOpen, setLoopDlgOpen] = useState(false)
+  // 批判 P2：launcher 摘要只在 mount 拉一次——弹窗保存后「未注入舰队」徽标余下
+  // 会话撒谎。关闭弹窗即 +1 刷新信号，launcher 重拉。
+  const [loopSummaryTick, setLoopSummaryTick] = useState(0)
   // 定夺授权（D27）归队（2026-10-21 设置归拢：独立壳迷你弹层退役，全设置唯一
   // 面=看板设置抽屉）。代理舰长在役才有意义；降级态藏段不误导演长。授权对钮
   // 沿用 critique7 等权纪律：不设 primary，禁用侧=当前态，状态句点名。
@@ -3363,7 +3370,7 @@ function SettingsDrawer(props: {
         createElement('button', { className: 'war-btn', onClick: onClose }, copy.close)),
       createElement('div', { className: 'war-settings-body' },
         // D34 舰长令：模型设置收成一行摘要+按钮，完整表单在独立弹窗。
-        standaloneChrome ? createElement(LoopConfigLauncher, { onOpen: () => { setLoopDlgOpen(true) } }) : null,
+        standaloneChrome ? createElement(LoopConfigLauncher, { onOpen: () => { setLoopDlgOpen(true) }, refreshSignal: loopSummaryTick }) : null,
         createElement('div', { className: 'war-settings-section' }, copy.skinSection),
         createElement('div', { className: 'war-skin-row' },
           skinBtn('trek', copy.skinTrek),
@@ -3415,7 +3422,7 @@ function SettingsDrawer(props: {
       ),
     ),
     // D34：模型设置弹窗与抽屉平级渲染（不受抽屉 overflow 裁剪；Esc 栈=后开先关）。
-    loopDlgOpen ? createElement(ModelSettingsDialog, { onClose: () => { setLoopDlgOpen(false) } }) : null,
+    loopDlgOpen ? createElement(ModelSettingsDialog, { onClose: () => { setLoopDlgOpen(false); setLoopSummaryTick(t => t + 1) } }) : null,
   )
 }
 

@@ -64,6 +64,9 @@ interface GateCopy {
    *  官方仓库链接恒在场（用户据此知道「要装这些 CLI 才能用」）。 */
   updateVia: (pkg: string) => string
   updateBtn: string
+  /** 批判 P2：复制钮自称做什么（裸席位名读作导航/SR 读无名钮）+ 命令级 aria。 */
+  copyBtn: string
+  copyAria: (cmd: string) => string
   versionPrefix: string
   repoLink: string
   /** 零舰队逃生口：无任何可绑席时门可跳过（先上甲板聊天/看板，稍后再装）。 */
@@ -126,6 +129,8 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     agentCardBtn: '复制接入提示词',
     updateVia: pkg => `npm i -g ${pkg}@latest`,
     updateBtn: '更新',
+    copyBtn: '复制',
+    copyAria: cmd => `复制命令：${cmd}`,
     versionPrefix: '已装',
     repoLink: '仓库',
     skipInstall: '先上甲板，稍后再装',
@@ -168,6 +173,8 @@ const GATE: Record<'zh' | 'en', GateCopy> = {
     agentCardBtn: 'Copy install prompt',
     updateVia: pkg => `npm i -g ${pkg}@latest`,
     updateBtn: 'Update',
+    copyBtn: 'Copy',
+    copyAria: cmd => `Copy command: ${cmd}`,
     versionPrefix: 'installed',
     repoLink: 'repo',
     skipInstall: 'Board first, install later',
@@ -247,11 +254,13 @@ export function fleetGate(props: {
         const absent = status === 'absent'
         const cmd = link.pkg !== undefined ? (absent ? t.installVia(link.pkg) : t.updateVia(link.pkg)) : ''
         if (cmd === '' && link.repo === undefined) return null
-        return createElement('div', { 'data-war-seat-ops': seat.id, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 } },
+        return createElement('div', { 'data-war-seat-ops': seat.id, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' } },
           !absent && seat.version !== undefined && seat.version !== ''
             ? createElement('span', {
                 'data-war-seat-version': seat.id,
-                style: { flex: '0 0 auto', fontSize: 'calc(11px*var(--war-fs))', color: 'var(--war-text-3)', fontFamily: 'var(--war-font-code)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '40%' },
+                // 批判 P2：text-3 白α.50 叠选中卡底实测 4.4:1（11px 小字需 4.5:1）
+                // ——升 text-2 并对齐折叠钮的 12px。
+                style: { flex: '0 0 auto', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-2)', fontFamily: 'var(--war-font-code)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '40%' },
               }, `${t.versionPrefix} ${seat.version}`)
             : null,
           cmd !== ''
@@ -261,10 +270,10 @@ export function fleetGate(props: {
             : null,
           cmd !== ''
             ? createElement('button', {
-                type: 'button',
+                type: 'button', 'aria-label': t.copyAria(cmd),
                 onClick: () => { copyCmd(seat.id, cmd) },
                 style: { flex: '0 0 auto', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--war-border)', background: 'transparent', color: copiedId === seat.id ? 'var(--war-done)' : 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))' },
-              }, copiedId === seat.id ? t.copied : absent ? seat.label : t.updateBtn)
+              }, copiedId === seat.id ? t.copied : absent ? t.copyBtn : t.updateBtn)
             : null,
           link.repo !== undefined
             ? createElement('a', {
@@ -333,8 +342,10 @@ export function fleetGate(props: {
       // 说明文字不再贴着对比度下限。
       createElement('p', { style: { margin: '0 0 14px', color: 'var(--war-text-2)', fontSize: 'calc(13px*var(--war-fs))' } }, t.sub),
       // 席位清单独立滚动容器（2026-09-03 定案：十一席不撑爆门面；底部操作钮
-      // 在容器外常驻，不随席列滚动）。
-      createElement('div', { className: 'war-gate-scroll', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'grid', gap: 8, alignContent: 'start', paddingBottom: 4 } },
+      // 在容器外常驻，不随席列滚动）。2026-11-17 批判 P1：无 template 的 grid
+      // 隐式 auto 列被 nowrap 命令的 max-content 撑爆——操作行溢出卡边全宽度
+      // 复现（1440/375 双实证）；minmax(0,1fr) 让列可缩、code 的 ellipsis 接管。
+      createElement('div', { className: 'war-gate-scroll', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8, alignContent: 'start', paddingBottom: 4 } },
         visibleSeats.map(card),
         // D30 开箱面：全席缺席不再是哑谜死路——安装引导卡（正典包名一键复制）
         // + 重新探测；内置 loop 指引（env 已开=就绪卡，未开=零 CLI 指路）。
@@ -345,15 +356,15 @@ export function fleetGate(props: {
             },
               createElement('div', { style: { fontSize: 'calc(13px*var(--war-fs))', color: 'var(--war-text-2)', lineHeight: 1.6 } }, t.installTitle),
               ...absentSeats.filter(s => SEAT_LINKS[s.id]?.pkg !== undefined).map(seat =>
-                createElement('div', { key: `ins-${seat.id}`, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
+                createElement('div', { key: `ins-${seat.id}`, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' } },
                   createElement('code', {
-                    style: { flex: '1 1 auto', fontFamily: 'var(--war-font-code)', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-1)', background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '5px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                    style: { flex: '1 1 auto', minWidth: 0, fontFamily: 'var(--war-font-code)', fontSize: 'calc(12px*var(--war-fs))', color: 'var(--war-text-1)', background: 'var(--war-card-bg)', border: '1px solid var(--war-border-soft)', borderRadius: 6, padding: '5px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
                   }, t.installVia(SEAT_LINKS[seat.id]!.pkg!)),
                   createElement('button', {
-                    type: 'button',
+                    type: 'button', 'aria-label': t.copyAria(t.installVia(SEAT_LINKS[seat.id]!.pkg!)),
                     onClick: () => { copyInstall(seat.id) },
                     style: { flex: '0 0 auto', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--war-border)', background: 'transparent', color: copiedId === seat.id ? 'var(--war-done)' : 'var(--war-text-2)', cursor: 'pointer', fontSize: 'calc(12px*var(--war-fs))' },
-                  }, copiedId === seat.id ? t.copied : seat.label),
+                  }, copiedId === seat.id ? t.copied : t.copyBtn),
                 )),
               createElement('button', {
                 type: 'button', 'data-war-reprobe': '1',

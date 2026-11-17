@@ -12,11 +12,12 @@ import type { FleetFamily } from '../fleet-creds.ts'
 
 /** EN counterpart of INJECT_COPY_ZH in copy.ts（键形逐键对齐；覆盖面口径与
  *  fleet-creds.fleetEnvFor 发射的变量族一致）。 */
-const INJECT_COPY_EN: Pick<WarCopy['bridge'], 'injectLabel' | 'injectOn' | 'injectOff' | 'injectHint' | 'injectCover' | 'injectOffShort'> = {
+const INJECT_COPY_EN: Pick<WarCopy['bridge'], 'injectLabel' | 'injectOn' | 'injectOff' | 'injectOverrideWarn' | 'injectHint' | 'injectCover' | 'injectOffShort'> = {
   injectLabel: 'Inject into fleet CLIs',
   injectOn: 'On',
   injectOff: 'Off',
-  injectHint: 'When on, this key/base URL feeds the chat window and is also injected into fleet CLI child processes on conscription — same-named environment variables take this config (overriding your shell). Takes effect on save.',
+  injectOverrideWarn: 'Note: same-named environment variables take this config — overriding values set in your own shell.',
+  injectHint: 'When on, this key/base URL feeds the chat window and is also injected into fleet CLI child processes on conscription. Takes effect on save.',
   injectCover: {
     zai: 'Coverage: pi reads ZAI_API_KEY; claude / opencode use the z.ai anthropic-compatible face (ANTHROPIC_*); dsh reads DEEPSEEK_*. codex takes its key on the shim side and zcode manages its own — those two seats skip injection.',
     deepseek: 'Coverage: dsh / pi read DEEPSEEK_*; claude / opencode use api.deepseek.com/anthropic (ANTHROPIC_*). codex takes its key on the shim side; zcode manages its own.',

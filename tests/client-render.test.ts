@@ -831,11 +831,20 @@ test('2026-11-17 安装/更新入口：席位卡操作行——已装席=版本 
     onEnter: (executor: string) => { entered = executor }, dismissible: false,
   }))
   try {
+    // 批判 P1 回归钉：滚动容器网格列可缩（minmax(0,1fr)）——nowrap 命令不再
+    // 撑爆隐式 auto 列把操作行推出视口。
+    const scroll = document.querySelector('.war-gate-scroll') as HTMLElement | null
+    assert.ok(scroll !== null, 'gate 滚动容器在场')
+    assert.ok((scroll?.getAttribute('style') ?? '').includes('minmax(0, 1fr)'), 'grid 列=minmax(0,1fr)（P1 溢出修复钉）')
     // 已装席（opencode）：版本 chip + 更新命令 + 仓库链接。
     const ops = document.querySelector('[data-war-seat-ops="opencode"]') as HTMLElement | null
     assert.ok(ops !== null, 'opencode 操作行在场')
+    assert.ok((ops?.getAttribute('style') ?? '').includes('flex-wrap: wrap') || (ops?.getAttribute('style') ?? '').includes('flexWrap'), '操作行 wrap 在（窄卡按钮换行不溢出）')
     assert.ok((ops?.textContent ?? '').includes('npm i -g opencode-ai@latest'), '更新命令在场')
     assert.ok((ops?.textContent ?? '').includes('1.19.5'), '版本 chip 在场')
+    const copyBtn = ops?.querySelector('button') as HTMLButtonElement | null
+    assert.equal(copyBtn?.textContent, '更新', '已装席复制钮=更新（批判 P2 标签语义）')
+    assert.ok((copyBtn?.getAttribute('aria-label') ?? '').includes('npm i -g opencode-ai@latest'), 'aria-label 携命令全文')
     const repo = ops?.querySelector('[data-war-seat-repo="opencode"]') as HTMLAnchorElement | null
     assert.ok(repo !== null && repo.getAttribute('href') === 'https://github.com/anomalyco/opencode', '官方仓库链接（anomalyco 迁移后正典）')
     // 缺席席（pi）：在折叠面里——先展开再断言。安装命令（无 @latest）+ 仓库链接
@@ -847,6 +856,8 @@ test('2026-11-17 安装/更新入口：席位卡操作行——已装席=版本 
     const piOps = document.querySelector('[data-war-seat-ops="pi"]') as HTMLElement | null
     assert.ok((piOps?.textContent ?? '').includes('npm i -g @earendil-works/pi-coding-agent'), '安装命令在场')
     assert.ok((piOps?.textContent ?? '').includes('@latest') === false, '缺席席给安装命令不给更新命令')
+    const piCopy = piOps?.querySelector('button') as HTMLButtonElement | null
+    assert.equal(piCopy?.textContent, '复制', '缺席席复制钮自称「复制」（批判 P2：不再是裸席位名）')
     assert.equal((piOps?.querySelector('[data-war-seat-repo="pi"]') as HTMLAnchorElement | null)?.getAttribute('href'), 'https://github.com/earendil-works/pi')
     // zcode 无 npm 包：只有仓库链接（zai-org/ZCode），无命令。
     const zcOps = document.querySelector('[data-war-seat-ops="zcode"]') as HTMLElement | null
@@ -856,8 +867,7 @@ test('2026-11-17 安装/更新入口：席位卡操作行——已装席=版本 
     assert.ok(document.querySelector('[data-war-seat-ops="dsh"]') === null, 'dsh 无操作行（渠道见席位注记）')
     assert.equal(entered, '', '操作行点击不触发进入')
     // 复制钮：点击走剪贴板通路（happy-dom 无 clipboard 也不炸——copyCmd 有 catch）。
-    const copyBtn = ops?.querySelector('button')
-    copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    ops?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await new Promise(resolve => setTimeout(resolve, 20))
   } finally { r.unmount() }
 })
