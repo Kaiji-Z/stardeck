@@ -69,15 +69,30 @@ const SEATS: ReadonlyArray<{ id: string; label: string; experimental?: boolean; 
 export type VersionProbe = (bin: string) => string | false
 
 function defaultVersionProbe(bin: string): string | false {
+  // 可执行形态白名单（2026-11-17 实抓：本机 .ts 关联 WMP11.AssocFile.TTS——cmd 对
+  // 非可执行扩展名按文件关联 ShellExecute，spawnSync(bin.ts, --version, shell:true)
+  // 会拿 dsh 源码入口当 MPEG 视频弹 Windows Media Player，GET /fleet 一次弹一个）。
+  // 只放行三种真可执行形态：.js/.mjs/.cjs 经 process.execPath（win32 .cmd 垫片纪律
+  // 同 executor.spawnCli——shell:true 跑 .js 是「不是内部或外部命令」恒空版本）；
+  // .exe/.cmd/.bat/.com 与无扩展名裸名（unix PATH 形/契约席）走 shell；其余扩展名
+  // （.ts 源码入口/.py/.ps1/文档）一律不碰——不猜文件关联，诚实空版本。
+  const base = bin.split(/[\\/]/).pop() ?? bin
+  const ext = /\.([a-z0-9]+)$/i.exec(base)?.[1]?.toLowerCase()
+  if (ext === undefined) {
+    // 裸名（PATH 上的命令）——shell 解析 PATHEXT，找不到=干净失败无关联风险。
+  } else if (ext === 'js' || ext === 'mjs' || ext === 'cjs') {
+    try {
+      const r = spawnSync(process.execPath, [bin, '--version'], { timeout: 15_000, windowsHide: true })
+      if (r.status !== 0) return false
+      return String(r.stdout ?? '')
+    } catch {
+      return false
+    }
+  } else if (ext !== 'exe' && ext !== 'cmd' && ext !== 'bat' && ext !== 'com') {
+    return false
+  }
   try {
-    // win32 .cmd 垫片纪律（同 executor.spawnCli 家法）：JS 入口（.js/.mjs/.cjs——
-    // pi/codex/gemini/qwen/zcode 的包内形态）必须经 process.execPath 直跑，
-    // shell:true 交给 cmd.exe 的 .js 是「不是内部或外部命令」→版本恒空串。
-    // .ts（dsh 源码入口）无 loader 跑不动=诚实空版本。.exe/.cmd/裸名走 shell。
-    const js = /\.(js|mjs|cjs)$/i.test(bin)
-    const r = js
-      ? spawnSync(process.execPath, [bin, '--version'], { timeout: 15_000, windowsHide: true })
-      : spawnSync(bin, ['--version'], { timeout: 15_000, windowsHide: true, shell: process.platform === 'win32' })
+    const r = spawnSync(bin, ['--version'], { timeout: 15_000, windowsHide: true, shell: process.platform === 'win32' })
     if (r.status !== 0) return false
     return String(r.stdout ?? '')
   } catch {

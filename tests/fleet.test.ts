@@ -61,6 +61,21 @@ test('探测语义：裸名走 --version 探针（win32 无绝对入口的 PATH 
   assert.ok(miss !== undefined && miss.ok === false && miss.version === '', '裸名探针未中=缺席+无版本')
 })
 
+test('版本探针可执行形态白名单：.ts 源码入口零 spawn（2026-11-17 WMP 弹窗坑——.ts 被文件关联时 cmd 会当文档打开）；.js 入口经 node 取版本', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'stardeck-fleet-probe-'))
+  try {
+    const tsEntry = join(dir, 'bin.ts')
+    writeFileSync(tsEntry, '', 'utf8')
+    const tsSeats = probeFleet(tsEntry) // 缺省探针——.ts 必须零 spawn（回归钉：修前每次 GET /fleet 弹一个 Media Player）
+    assert.ok(tsSeats.every(s => s.version === ''), '.ts 入口=诚实空版本（不 shell 打开）')
+    assert.ok(tsSeats.every(s => s.ok === true), 'ok 语义不变（existsSync 判真，探针失败不翻案）')
+    const jsEntry = join(dir, 'cli.js')
+    writeFileSync(jsEntry, 'process.stdout.write("9.9.9-fake")', 'utf8')
+    const jsSeats = probeFleet(jsEntry)
+    assert.ok(jsSeats.every(s => s.version === '9.9.9-fake'), '.js 入口经 process.execPath 直跑取版本')
+  } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5 }) }
+})
+
 test('席位卡三分语义（绑定门诚实证）：可绑定 / 受限·实验性 / 未检出——codex 不再裸标可绑定', () => {
   assert.equal(seatStatusOf({ ok: true }), 'ready')
   assert.equal(seatStatusOf({ ok: true, experimental: true }), 'limited') // codex 席：契约在档但本机有已知阻碍
