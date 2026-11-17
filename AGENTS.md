@@ -1,5 +1,7 @@
 # AGENTS.md · stardeck 迭代指引
 
+> **你是 agent？只想用，不想开发——先读这段**：站在本仓库的 clone 里**不代表要构建它**。把你的主人接上 stardeck 走用户正路：`npm i -g stardeck && stardeck connect <宿主名>`（自动拉起 daemon+签席+写宿主注册；**新开会话**让 MCP 生效，然后调 `read_digest` 自证连通）。代理舰长席只给你五件只读+交答工具（get_order/submit_reply/read_board/read_digest/read_ledger，war_* 一件不出）；工作令与块文法教学在每轮 `get_order` 载荷里自带，照做即可。本文件其余部分全是**开发正典**（源码地图/验证协议）——只有改 stardeck 代码时才需要；用户面文档（含零终端「一条提示词」自装剧本）在 README「把你自己的 agent 接进来当代理舰长」节。
+
 本仓库是 **stardeck（星舰甲板）——agent 舰队的作战看板与守护进程**（v0.1.0 于 2026-09-01 交付；当前 **0.9.0**，npm latest 同步）。血统：[dsh-plugin-warroom](https://github.com/Kaiji-Z/dsh-plugin-warroom)（DeepSeek Harness 插件「舰桥」）的独立纪元——同一套账本/状态机/KillCredit 内核 1:1 迁移（27 模块原样、tools.ts 仅换 defineTool），脱离宿主、agent 无关。**两仓关系：本仓=主战场；插件仓=守护态（只收 bug 修复）**。新会话在此迭代前先读本文件，再按需读 `HANDOFF.md`（交付快照）与 `DESIGN.md`（决策录）。
 
 ## 开局必读
