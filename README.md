@@ -171,7 +171,7 @@ pnpm live         # 端到端实机门：真 CLI 外勤全链（开发态）
 | ✅ 稳定 | zcode | [zai-org/ZCode](https://github.com/zai-org/ZCode) | GLM 系；模型走其自身配置（引擎随桌面应用，0.17.x 实测） |
 | ✅ 稳定 | Claude Code | [anthropics/claude-code](https://github.com/anthropics/claude-code)（[文档](https://docs.anthropic.com/en/docs/claude-code)） | 原生订阅或 anthropic 兼容网关（最新适配 2.1.322） |
 | ✅ 稳定 | Codex CLI | [openai/codex](https://github.com/openai/codex) | 经 Responses→chat 垫片直驱 GLM（`stardeck codex-shim`，另配 `STARDECK_CODEX_SHIM_BASE`）；工具走 HTTP 直连（最新适配 0.167.2，隔离 CODEX_HOME） |
-| ✅ 稳定 | dsh（DeepSeek Harness） | 无公开仓（内部渠道） | 走源码仓克隆入口；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*——0.2.2 起走 Anthropic Messages wire，z.ai 网关自动改译 `/api/anthropic` 面） |
+| ✅ 稳定 | dsh（DeepSeek Harness） | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（npm `@deepseek-ai/dsh`） | `npm i -g @deepseek-ai/dsh` 即装（js 入口；本机源码 clone 优先——实弹正典 rc.2）；网关 env `DEEPSEEK_API_KEY/BASE_URL`（自动映射 Z_AI_*——0.2.2 起走 Anthropic Messages wire，z.ai 网关自动改译 `/api/anthropic` 面） |
 | 🚧 暂不可绑 | Gemini CLI | [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | 双席未接通（外勤契约在档未实弹、大副通道未建）——配好 key 实弹转正后开放 |
 | 🚧 暂不可绑 | Qwen Code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | 双席未接通（外勤半证、大副通道未建）——实弹转正后开放 |
 | 🚧 即将支持 | Copilot CLI / Amp / Cursor CLI / Droid | — | 适配进行中（部分走 ACP 协议） |
@@ -404,7 +404,7 @@ Fleet binding is persisted to the config file and survives restarts; rebind anyt
 | ✅ Stable | zcode | [zai-org/ZCode](https://github.com/zai-org/ZCode) | GLM family; model lives in its own config (engine ships with the desktop app, tested on 0.17.x) |
 | ✅ Stable | Claude Code | [anthropics/claude-code](https://github.com/anthropics/claude-code) ([docs](https://docs.anthropic.com/en/docs/claude-code)) | Native subscription or an anthropic-compatible gateway (verified up to 2.1.322) |
 | ✅ Stable | Codex CLI | [openai/codex](https://github.com/openai/codex) | GLM via the Responses→chat shim (`stardeck codex-shim` + `STARDECK_CODEX_SHIM_BASE`); tools over direct HTTP (verified up to 0.167.2, isolated CODEX_HOME) |
-| ✅ Stable | dsh (DeepSeek Harness) | no public repo (internal channel) | Runs from a source-tree clone; gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_* — since 0.2.2 speaks the Anthropic Messages wire; z.ai gateways are auto-rewritten to the `/api/anthropic` face) |
+| ✅ Stable | dsh (DeepSeek Harness) | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (npm `@deepseek-ai/dsh`) | `npm i -g @deepseek-ai/dsh` (js entry; a local source clone takes precedence — live-fired canon rc.2); gateway env `DEEPSEEK_API_KEY/BASE_URL` (auto-maps Z_AI_* — since 0.2.2 speaks the Anthropic Messages wire; z.ai gateways are auto-rewritten to the `/api/anthropic` face) |
 | 🚧 Not bindable yet | Gemini CLI | [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Dual-role incomplete (executor contract never live-fired, no staff channel) — opens after a key + live-fire |
 | 🚧 Not bindable yet | Qwen Code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | Dual-role incomplete (executor half-proven, no staff channel) — opens after live-fire |
 | 🚧 Coming soon | Copilot CLI / Amp / Cursor CLI / Droid | — | Adapters in progress (some via ACP) |

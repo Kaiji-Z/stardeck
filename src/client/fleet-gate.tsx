@@ -76,11 +76,11 @@ interface GateCopy {
   credOff: string
 }
 
-/** 席位安装/更新入口正典（2026-11-17；包名=本机 npm ls 实锚，仓库=npm
- *  repository 元数据/官方源实锚）：opencode 仓已迁 anomalyco（sst/ 旧链重定向）、
- *  pi 已改名 earendil-works（README 旧链 badlogic/pi-mono 过时）；zcode 开源仓
- *  zai-org/ZCode 无 npm 包（走桌面版/源码构建）；dsh 无公开仓（DeepSeek 内部
- *  渠道——席位 note 交代源码仓克隆）。 */
+/** 席位安装/更新入口正典（2026-11-17 建，2026-11-18 dsh 开源更新；包名=npm
+ *  元数据实锚，仓库=npm repository/官方源实锚）：opencode 仓已迁 anomalyco
+ *  （sst/ 旧链重定向）、pi 已改名 earendil-works（README 旧链 badlogic/pi-mono
+ *  过时）；zcode 开源仓 zai-org/ZCode 无 npm 包（走桌面版/源码构建）；dsh 已
+ *  开源——@deepseek-ai/dsh（bin=lib/bin.js）+ deepseek-ai/deepseek-harness。 */
 const SEAT_LINKS: Record<string, { pkg?: string; repo?: string }> = {
   opencode: { pkg: 'opencode-ai', repo: 'https://github.com/anomalyco/opencode' },
   pi: { pkg: '@earendil-works/pi-coding-agent', repo: 'https://github.com/earendil-works/pi' },
@@ -89,7 +89,7 @@ const SEAT_LINKS: Record<string, { pkg?: string; repo?: string }> = {
   claude: { pkg: '@anthropic-ai/claude-code', repo: 'https://github.com/anthropics/claude-code' },
   gemini: { pkg: '@google/gemini-cli', repo: 'https://github.com/google-gemini/gemini-cli' },
   qwen: { pkg: '@qwen-code/qwen-code', repo: 'https://github.com/QwenLM/qwen-code' },
-  dsh: {},
+  dsh: { pkg: '@deepseek-ai/dsh', repo: 'https://github.com/deepseek-ai/deepseek-harness' },
 }
 
 const GATE: Record<'zh' | 'en', GateCopy> = {
@@ -247,8 +247,8 @@ export function fleetGate(props: {
         }, t.statusLabel[status]),
       ),
       // 2026-11-17 安装/更新入口行：缺席席=安装命令复制；已装席=版本 chip+更新
-      // 命令复制；官方仓库链接恒在场（zcode 无 npm 包只链接；dsh 无公开仓——
-      // 渠道见席位注记）。让「要装这些 CLI 才能用」在门上自解释。
+      // 命令复制；官方仓库链接恒在场（zcode 无 npm 包只链接）。让「要装这些
+      // CLI 才能用」在门上自解释。
       (() => {
         const link = SEAT_LINKS[seat.id] ?? {}
         const absent = status === 'absent'

@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed（2026-11-18 舰长查证：dsh 已开源）
+
+- dsh（DeepSeek Harness）已开源：仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)、npm 包 `@deepseek-ai/dsh`（bin=lib/bin.js，js 入口）。`detectDshBin` 增 npm 全局入口探测（本机源码 clone 保持先位——实弹正典 rc.2 > npm rc.1 未实弹）；绑定门 dsh 席补安装命令+仓库链接（此前「无公开仓」为过时信息）；README 双语舰队表修正。
+
 ## [0.9.2] - 2026-11-18
 
 ### Added（绑定门舰队安装/更新入口 + 集中凭证注入舰队：2026-11-17 舰长令）

@@ -1088,8 +1088,16 @@ export const zcodeAdapter: ExecutorAdapter = {
  * spawn 时经 node+tsx loader）；再退 PATH 裸名。 */
 export function detectDshBin(configured: string): string {
   if (configured !== '') return configured
+  // 2026-11-18 舰长查证：dsh 已开源（github.com/deepseek-ai/deepseek-harness，
+  // npm @deepseek-ai/dsh bin=lib/bin.js——.js 入口走 spawnCli 的 node 通道+版本
+  // 探针可取）。优先级：显式配置 > 本机 clone（0.2.2-rc.2 实弹正典）> npm 全局
+  // （0.2.2-rc.1，同族代码但入口契约未实弹——保持 clone 先位）> 裸名 PATH。
   const cloned = join(homedir(), 'vibecodingKJ', 'clones', 'deepseek-ai', 'deepseek-harness', 'apps', 'cli', 'src', 'bin.ts')
   if (existsSync(cloned)) return cloned
+  const npmGlobal = process.env.APPDATA !== undefined
+    ? join(process.env.APPDATA, 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    : join(homedir(), '.npm-global', 'lib', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  if (existsSync(npmGlobal)) return npmGlobal
   return 'dsh'
 }
 

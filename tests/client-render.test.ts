@@ -863,8 +863,11 @@ test('2026-11-17 安装/更新入口：席位卡操作行——已装席=版本 
     const zcOps = document.querySelector('[data-war-seat-ops="zcode"]') as HTMLElement | null
     assert.ok((zcOps?.textContent ?? '').includes('npm i') === false, 'zcode 无包名=无命令')
     assert.equal((zcOps?.querySelector('[data-war-seat-repo="zcode"]') as HTMLAnchorElement | null)?.getAttribute('href'), 'https://github.com/zai-org/ZCode')
-    // dsh 无公开仓：整行缺席。
-    assert.ok(document.querySelector('[data-war-seat-ops="dsh"]') === null, 'dsh 无操作行（渠道见席位注记）')
+    // dsh 已开源（2026-11-18 舰长查证）：npm 包+仓库链接齐——操作行不再缺席。
+    const dshOps = document.querySelector('[data-war-seat-ops="dsh"]') as HTMLElement | null
+    assert.ok(dshOps !== null, 'dsh 操作行在场（开源后有 npm 包+仓库）')
+    assert.ok((dshOps?.textContent ?? '').includes('@deepseek-ai/dsh'), 'dsh npm 包名在场')
+    assert.equal((dshOps?.querySelector('[data-war-seat-repo="dsh"]') as HTMLAnchorElement | null)?.getAttribute('href'), 'https://github.com/deepseek-ai/deepseek-harness')
     assert.equal(entered, '', '操作行点击不触发进入')
     // 复制钮：点击走剪贴板通路（happy-dom 无 clipboard 也不炸——copyCmd 有 catch）。
     ops?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
