@@ -1090,8 +1090,9 @@ export function detectDshBin(configured: string): string {
   if (configured !== '') return configured
   // 2026-11-18 舰长查证：dsh 已开源（github.com/deepseek-ai/deepseek-harness，
   // npm @deepseek-ai/dsh bin=lib/bin.js——.js 入口走 spawnCli 的 node 通道+版本
-  // 探针可取）。优先级：显式配置 > 本机 clone（0.2.2-rc.2 实弹正典）> npm 全局
-  // （0.2.2-rc.1，同族代码但入口契约未实弹——保持 clone 先位）> 裸名 PATH。
+  // 探针可取）。优先级：显式配置 > 本机 clone（0.2.2-rc.2，较新）> npm 全局
+  // （0.2.2-rc.1，真链实弹通过——2026-11-18 chain.mjs 全任务环流 reported，
+  // rc.1 已带 Anthropic wire）> 裸名 PATH。
   const cloned = join(homedir(), 'vibecodingKJ', 'clones', 'deepseek-ai', 'deepseek-harness', 'apps', 'cli', 'src', 'bin.ts')
   if (existsSync(cloned)) return cloned
   const npmGlobal = process.env.APPDATA !== undefined
@@ -1234,6 +1235,7 @@ export const dshAdapter: ExecutorAdapter = {
       executorBin: args.executorBin,
       attachTaskId: args.taskId,
       prompt: PROMPT,
+      credEnv: args.credEnv,
     })
   },
 }
@@ -1404,7 +1406,7 @@ export const geminiAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, geminiPrintArgs({ model: args.model, prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+        env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
       })
   },
 }
@@ -1489,7 +1491,7 @@ export const qwenAdapter: ExecutorAdapter = {
     return spawnCli(args.executorBin, qwenPrintArgs({ model: args.model, prompt: PROMPT }),
       {
         cwd: args.workspacePath, stateDir: args.stateDir, role: 'executor', agentId: args.agentId, taskId: args.taskId,
-        env: { ...process.env, STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId },
+        env: childEnv(args.credEnv, { STARDECK_HTTP: args.http, STARDECK_AGENT: args.agentId }),
       })
   },
 }

@@ -7,7 +7,11 @@
 
 ### Changed（2026-11-18 舰长查证：dsh 已开源）
 
-- dsh（DeepSeek Harness）已开源：仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)、npm 包 `@deepseek-ai/dsh`（bin=lib/bin.js，js 入口）。`detectDshBin` 增 npm 全局入口探测（本机源码 clone 保持先位——实弹正典 rc.2 > npm rc.1 未实弹）；绑定门 dsh 席补安装命令+仓库链接（此前「无公开仓」为过时信息）；README 双语舰队表修正。
+- dsh（DeepSeek Harness）已开源：仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)、npm 包 `@deepseek-ai/dsh`（bin=lib/bin.js，js 入口）。`detectDshBin` 增 npm 全局入口探测（本机源码 clone 先位——版本较新 rc.2；npm rc.1 **真链实弹通过**：daemon+共享凭证注入+war_publish→war_claim/war_submit 全任务环流到 reported，rc.1 已带 Anthropic wire）；绑定门 dsh 席补安装命令+仓库链接（此前「无公开仓」为过时信息）；README 双语舰队表修正。
+
+### Fixed
+
+- **credEnv 适配器贯穿缺口**（实弹实抓）：`dshAdapter`/`geminiAdapter`/`qwenAdapter` 的 spawn 字面量漏传 `credEnv`——共享凭证注入在这三席蒸发（npm dsh 以 `MISSING_CREDENTIAL: no API key` 秒退、巡检 15s 重派循环；0.9.2 的注入特性对 dsh 外勤实际失效）。修=三适配器补透传；新增回归钉（executor-face：八适配器 spawn 字面量必须含 credEnv——共享凭证→子进程 env 的单一通路不许再断）。
 
 ## [0.9.2] - 2026-11-18
 

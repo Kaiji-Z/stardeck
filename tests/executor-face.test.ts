@@ -139,6 +139,20 @@ test('适配器注册表三席在位（opencode 实弹 / codex+pi 契约实装�
   assert.ok(executorBrief(face).includes('MCP 服务'))
 })
 
+test('credEnv 贯穿契约：八适配器 spawn 字面量必须透传共享凭证（2026-11-18 实弹教训——dshAdapter 漏传致注入蒸发，npm dsh MISSING_CREDENTIAL 秒退循环）', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { fileURLToPath } = await import('node:url')
+  const src = readFileSync(fileURLToPath(new URL('../src/executor.ts', import.meta.url)), 'utf8')
+  const seats = ['opencode', 'codex', 'pi', 'zcode', 'dsh', 'claude', 'gemini', 'qwen']
+  for (const seat of seats) {
+    const m = new RegExp(`export const ${seat}Adapter: ExecutorAdapter = \\{[\\s\\S]*?\\n\\}`, 'm').exec(src)
+    assert.ok(m !== null, `${seat}Adapter 块找到`)
+    assert.ok(m![0].includes('credEnv'), `${seat}Adapter spawn 字面量必须透传 credEnv（共享凭证→子进程 env 的单一通路）`)
+  }
+  // ExecutorSpawnArgs 契约字段在档（适配器透传的类型底座）。
+  assert.ok(src.includes('credEnv?: Record<string, string>'), 'ExecutorSpawnArgs.credEnv 字段在档')
+})
+
 test('V19 腿1 战报纪律：三 face 简报都教「report=给舰长的最终答复」（结论先行/产物相对路径/不复述过程）', () => {
   const face = { taskId: 't1', title: 'x', acceptance: 'y', workspacePath: '/w', http: 'http://h', agentId: 'oc-z', model: '', modelProvider: '', executorBin: '', stateDir: '/s' }
   for (const f of ['mcp', 'pi-extension', 'http'] as const) {
