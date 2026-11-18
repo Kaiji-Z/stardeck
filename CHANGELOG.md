@@ -3,9 +3,9 @@
 本仓遵循 [Keep a Changelog 1.1](https://keepachangelog.com/zh-CN/1.1.0/)；版本号 pre-1.0 用 `0.<里程碑>.<迭代>-<刀>`（继承 warroom 版本方案）。**发版门**：平时只往 `[Unreleased]` 积条目，项目主明说「发版」才落版本头（tag→.github/workflows/publish.yml OIDC trusted publishing 直发 npm，落版本头同时推进 package.json）。
 
 
-## [Unreleased]
+## [0.9.2-1] - 2026-11-18
 
-### Changed（2026-11-18 舰长查证：dsh 已开源）
+### Changed（舰长查证：dsh 已开源）
 
 - dsh（DeepSeek Harness）已开源：仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)、npm 包 `@deepseek-ai/dsh`（bin=lib/bin.js，js 入口）。`detectDshBin` 增 npm 全局入口探测（本机源码 clone 先位——版本较新 rc.2；npm rc.1 **真链实弹通过**：daemon+共享凭证注入+war_publish→war_claim/war_submit 全任务环流到 reported，rc.1 已带 Anthropic wire）；绑定门 dsh 席补安装命令+仓库链接（此前「无公开仓」为过时信息）；README 双语舰队表修正。
 
